@@ -186,9 +186,9 @@ function Hero({
         </p>
 
         <h1
-          className="font-display text-center leading-[0.9] mt-3 whitespace-nowrap"
+          className="font-display text-center leading-[0.95] mt-3"
           style={{
-            fontSize: "clamp(56px, 14vw, 220px)",
+            fontSize: "clamp(44px, 8vw, 112px)",
             color: "var(--ink)",
             letterSpacing: "-0.02em",
             animation: "fade-up 1.2s ease-out 0.2s both",
@@ -198,7 +198,7 @@ function Hero({
         </h1>
 
         <p
-          className="mt-6 max-w-2xl text-center leading-snug"
+          className="mt-6 max-w-xl text-center leading-snug"
           style={{
             color: "var(--ink)",
             fontSize: 16,
@@ -206,11 +206,8 @@ function Hero({
             animation: "fade-up 1.2s ease-out 0.6s both",
           }}
         >
-          Veda tells you what actually works. Search any ingredient, product, or ritual —
-          we cross-reference clinical research with what real people report, then label it{" "}
-          <strong style={{ color: "var(--verdict-backed)", fontWeight: 500 }}>BACKED</strong>,{" "}
-          <strong style={{ color: "var(--verdict-mixed)", fontWeight: 500 }}>MIXED</strong>, or{" "}
-          <strong style={{ color: "var(--verdict-debunked)", fontWeight: 500 }}>DEBUNKED</strong>.
+          Search any ingredient, product, or ritual. We read the research papers
+          and the Reddit threads so you don't have to.
           <br />
           <span style={{ color: "var(--muted-ink)", fontSize: 14 }}>
             Try <em>“creatine for muscle growth”</em>, <em>“magnesium for sleep”</em>, or <em>“rosemary oil for hair”</em>.
