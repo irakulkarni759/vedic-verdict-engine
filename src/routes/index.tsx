@@ -209,7 +209,6 @@ function Hero({
         >
           Search any ingredient, product, or ritual.{"\u00a0"}{"\n"}
           We read the research papers and the Reddit threads so you don't have to.{"\n"}
-          Try “creatine for muscle growth”, “magnesium for sleep”, or “rosemary oil for hair”.
         </p>
 
 
