@@ -746,6 +746,58 @@ const ICONS: Record<IconKey, React.FC<{ size?: number }>> = {
       <path d="M12 3v6M12 15v6M3 12h6M15 12h6M6 6l4 4M14 14l4 4M18 6l-4 4M10 14l-4 4" />
     </svg>
   ),
+  dropper: ({ size = 24 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+      <rect x="10" y="2" width="4" height="10" rx="1" />
+      <path d="M9 12h6" />
+      <path d="M12 12v6c0 2-2 3-2 3" />
+      <circle cx="10" cy="21" r="0.6" fill="currentColor" />
+    </svg>
+  ),
+  beaker: ({ size = 24 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 3h8M9 3v6l-4 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-4-9V3" />
+      <path d="M6 15h12" />
+    </svg>
+  ),
+  jar: ({ size = 24 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+      <rect x="6" y="3" width="12" height="3" rx="1" />
+      <path d="M7 6h10v13a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2z" />
+      <path d="M9 12h6" />
+    </svg>
+  ),
+  bottle: ({ size = 24 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 2h4v3h-4z" />
+      <path d="M9 5h6l1 4v10a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2V9z" />
+      <path d="M9 11h6" />
+    </svg>
+  ),
+  pillow: ({ size = 24 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 9c0-2 2-3 4-3h10c2 0 4 1 4 3v6c0 2-2 3-4 3H7c-2 0-4-1-4-3z" />
+      <path d="M6 9c2 1 2 5 0 6M18 9c-2 1-2 5 0 6" />
+    </svg>
+  ),
+  root: ({ size = 24 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3c-2 3-5 4-5 8s3 6 5 6 5-2 5-6-3-5-5-8z" />
+      <path d="M12 17v4M9 19l-2 2M15 19l2 2" />
+    </svg>
+  ),
+  mouth: ({ size = 24 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 12c3-4 15-4 18 0-3 4-15 4-18 0z" />
+      <path d="M8 12c1-1 7-1 8 0" />
+    </svg>
+  ),
+  snail: ({ size = 24 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 18h14a6 6 0 1 0-6-6c0 2 1 3 3 3s3-1 3-3" />
+      <path d="M16 8V4M14 4l2-1 2 1" />
+    </svg>
+  ),
 };
 
 
