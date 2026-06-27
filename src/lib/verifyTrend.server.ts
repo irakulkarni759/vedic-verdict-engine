@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import type { CategorySlug, Trend } from "@/data/trends";
+import type { CategorySlug, Trend } from "@/lib/trends";
 import { getSupabaseServiceClient } from "./supabase.server";
 import { autoExtractProductInfo } from "./pipeline/productInfo.server";
 import { analyzeCommunitySentiment, type SentimentResult } from "./pipeline/sentiment.server";

@@ -1,4 +1,4 @@
-import type { Verdict } from "@/data/trends";
+import type { Verdict } from "@/lib/trends";
 import type { ResearchVerdict } from "./synthesize.server";
 
 // This mapping is a PRODUCT DECISION, made here explicitly rather than left
