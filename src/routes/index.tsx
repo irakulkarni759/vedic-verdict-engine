@@ -186,9 +186,9 @@ function Hero({
         </p>
 
         <h1
-          className="font-display text-center leading-[0.9] mt-3 whitespace-nowrap"
+          className="font-display text-center leading-[0.95] mt-3"
           style={{
-            fontSize: "clamp(56px, 14vw, 220px)",
+            fontSize: "clamp(44px, 8vw, 112px)",
             color: "var(--ink)",
             letterSpacing: "-0.02em",
             animation: "fade-up 1.2s ease-out 0.2s both",
@@ -198,7 +198,7 @@ function Hero({
         </h1>
 
         <p
-          className="mt-6 max-w-2xl text-center leading-snug"
+          className="mt-6 max-w-xl text-center leading-snug"
           style={{
             color: "var(--ink)",
             fontSize: 16,
@@ -206,11 +206,8 @@ function Hero({
             animation: "fade-up 1.2s ease-out 0.6s both",
           }}
         >
-          Veda tells you what actually works. Search any ingredient, product, or ritual —
-          we cross-reference clinical research with what real people report, then label it{" "}
-          <strong style={{ color: "var(--verdict-backed)", fontWeight: 500 }}>BACKED</strong>,{" "}
-          <strong style={{ color: "var(--verdict-mixed)", fontWeight: 500 }}>MIXED</strong>, or{" "}
-          <strong style={{ color: "var(--verdict-debunked)", fontWeight: 500 }}>DEBUNKED</strong>.
+          Search any ingredient, product, or ritual. We read the research papers
+          and the Reddit threads so you don't have to.
           <br />
           <span style={{ color: "var(--muted-ink)", fontSize: 14 }}>
             Try <em>“creatine for muscle growth”</em>, <em>“magnesium for sleep”</em>, or <em>“rosemary oil for hair”</em>.
@@ -589,15 +586,16 @@ function TrendIcon({ name, slug, size = 24 }: { name: string; slug?: string; siz
 type IconKey =
   | "sun" | "vial" | "capsule" | "droplet" | "leaf" | "brush"
   | "roller" | "stone" | "mask" | "clock" | "glass" | "muscle"
-  | "tube" | "mortar" | "moon" | "flame" | "spark";
+  | "tube" | "mortar" | "moon" | "flame" | "spark"
+  | "dropper" | "beaker" | "jar" | "bottle" | "pillow" | "root" | "mouth" | "snail";
 
 const SLUG_ICON: Record<string, IconKey> = {
   "daily-spf": "sun",
   "retinol": "vial",
-  "vitamin-c-serum": "vial",
-  "niacinamide": "vial",
+  "vitamin-c-serum": "dropper",
+  "niacinamide": "beaker",
   "hyaluronic-acid": "droplet",
-  "snail-mucin": "vial",
+  "snail-mucin": "snail",
   "slugging": "tube",
   "jade-roller": "roller",
   "gua-sha": "stone",
@@ -605,17 +603,17 @@ const SLUG_ICON: Record<string, IconKey> = {
   "dry-brushing": "brush",
   "rosemary-oil": "leaf",
   "biotin": "capsule",
-  "collagen-peptides": "capsule",
+  "collagen-peptides": "bottle",
   "ashwagandha": "mortar",
   "creatine": "muscle",
   "melatonin": "moon",
-  "magnesium-sleep": "moon",
+  "magnesium-sleep": "pillow",
   "celery-juice": "glass",
-  "turmeric": "mortar",
+  "turmeric": "root",
   "intermittent-fasting": "clock",
-  "oil-pulling": "droplet",
-  "castor-oil": "droplet",
-  "beef-liver": "capsule",
+  "oil-pulling": "mouth",
+  "castor-oil": "jar",
+  "beef-liver": "flame",
 };
 
 function pickIconKey(slug: string | undefined, name: string): IconKey {
@@ -746,6 +744,58 @@ const ICONS: Record<IconKey, React.FC<{ size?: number }>> = {
   spark: ({ size = 24 }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 3v6M12 15v6M3 12h6M15 12h6M6 6l4 4M14 14l4 4M18 6l-4 4M10 14l-4 4" />
+    </svg>
+  ),
+  dropper: ({ size = 24 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+      <rect x="10" y="2" width="4" height="10" rx="1" />
+      <path d="M9 12h6" />
+      <path d="M12 12v6c0 2-2 3-2 3" />
+      <circle cx="10" cy="21" r="0.6" fill="currentColor" />
+    </svg>
+  ),
+  beaker: ({ size = 24 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 3h8M9 3v6l-4 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-4-9V3" />
+      <path d="M6 15h12" />
+    </svg>
+  ),
+  jar: ({ size = 24 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+      <rect x="6" y="3" width="12" height="3" rx="1" />
+      <path d="M7 6h10v13a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2z" />
+      <path d="M9 12h6" />
+    </svg>
+  ),
+  bottle: ({ size = 24 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 2h4v3h-4z" />
+      <path d="M9 5h6l1 4v10a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2V9z" />
+      <path d="M9 11h6" />
+    </svg>
+  ),
+  pillow: ({ size = 24 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 9c0-2 2-3 4-3h10c2 0 4 1 4 3v6c0 2-2 3-4 3H7c-2 0-4-1-4-3z" />
+      <path d="M6 9c2 1 2 5 0 6M18 9c-2 1-2 5 0 6" />
+    </svg>
+  ),
+  root: ({ size = 24 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3c-2 3-5 4-5 8s3 6 5 6 5-2 5-6-3-5-5-8z" />
+      <path d="M12 17v4M9 19l-2 2M15 19l2 2" />
+    </svg>
+  ),
+  mouth: ({ size = 24 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 12c3-4 15-4 18 0-3 4-15 4-18 0z" />
+      <path d="M8 12c1-1 7-1 8 0" />
+    </svg>
+  ),
+  snail: ({ size = 24 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 18h14a6 6 0 1 0-6-6c0 2 1 3 3 3s3-1 3-3" />
+      <path d="M16 8V4M14 4l2-1 2 1" />
     </svg>
   ),
 };
