@@ -1,5 +1,5 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
-import { trendBySlug, type Verdict } from "@/lib/trends";
+import { trendBySlug, type Trend, type Verdict } from "@/lib/trends";
 import { TrendCard } from "@/components/TrendCard";
 
 export const Route = createFileRoute("/trend/$slug")({
@@ -129,7 +129,7 @@ function TrendPage() {
             WHAT THE RESEARCH SAYS
           </p>
           <ul className="mt-3 space-y-2">
-            {trend.evidence.map((e, i) => (
+            {trend.evidence.map((e: string, i: number) => (
               <li
                 key={i}
                 className="flex items-start gap-4 rounded-2xl px-5 py-4"
@@ -182,7 +182,7 @@ function TrendPage() {
               />
             </div>
             <div className="mt-6 space-y-5">
-              {trend.quotes.map((q, i) => (
+              {trend.quotes.map((q: { handle: string; text: string }, i: number) => (
                 <div key={i}>
                   <p className="italic" style={{ color: "var(--ink)", fontSize: 14, lineHeight: 1.5 }}>
                     "{q.text}"
@@ -203,7 +203,7 @@ function TrendPage() {
               RELATED TRENDS
             </p>
             <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-4">
-              {related.map((r) => (
+              {related.map((r: Trend) => (
                 <TrendCard key={r.slug} trend={r} compact />
               ))}
             </div>

@@ -1,5 +1,5 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
-import { categoryBySlug, trendsByCategory } from "@/lib/trends";
+import { categoryBySlug, trendsByCategory, type Trend } from "@/lib/trends";
 import { TrendCard } from "@/components/TrendCard";
 
 export const Route = createFileRoute("/category/$slug")({
@@ -54,7 +54,7 @@ function CategoryPage() {
 
       <section className="mx-auto max-w-[1100px] px-6 pb-24">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {trends.map((t) => (
+          {trends.map((t: Trend) => (
             <TrendCard key={t.slug} trend={t} />
           ))}
           {trends.length === 0 && (
