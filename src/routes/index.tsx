@@ -815,7 +815,7 @@ function Footer() {
           <span style={{ color: "var(--muted-ink)", fontFamily: "var(--font-display)" }} className="text-base">वेद</span>
         </div>
         <p className="font-label" style={{ color: "var(--muted-ink)", fontSize: 10 }}>
-          EVIDENCE OVER ALGORITHM · MADE WITH CARE
+          EVIDENCE OVER ALGORITHM · EST 2026
         </p>
       </div>
     </footer>
