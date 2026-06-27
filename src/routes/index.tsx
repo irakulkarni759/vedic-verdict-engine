@@ -103,7 +103,7 @@ function Veda() {
     ]);
     setCount((c) => c + 1);
     setQuery("");
-    navigate({ to: "/search/$query", params: { query: encodeURIComponent(q) } });
+    navigate({ to: "/search/$query", params: { query: q } });
   }
 
   return (
