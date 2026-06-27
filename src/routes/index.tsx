@@ -131,7 +131,7 @@ function Nav() {
           <span className="font-display text-[34px] leading-none" style={{ color: "var(--ink)" }}>
             veda
           </span>
-          <span style={{ color: "var(--muted-ink)", fontFamily: "var(--font-display)" }} className="text-[26px] leading-none">
+          <span style={{ color: "var(--muted-ink)", fontFamily: "var(--font-display)", fontSize: 26, lineHeight: 1, display: "inline-flex", alignItems: "center", height: "34px", position: "relative", top: "4px" }}>
             वेद
           </span>
         </Link>
