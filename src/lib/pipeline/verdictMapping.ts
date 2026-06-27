@@ -41,15 +41,15 @@ export function toConfidence(v: ResearchVerdict): "low" | "moderate" | "high" {
 export function sentimentToScore(overall: string): number {
   switch (overall) {
     case "positive":
-      return 0.75;
+      return 10;
     case "mostly positive":
-      return 0.4;
+      return 7;
     case "mixed":
-      return 0;
+      return 5;
     case "mostly negative":
-      return -0.4;
+      return 3;
     case "negative":
-      return -0.75;
+      return 1;
     default:
       return 0;
   }
