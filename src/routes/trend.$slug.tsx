@@ -1,3 +1,4 @@
+import { comments } from "@/components/comments";   // ← NEW
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { trendBySlug, type Trend, type Verdict } from "@/lib/trends";
 import { TrendCard } from "@/components/TrendCard";
@@ -294,9 +295,11 @@ function TrendPage() {
               {related.map((r: Trend) => (
                 <TrendCard key={r.slug} trend={r} compact />
               ))}
+              
             </div>
           </section>
         )}
+        <comments slug={trend.slug} />
       </div>
     </div>
   );
