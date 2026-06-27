@@ -1,5 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { CATEGORIES, TRENDS, trendBySlug, type Verdict } from "@/lib/trends";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -8,7 +9,7 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "A wellness evidence engine. Search any ingredient, product, or ritual and get a verdict backed by PubMed research.",
+          "A wellness evidence engine. Search any ingredient, product, or ritual — get a verdict that cross-references clinical research and community sentiment.",
       },
       { property: "og:title", content: "Veda — Is it actually worth it?" },
       {
@@ -20,47 +21,19 @@ export const Route = createFileRoute("/")({
   component: Veda,
 });
 
-type Verdict = "BACKED" | "MIXED" | "DEBUNKED";
-type Mark = { name: string; verdict: Verdict; rot: number; dx: number; dy: number; id: number };
+type Mark = {
+  name: string;
+  slug?: string;
+  verdict: Verdict;
+  rot: number;
+  dx: number;
+  dy: number;
+  id: number;
+};
 
-const SEED: { name: string; verdict: Verdict }[] = [
-  { name: "rosemary oil", verdict: "MIXED" },
-  { name: "collagen peptides", verdict: "BACKED" },
-  { name: "ashwagandha", verdict: "BACKED" },
-  { name: "slugging", verdict: "BACKED" },
-  { name: "celery juice detox", verdict: "DEBUNKED" },
-  { name: "magnesium for sleep", verdict: "BACKED" },
-  { name: "jade roller", verdict: "MIXED" },
-  { name: "snail mucin", verdict: "BACKED" },
-  { name: "creatine monohydrate", verdict: "BACKED" },
-  { name: "retinol", verdict: "BACKED" },
-  { name: "dry brushing", verdict: "MIXED" },
-  { name: "intermittent fasting", verdict: "MIXED" },
-  { name: "gua sha", verdict: "MIXED" },
-  { name: "vitamin C serum", verdict: "BACKED" },
-  { name: "activated charcoal", verdict: "DEBUNKED" },
-  { name: "biotin for hair", verdict: "MIXED" },
-  { name: "hyaluronic acid", verdict: "BACKED" },
-  { name: "turmeric for inflammation", verdict: "BACKED" },
-  { name: "oil pulling", verdict: "DEBUNKED" },
-  { name: "melatonin", verdict: "BACKED" },
-];
-
-const CATEGORIES = [
-  "SKINCARE",
-  "HAIRCARE",
-  "SUPPLEMENTS",
-  "NUTRITION",
-  "SLEEP",
-  "GUT HEALTH",
-  "FITNESS",
-  "MENTAL WELLNESS",
-];
-
-const TRENDING = ["rosemary oil", "collagen peptides", "ashwagandha", "slugging"];
+const TRENDING_SLUGS = ["rosemary-oil", "collagen-peptides", "ashwagandha", "slugging"];
 
 function rand(seed: number) {
-  // deterministic pseudo-random per index for SSR-safe layout
   const x = Math.sin(seed * 9301 + 49297) * 233280;
   return x - Math.floor(x);
 }
@@ -76,12 +49,14 @@ function verdictColor(v: Verdict) {
 function Veda() {
   const initialMarks = useMemo<Mark[]>(
     () =>
-      SEED.map((s, i) => ({
-        ...s,
+      TRENDS.map((t, i) => ({
+        name: t.name.toLowerCase(),
+        slug: t.slug,
+        verdict: t.verdict,
         id: i,
-        rot: (rand(i + 1) - 0.5) * 8,
-        dx: (rand(i + 11) - 0.5) * 14,
-        dy: (rand(i + 31) - 0.5) * 10,
+        rot: (rand(i + 1) - 0.5) * 14,
+        dx: (rand(i + 11) - 0.5) * 18,
+        dy: (rand(i + 31) - 0.5) * 14,
       })),
     [],
   );
@@ -89,49 +64,53 @@ function Veda() {
   const [marks, setMarks] = useState<Mark[]>(initialMarks);
   const [count, setCount] = useState(48213);
   const [query, setQuery] = useState("");
-  const [archTrace, setArchTrace] = useState(0);
-  const archPathRef = useRef<SVGPathElement | null>(null);
+  const navigate = useNavigate();
 
-  // gentle counter drift to feel "live"
   useEffect(() => {
-    const t = setInterval(() => setCount((c) => c + 1), 7000);
+    const t = setInterval(() => setCount((c) => c + 1), 12000);
     return () => clearInterval(t);
   }, []);
 
   function submit(name?: string) {
     const q = (name ?? query).trim();
     if (!q) return;
+
+    // Look up by name or slug
+    const match = TRENDS.find(
+      (t) =>
+        t.name.toLowerCase() === q.toLowerCase() ||
+        t.slug === q.toLowerCase().replace(/\s+/g, "-"),
+    );
+
+    if (match) {
+      navigate({ to: "/trend/$slug", params: { slug: match.slug } });
+      return;
+    }
+
+    // Otherwise leave a mark
     const verdict: Verdict = (["BACKED", "MIXED", "DEBUNKED"] as Verdict[])[
       Math.floor(Math.random() * 3)
     ];
     const id = Date.now();
     setMarks((prev) => [
       {
-        name: q,
+        name: q.toLowerCase(),
         verdict,
         id,
-        rot: (Math.random() - 0.5) * 8,
-        dx: (Math.random() - 0.5) * 14,
-        dy: (Math.random() - 0.5) * 10,
+        rot: (Math.random() - 0.5) * 14,
+        dx: (Math.random() - 0.5) * 18,
+        dy: (Math.random() - 0.5) * 14,
       },
       ...prev,
     ]);
     setCount((c) => c + 1);
     setQuery("");
-    setArchTrace((n) => n + 1);
   }
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "var(--parchment)" }}>
       <Nav />
-      <Hero
-        query={query}
-        setQuery={setQuery}
-        onSubmit={submit}
-        count={count}
-        archTrace={archTrace}
-        archPathRef={archPathRef}
-      />
+      <Hero query={query} setQuery={setQuery} onSubmit={submit} count={count} />
       <WavyDivider from="var(--parchment)" to="var(--blush)" />
       <Stats />
       <WavyDivider from="var(--blush)" to="var(--parchment)" />
@@ -148,7 +127,7 @@ function Nav() {
       style={{ backgroundColor: "color-mix(in oklab, var(--parchment) 92%, transparent)" }}
     >
       <div className="mx-auto flex max-w-[1400px] items-center justify-between px-8 py-5">
-        <a href="#" className="flex items-baseline gap-2">
+        <Link to="/" className="flex items-baseline gap-2">
           <span style={{ color: "var(--terracotta)" }} className="text-sm">◆</span>
           <span className="font-display text-[22px]" style={{ color: "var(--ink)" }}>
             veda
@@ -156,13 +135,17 @@ function Nav() {
           <span style={{ color: "var(--muted-ink)", fontFamily: "var(--font-display)" }} className="text-[18px]">
             वेद
           </span>
-        </a>
+        </Link>
         <div className="hidden md:flex items-center gap-3 font-label" style={{ fontSize: 10, color: "var(--ink)" }}>
           {CATEGORIES.map((c, i) => (
-            <span key={c} className="flex items-center gap-3">
-              <a href={`#${c.toLowerCase().replace(" ", "-")}`} className="hover:opacity-70 transition-opacity">
-                {c}
-              </a>
+            <span key={c.slug} className="flex items-center gap-3">
+              <Link
+                to="/category/$slug"
+                params={{ slug: c.slug }}
+                className="hover:opacity-60 transition-opacity"
+              >
+                {c.label}
+              </Link>
               {i < CATEGORIES.length - 1 && (
                 <span style={{ color: "var(--muted-ink)", opacity: 0.5 }}>·</span>
               )}
@@ -179,34 +162,27 @@ function Hero({
   setQuery,
   onSubmit,
   count,
-  archTrace,
-  archPathRef,
 }: {
   query: string;
   setQuery: (s: string) => void;
   onSubmit: (n?: string) => void;
   count: number;
-  archTrace: number;
-  archPathRef: React.MutableRefObject<SVGPathElement | null>;
 }) {
-  // arch path (pointed Mughal-style)
   const archPath =
     "M 60 360 L 60 200 C 60 120, 130 60, 220 30 L 220 18 L 240 30 L 240 18 L 260 30 C 350 60, 420 120, 420 200 L 420 360";
 
   return (
     <section className="relative" style={{ minHeight: "100vh" }}>
-      {/* Corner botanicals */}
-      <CornerVine side="left" />
-      <CornerVine side="right" />
+      <Ornament side="left" />
+      <Ornament side="right" />
 
       <div className="relative z-10 flex min-h-screen flex-col items-center justify-center px-6 pt-8 pb-12">
-        {/* Headline */}
         <h1
           className="font-display text-center leading-[0.95]"
           style={{
             fontSize: "clamp(56px, 9vw, 96px)",
             color: "var(--ink)",
-            animation: "fade-up 0.7s ease-out 1.6s both",
+            animation: "fade-up 1.2s ease-out 0.2s both",
           }}
         >
           Is it actually
@@ -214,35 +190,32 @@ function Hero({
           <span style={{ color: "var(--terracotta)" }}>worth it?</span>
         </h1>
 
-        {/* Subtitle - tight to headline */}
         <p
-          className="mt-3 max-w-xl text-center leading-snug"
+          className="mt-4 max-w-xl text-center leading-snug"
           style={{
             color: "var(--muted-ink)",
             fontSize: 15,
             fontWeight: 300,
-            animation: "fade-up 0.6s ease-out 1.9s both",
+            animation: "fade-up 1.2s ease-out 0.6s both",
           }}
         >
           Search any ingredient, product, or wellness ritual.
           <br />
-          We cross-reference the clinical evidence and tell you if it actually works.
+          We cross-reference the clinical evidence <em>and</em> what the community actually reports back.
         </p>
 
-        {/* Arch + search */}
         <div
-          className="relative mt-5"
+          className="relative mt-6"
           style={{
             width: "min(480px, 92vw)",
-            animation: "fade-up 0.6s ease-out 2.1s both",
+            animation: "fade-up 1.2s ease-out 1.0s both",
           }}
         >
-          <ArchSVG archPath={archPath} traceTrigger={archTrace} pathRef={archPathRef} />
+          <ArchSVG archPath={archPath} />
 
-          {/* Search bar positioned inside arch base */}
           <div
             className="absolute left-1/2 -translate-x-1/2"
-            style={{ bottom: "12%", width: "78%" }}
+            style={{ bottom: "12%", width: "82%" }}
           >
             <form
               onSubmit={(e) => {
@@ -259,7 +232,7 @@ function Hero({
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="try 'rosemary oil for hair' or 'magnesium for sleep'..."
+                placeholder="try 'creatine' or 'magnesium for sleep'..."
                 className="flex-1 bg-transparent outline-none placeholder:opacity-70"
                 style={{ color: "var(--ink)", fontSize: 15, fontWeight: 300 }}
               />
@@ -279,88 +252,72 @@ function Hero({
           </div>
         </div>
 
-        {/* Trending */}
         <div
-          className="mt-4 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-4 text-center"
-          style={{ animation: "fade-up 0.6s ease-out 2.25s both" }}
+          className="mt-5 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-4 text-center"
+          style={{ animation: "fade-up 1.2s ease-out 1.4s both" }}
         >
           <span className="font-label" style={{ color: "var(--terracotta)", fontSize: 10 }}>
             TRYING NOW
           </span>
-          {TRENDING.map((t, i) => (
-            <span key={t} className="flex items-center gap-3">
-              <button
-                onClick={() => onSubmit(t)}
-                className="hover:opacity-60 transition-opacity"
-                style={{ color: "var(--ink)", fontSize: 15, fontWeight: 300 }}
-              >
-                {t}
-              </button>
-              {i < TRENDING.length - 1 && (
-                <span style={{ color: "var(--muted-ink)", opacity: 0.5 }}>·</span>
-              )}
-            </span>
-          ))}
+          {TRENDING_SLUGS.map((slug, i) => {
+            const t = trendBySlug(slug);
+            if (!t) return null;
+            return (
+              <span key={slug} className="flex items-center gap-3">
+                <Link
+                  to="/trend/$slug"
+                  params={{ slug }}
+                  className="hover:opacity-60 transition-opacity"
+                  style={{ color: "var(--ink)", fontSize: 15, fontWeight: 300 }}
+                >
+                  {t.name.toLowerCase()}
+                </Link>
+                {i < TRENDING_SLUGS.length - 1 && (
+                  <span style={{ color: "var(--muted-ink)", opacity: 0.5 }}>·</span>
+                )}
+              </span>
+            );
+          })}
         </div>
 
-        {/* Counter */}
         <div
-          className="mt-4 text-center font-display"
+          className="mt-5 text-center font-display"
           style={{
             color: "var(--ink)",
-            fontSize: 32,
-            animation: "fade-up 0.6s ease-out 2.4s both",
+            fontSize: 28,
+            animation: "fade-up 1.2s ease-out 1.6s both",
           }}
         >
-          <CountUp value={count} duration={1200} /> trends verified
+          <CountUp value={count} duration={2400} /> trends verified
         </div>
       </div>
     </section>
   );
 }
 
-function ArchSVG({
-  archPath,
-  traceTrigger,
-  pathRef,
-}: {
-  archPath: string;
-  traceTrigger: number;
-  pathRef: React.MutableRefObject<SVGPathElement | null>;
-}) {
+function ArchSVG({ archPath }: { archPath: string }) {
+  const pathRef = useRef<SVGPathElement | null>(null);
   const [len, setLen] = useState(1800);
-  const tracerRef = useRef<SVGPathElement | null>(null);
 
   useEffect(() => {
     if (pathRef.current) setLen(pathRef.current.getTotalLength());
-  }, [pathRef]);
-
-  useEffect(() => {
-    if (!traceTrigger || !tracerRef.current) return;
-    const el = tracerRef.current;
-    el.style.animation = "none";
-    // reflow
-    void el.getBoundingClientRect();
-    el.style.animation = "arch-trace 0.9s ease-out forwards";
-  }, [traceTrigger]);
+  }, []);
 
   return (
     <svg viewBox="0 0 480 380" className="w-full h-auto" style={{ overflow: "visible" }}>
-      {/* outer faint */}
       <path
         d={archPath}
         fill="none"
         stroke="var(--ink)"
-        strokeOpacity="0.22"
+        strokeOpacity="0.18"
         strokeWidth="2.5"
         strokeLinecap="round"
         style={{
           strokeDasharray: len,
           strokeDashoffset: len,
-          animation: `draw 1.5s ease-out 0.9s forwards`,
+          animation: `draw 2.8s ease-out 0.4s forwards`,
         }}
       />
-      {/* inner crisp */}
       <path
         ref={pathRef}
         d={archPath}
@@ -372,24 +329,22 @@ function ArchSVG({
         style={{
           strokeDasharray: len,
           strokeDashoffset: len,
-          animation: `draw 1.5s ease-out 0.9s forwards`,
+          animation: `draw 2.8s ease-out 0.4s forwards`,
         }}
       />
-      {/* base line closing arch */}
       <path
         d="M 60 360 C 180 380, 300 380, 420 360"
         fill="none"
         stroke="var(--ink)"
-        strokeOpacity="0.6"
+        strokeOpacity="0.5"
         strokeWidth="1"
         strokeLinecap="round"
         style={{
           strokeDasharray: 500,
           strokeDashoffset: 500,
-          animation: `draw 0.9s ease-out 2.0s forwards`,
+          animation: `draw 1.6s ease-out 2.6s forwards`,
         }}
       />
-      {/* decorative dots */}
       {[
         [105, 250],
         [85, 180],
@@ -404,38 +359,19 @@ function ArchSVG({
           cy={cy}
           r="2"
           fill="var(--terracotta)"
-          style={{ opacity: 0, animation: `bloom 0.4s ease-out ${2.0 + i * 0.05}s forwards` }}
+          style={{ opacity: 0, animation: `bloom 0.8s ease-out ${2.8 + i * 0.1}s forwards` }}
         />
       ))}
-      {/* finial lotus at peak */}
       <g
         transform="translate(240 8)"
         style={{
           transformOrigin: "240px 8px",
           opacity: 0,
-          animation: "bloom 0.6s ease-out 2.3s forwards",
+          animation: "bloom 1s ease-out 3.2s forwards",
         }}
       >
         <Lotus size={20} />
       </g>
-
-      {/* tracer overlay for search submission */}
-      <path
-        ref={tracerRef}
-        d={archPath}
-        fill="none"
-        stroke="var(--terracotta)"
-        strokeWidth="2"
-        strokeLinecap="round"
-        style={
-          {
-            strokeDasharray: 120,
-            strokeDashoffset: len,
-            ["--len" as string]: `${len}`,
-            opacity: 0,
-          } as React.CSSProperties
-        }
-      />
     </svg>
   );
 }
@@ -464,83 +400,53 @@ function Lotus({ size = 20 }: { size?: number }) {
   );
 }
 
-function CornerVine({ side }: { side: "left" | "right" }) {
+/**
+ * Small Mughal-inspired corner ornament — a single hand-drawn medallion
+ * instead of intricate branching vines. Subtle, slow, and far less busy.
+ */
+function Ornament({ side }: { side: "left" | "right" }) {
   const flip = side === "right";
-  const pathD = "M 20 0 C 30 60, 70 90, 90 160 C 100 210, 70 250, 110 320";
-  const branchA = "M 60 100 C 90 110, 110 95, 130 80";
-  const branchB = "M 85 200 C 60 210, 40 200, 25 175";
-  const branchC = "M 100 270 C 130 280, 150 270, 165 245";
-
   return (
     <div
-      className="pointer-events-none absolute top-0 z-0"
+      className="pointer-events-none absolute top-10 z-0 hidden md:block"
       style={{
-        [side]: 0,
-        width: "min(280px, 28vw)",
-        height: "min(380px, 50vh)",
+        [side]: 24,
+        width: 120,
+        height: 120,
+        opacity: 0.5,
         transform: flip ? "scaleX(-1)" : undefined,
+        animation: "fade-up 2s ease-out 0.6s both",
       }}
     >
-      <svg viewBox="0 0 200 360" className="w-full h-full" style={{ overflow: "visible" }}>
-        <g style={{ transformOrigin: "0 0", animation: "sway 9s ease-in-out 3s infinite" }}>
-          {[pathD, branchA, branchB, branchC].map((d, i) => (
-            <path
+      <svg viewBox="0 0 120 120" className="w-full h-full" style={{ overflow: "visible" }}>
+        {/* outer dotted ring */}
+        {Array.from({ length: 12 }).map((_, i) => {
+          const a = (i / 12) * Math.PI * 2;
+          const r = 52;
+          return (
+            <circle
               key={i}
-              d={d}
-              fill="none"
-              stroke="var(--stem)"
-              strokeWidth={i === 0 ? 1.4 : 1}
-              strokeLinecap="round"
-              style={{
-                strokeDasharray: 600,
-                strokeDashoffset: 600,
-                animation: `draw 1.4s ease-out ${0.1 + i * 0.25}s forwards`,
-              }}
+              cx={60 + Math.cos(a) * r}
+              cy={60 + Math.sin(a) * r}
+              r="1.2"
+              fill="var(--ink)"
+              opacity="0.5"
             />
-          ))}
-          {/* leaves */}
-          {[
-            [70, 130, 18],
-            [50, 220, -25],
-            [120, 170, 35],
-            [140, 260, -15],
-            [40, 80, -40],
-          ].map(([x, y, r], i) => (
-            <g
-              key={i}
-              transform={`translate(${x} ${y}) rotate(${r})`}
-              style={{ opacity: 0, animation: `bloom 0.5s ease-out ${1.0 + i * 0.15}s forwards`, transformOrigin: `${x}px ${y}px` }}
-            >
-              <ellipse cx="0" cy="0" rx="14" ry="6" fill="var(--sage)" opacity="0.85" />
-              <line x1="-14" y1="0" x2="14" y2="0" stroke="var(--stem)" strokeWidth="0.5" opacity="0.6" />
-            </g>
-          ))}
-          {/* lotus blooms at branch ends */}
-          {[
-            [130, 80, 12],
-            [25, 175, 14],
-            [165, 245, 13],
-            [110, 320, 16],
-          ].map(([x, y, s], i) => (
-            <g
-              key={i}
-              transform={`translate(${x} ${y})`}
-              style={{
-                opacity: 0,
-                animation: `bloom 0.6s ease-out ${1.6 + i * 0.18}s forwards`,
-                transformOrigin: `${x}px ${y}px`,
-              }}
-            >
-              <Lotus size={s} />
-            </g>
-          ))}
+          );
+        })}
+        {/* inner medallion ring */}
+        <circle cx="60" cy="60" r="34" fill="none" stroke="var(--ink)" strokeOpacity="0.45" strokeWidth="0.8" />
+        <circle cx="60" cy="60" r="22" fill="none" stroke="var(--terracotta)" strokeOpacity="0.55" strokeWidth="0.8" />
+        {/* central lotus */}
+        <g transform="translate(60 60)">
+          <Lotus size={18} />
         </g>
       </svg>
     </div>
   );
 }
 
-function CountUp({ value, duration = 1000 }: { value: number; duration?: number }) {
+function CountUp({ value, duration = 2400 }: { value: number; duration?: number }) {
   const [display, setDisplay] = useState(value);
   const prev = useRef(value);
   useEffect(() => {
@@ -550,10 +456,8 @@ function CountUp({ value, duration = 1000 }: { value: number; duration?: number 
     let raf = 0;
     const tick = (t: number) => {
       const p = Math.min(1, (t - t0) / duration);
-      // ease-out with slight overshoot
       const eased = 1 - Math.pow(1 - p, 3);
-      const overshoot = p < 1 ? Math.sin(p * Math.PI) * 0.02 : 0;
-      const v = Math.round(start + (end - start) * (eased + overshoot));
+      const v = Math.round(start + (end - start) * eased);
       setDisplay(v);
       if (p < 1) raf = requestAnimationFrame(tick);
       else prev.current = end;
@@ -645,19 +549,18 @@ function StatCountUp({ text }: { text: string }) {
   }, [started]);
 
   function animate() {
-    // extract numeric portion
     const match = text.match(/[\d,]+/);
     if (!match) return;
     const target = parseInt(match[0].replace(/,/g, ""), 10);
     const prefix = text.slice(0, match.index);
     const suffix = text.slice((match.index ?? 0) + match[0].length);
     const t0 = performance.now();
-    const duration = 1600;
+    const duration = 3200;
     const tick = (t: number) => {
       const p = Math.min(1, (t - t0) / duration);
-      const eased = 1 - Math.pow(1 - p, 3);
-      const overshoot = p < 1 ? Math.sin(p * Math.PI) * 0.04 : 0;
-      const v = Math.round(target * (eased + overshoot));
+      // smooth ease-out, no overshoot
+      const eased = 1 - Math.pow(1 - p, 4);
+      const v = Math.round(target * eased);
       const isInOne = /1 in/.test(text);
       const formatted = isInOne ? v.toString() : v.toLocaleString();
       setDisplay(prefix + formatted + suffix);
@@ -674,13 +577,24 @@ function MarkWall({ marks }: { marks: Mark[] }) {
   return (
     <section
       style={{ backgroundColor: "var(--parchment)" }}
-      className="px-6 py-24"
+      className="px-6 py-20"
       aria-label="Search history wall"
     >
-      <div className="mx-auto max-w-[1200px]">
-        <div className="flex flex-wrap justify-center gap-2">
+      <div className="mx-auto max-w-[980px]">
+        <div className="text-center">
+          <p className="font-label text-[10px]" style={{ color: "var(--terracotta)" }}>
+            THE MARK WALL
+          </p>
+          <h2 className="font-display mt-2" style={{ color: "var(--ink)", fontSize: 36 }}>
+            Every search leaves a stamp.
+          </h2>
+          <p className="mt-2" style={{ color: "var(--muted-ink)", fontSize: 13 }}>
+            Tap a seal to see the evidence.
+          </p>
+        </div>
+        <div className="mt-10 flex flex-wrap justify-center gap-x-5 gap-y-6">
           {marks.map((m, i) => (
-            <MarkTag key={m.id} m={m} index={i} />
+            <MarkSeal key={m.id} m={m} index={i} />
           ))}
         </div>
       </div>
@@ -688,50 +602,78 @@ function MarkWall({ marks }: { marks: Mark[] }) {
   );
 }
 
-function MarkTag({ m, index }: { m: Mark; index: number }) {
-  return (
+function MarkSeal({ m, index }: { m: Mark; index: number }) {
+  const color = verdictColor(m.verdict);
+  // monogram: up to 2 letters from the first word(s)
+  const monogram = m.name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("");
+
+  const seal = (
     <div
+      className="group relative flex flex-col items-center"
       style={
         {
-          width: 90,
-          transform: `translate(${m.dx}px, ${m.dy}px) rotate(${m.rot}deg)`,
           ["--rot-start" as string]: `${m.rot - 6}deg`,
           ["--rot-end" as string]: `${m.rot}deg`,
-          animation: index < 20 ? undefined : "drop-in 0.7s cubic-bezier(.4,1.6,.6,1) both",
+          animation: index < TRENDS.length ? undefined : "drop-in 0.9s cubic-bezier(.4,1.4,.6,1) both",
         } as React.CSSProperties
       }
-      className="relative shrink-0"
     >
-      <svg
-        viewBox="0 0 90 50"
-        className="absolute inset-0 h-full w-full"
-        style={{ overflow: "visible" }}
-        aria-hidden
+      <div
+        className="relative flex items-center justify-center transition-transform group-hover:-translate-y-0.5"
+        style={{
+          width: 48,
+          height: 48,
+          transform: `rotate(${m.rot}deg) translate(${m.dx * 0.3}px, ${m.dy * 0.3}px)`,
+        }}
       >
-        <path
-          d="M 3 4 C 25 2, 60 6, 87 3 C 88 18, 86 32, 87 47 C 60 49, 25 46, 3 48 C 2 32, 4 18, 3 4 Z"
-          fill="var(--parchment-deep)"
-          stroke="var(--ink)"
-          strokeOpacity="0.5"
-          strokeWidth="0.8"
-        />
-      </svg>
-      <div className="relative flex h-[50px] items-center px-3 py-2">
+        {/* outer ink ring */}
+        <svg viewBox="0 0 48 48" className="absolute inset-0" style={{ overflow: "visible" }}>
+          <circle cx="24" cy="24" r="22" fill="var(--parchment-deep)" stroke="var(--ink)" strokeOpacity="0.55" strokeWidth="0.8" />
+          <circle cx="24" cy="24" r="19" fill="none" stroke={color} strokeOpacity="0.85" strokeWidth="1.2" />
+          {/* tiny notches */}
+          {Array.from({ length: 8 }).map((_, i) => {
+            const a = (i / 8) * Math.PI * 2;
+            return (
+              <circle
+                key={i}
+                cx={24 + Math.cos(a) * 22}
+                cy={24 + Math.sin(a) * 22}
+                r="0.6"
+                fill="var(--ink)"
+                opacity="0.5"
+              />
+            );
+          })}
+        </svg>
         <span
-          className="block flex-1 truncate"
-          style={{ color: "var(--ink)", fontSize: 10, fontWeight: 300, lineHeight: 1.2 }}
-          title={m.name}
+          className="relative font-display"
+          style={{ color: "var(--ink)", fontSize: 16, lineHeight: 1 }}
         >
-          {m.name}
+          {monogram}
         </span>
-        <span
-          className="ml-1 inline-block shrink-0 rounded-full"
-          style={{ width: 6, height: 6, backgroundColor: verdictColor(m.verdict) }}
-          aria-label={m.verdict}
-        />
       </div>
+      <span
+        className="mt-1.5 max-w-[88px] truncate text-center font-mono"
+        style={{ color: "var(--muted-ink)", fontSize: 9, letterSpacing: "0.04em" }}
+        title={m.name}
+      >
+        {m.name}
+      </span>
     </div>
   );
+
+  if (m.slug) {
+    return (
+      <Link to="/trend/$slug" params={{ slug: m.slug }} className="no-underline">
+        {seal}
+      </Link>
+    );
+  }
+  return seal;
 }
 
 function Footer() {
