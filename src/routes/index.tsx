@@ -360,19 +360,10 @@ function ArchSVG({ archPath }: { archPath: string }) {
           style={{ opacity: 0, animation: `bloom 0.8s ease-out ${2.8 + i * 0.1}s forwards` }}
         />
       ))}
-      <g
-        transform="translate(240 8)"
-        style={{
-          transformOrigin: "240px 8px",
-          opacity: 0,
-          animation: "bloom 1s ease-out 3.2s forwards",
-        }}
-      >
-        <Lotus size={20} />
-      </g>
     </svg>
   );
 }
+
 
 function Lotus({ size = 20 }: { size?: number }) {
   const petals = 8;
