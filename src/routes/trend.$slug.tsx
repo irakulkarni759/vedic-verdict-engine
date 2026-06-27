@@ -62,6 +62,52 @@ function VerdictPill({ v }: { v: Verdict }) {
   );
 }
 
+function pubmedUrl(q: string) {
+  return `https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(q)}`;
+}
+function redditUrl(q: string) {
+  return `https://www.reddit.com/search/?q=${encodeURIComponent(q)}`;
+}
+function redditHandleUrl(handle: string) {
+  const clean = handle.replace(/^@/, "");
+  return `https://www.reddit.com/search/?q=${encodeURIComponent(clean)}`;
+}
+
+function SourceButtons({ query }: { query: string }) {
+  return (
+    <div className="relative mt-6 flex flex-wrap gap-2">
+      <a
+        href={pubmedUrl(query)}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 font-label transition-opacity hover:opacity-80"
+        style={{
+          backgroundColor: "var(--ink)",
+          color: "var(--parchment)",
+          fontSize: 10,
+          letterSpacing: "0.14em",
+        }}
+      >
+        PUBMED RESEARCH ↗
+      </a>
+      <a
+        href={redditUrl(query)}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 font-label transition-opacity hover:opacity-80"
+        style={{
+          backgroundColor: "var(--terracotta)",
+          color: "var(--parchment)",
+          fontSize: 10,
+          letterSpacing: "0.14em",
+        }}
+      >
+        REDDIT THREADS ↗
+      </a>
+    </div>
+  );
+}
+
 function TrendPage() {
   const { trend, related } = Route.useLoaderData();
 
@@ -86,7 +132,6 @@ function TrendPage() {
             boxShadow: "0 1px 0 color-mix(in oklab, var(--ink) 4%, transparent)",
           }}
         >
-          {/* Soft verdict glow */}
           <div
             className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full"
             style={{
@@ -115,6 +160,8 @@ function TrendPage() {
             {trend.oneLiner}
           </p>
 
+          <SourceButtons query={trend.name} />
+
           <div className="relative mt-8 grid grid-cols-2 md:grid-cols-4 gap-6">
             <Stat label="STUDIES" value={trend.studies.toString()} />
             <Stat label="CONFIDENCE" value={trend.confidence} />
@@ -125,25 +172,49 @@ function TrendPage() {
 
         {/* Evidence */}
         <section className="mt-10">
-          <p className="font-label text-[10px]" style={{ color: "var(--sage)" }}>
-            WHAT THE RESEARCH SAYS
-          </p>
+          <div className="flex items-baseline justify-between">
+            <p className="font-label text-[10px]" style={{ color: "var(--sage)" }}>
+              WHAT THE RESEARCH SAYS
+            </p>
+            <a
+              href={pubmedUrl(trend.name)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-label text-[10px] hover:opacity-70"
+              style={{ color: "var(--terracotta)" }}
+            >
+              ALL {trend.studies} ON PUBMED ↗
+            </a>
+          </div>
           <ul className="mt-3 space-y-2">
             {trend.evidence.map((e: string, i: number) => (
               <li
                 key={i}
-                className="flex items-start gap-4 rounded-2xl px-5 py-4"
+                className="rounded-2xl px-5 py-4"
                 style={{
                   backgroundColor: "#fff",
                   border: "1px solid color-mix(in oklab, var(--ink) 8%, transparent)",
                 }}
               >
-                <span className="font-mono text-[10px] mt-0.5" style={{ color: "var(--sage)" }}>
-                  {String(i + 1).padStart(2, "0")}
-                </span>
-                <span style={{ color: "var(--ink)", fontSize: 14, lineHeight: 1.55, fontWeight: 300 }}>
-                  {e}
-                </span>
+                <div className="flex items-start gap-4">
+                  <span className="font-mono text-[10px] mt-0.5" style={{ color: "var(--sage)" }}>
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <span style={{ color: "var(--ink)", fontSize: 14, lineHeight: 1.55, fontWeight: 300 }}>
+                    {e}
+                  </span>
+                </div>
+                <div className="mt-2 pl-9">
+                  <a
+                    href={pubmedUrl(`${trend.name} ${e.split(" ").slice(0, 6).join(" ")}`)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono text-[10px] hover:opacity-70"
+                    style={{ color: "var(--terracotta)" }}
+                  >
+                    view on pubmed ↗
+                  </a>
+                </div>
               </li>
             ))}
           </ul>
@@ -151,9 +222,20 @@ function TrendPage() {
 
         {/* Community */}
         <section className="mt-10">
-          <p className="font-label text-[10px]" style={{ color: "var(--sage)" }}>
-            WHAT PEOPLE SAY
-          </p>
+          <div className="flex items-baseline justify-between">
+            <p className="font-label text-[10px]" style={{ color: "var(--sage)" }}>
+              WHAT PEOPLE SAY
+            </p>
+            <a
+              href={redditUrl(trend.name)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-label text-[10px] hover:opacity-70"
+              style={{ color: "var(--terracotta)" }}
+            >
+              READ THREADS ON REDDIT ↗
+            </a>
+          </div>
           <div
             className="mt-3 rounded-2xl p-6"
             style={{
@@ -187,9 +269,15 @@ function TrendPage() {
                   <p className="italic" style={{ color: "var(--ink)", fontSize: 14, lineHeight: 1.5 }}>
                     "{q.text}"
                   </p>
-                  <p className="font-mono mt-1 text-[10px]" style={{ color: "var(--muted-ink)" }}>
-                    {q.handle.toUpperCase()}
-                  </p>
+                  <a
+                    href={redditHandleUrl(q.handle)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono mt-1 inline-block text-[10px] hover:opacity-70"
+                    style={{ color: "var(--terracotta)" }}
+                  >
+                    {q.handle.toUpperCase()} ↗
+                  </a>
                 </div>
               ))}
             </div>
