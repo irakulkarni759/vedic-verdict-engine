@@ -204,14 +204,12 @@ function Hero({
             fontSize: 16,
             fontWeight: 300,
             animation: "fade-up 1.2s ease-out 0.6s both",
+            whiteSpace: "pre-line",
           }}
         >
-          Search any ingredient, product, or ritual. We read the research papers
-          and the Reddit threads so you don't have to.
-          <br />
-          <span style={{ color: "var(--muted-ink)", fontSize: 14 }}>
-            Try <em>“creatine for muscle growth”</em>, <em>“magnesium for sleep”</em>, or <em>“rosemary oil for hair”</em>.
-          </span>
+          Search any ingredient, product, or ritual.{"\u00a0"}{"\n"}
+          We read the research papers and the Reddit threads so you don't have to.{"\n"}
+          Try “creatine for muscle growth”, “magnesium for sleep”, or “rosemary oil for hair”.
         </p>
 
 
