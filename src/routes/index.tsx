@@ -173,33 +173,51 @@ function Hero({
 
   return (
     <section className="relative" style={{ minHeight: "100vh" }}>
-      <div className="relative z-10 flex min-h-screen flex-col items-center justify-center px-6 pt-8 pb-12">
-        <h1
-          className="font-display text-center leading-[0.95]"
+      <div className="relative z-10 flex min-h-screen flex-col items-center justify-center px-4 pt-8 pb-12">
+        <p
+          className="font-label text-center"
           style={{
-            fontSize: "clamp(56px, 9vw, 96px)",
+            color: "var(--terracotta)",
+            fontSize: 11,
+            animation: "fade-up 1.2s ease-out 0.1s both",
+          }}
+        >
+          THE WELLNESS EVIDENCE ENGINE
+        </p>
+
+        <h1
+          className="font-display text-center leading-[0.9] mt-3 whitespace-nowrap"
+          style={{
+            fontSize: "clamp(56px, 14vw, 220px)",
             color: "var(--ink)",
+            letterSpacing: "-0.02em",
             animation: "fade-up 1.2s ease-out 0.2s both",
           }}
         >
-          Is it actually
-          <br />
-          <span style={{ color: "var(--terracotta)" }}>worth it?</span>
+          Is it actually <span style={{ color: "var(--terracotta)" }}>worth it?</span>
         </h1>
 
         <p
-          className="mt-4 max-w-xl text-center leading-snug"
+          className="mt-6 max-w-2xl text-center leading-snug"
           style={{
-            color: "var(--muted-ink)",
-            fontSize: 15,
+            color: "var(--ink)",
+            fontSize: 16,
             fontWeight: 300,
             animation: "fade-up 1.2s ease-out 0.6s both",
           }}
         >
-          Search any ingredient, product, or ritual — paired with the goal you care about.
+          Veda tells you what actually works. Search any ingredient, product, or ritual —
+          we cross-reference clinical research with what real people report, then label it{" "}
+          <strong style={{ color: "var(--verdict-backed)", fontWeight: 500 }}>BACKED</strong>,{" "}
+          <strong style={{ color: "var(--verdict-mixed)", fontWeight: 500 }}>MIXED</strong>, or{" "}
+          <strong style={{ color: "var(--verdict-debunked)", fontWeight: 500 }}>DEBUNKED</strong>.
           <br />
-          Try <em>“creatine for muscle growth”</em>, <em>“magnesium for sleep”</em>, or <em>“rosemary oil for hair”</em>.
+          <span style={{ color: "var(--muted-ink)", fontSize: 14 }}>
+            Try <em>“creatine for muscle growth”</em>, <em>“magnesium for sleep”</em>, or <em>“rosemary oil for hair”</em>.
+          </span>
         </p>
+
+
 
 
         <div
