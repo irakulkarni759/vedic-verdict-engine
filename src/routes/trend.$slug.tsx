@@ -1,7 +1,7 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { trendBySlug, type Trend, type Verdict } from "@/lib/trends";
 import { TrendCard } from "@/components/TrendCard";
-import { Comments } from "../../components/Comments";   // 2x `..` from /trend to /components
+import { Comments } from "@/components/Comments";
 
 export const Route = createFileRoute("/trend/$slug")({
   loader: ({ params }) => {
