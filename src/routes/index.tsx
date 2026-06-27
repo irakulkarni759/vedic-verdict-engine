@@ -125,13 +125,13 @@ function Nav() {
       className="sticky top-0 z-40 backdrop-blur-[2px]"
       style={{ backgroundColor: "color-mix(in oklab, var(--parchment) 92%, transparent)" }}
     >
-      <div className="mx-auto flex max-w-[1100px] items-center justify-between gap-8 px-8 py-5">
+      <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-8 pl-4 pr-8 py-5">
         <Link to="/" className="flex items-baseline gap-2">
-          <span style={{ color: "var(--terracotta)" }} className="text-sm">◆</span>
-          <span className="font-display text-[22px]" style={{ color: "var(--ink)" }}>
+          <span style={{ color: "var(--terracotta)" }} className="text-base">◆</span>
+          <span className="font-display text-[34px] leading-none" style={{ color: "var(--ink)" }}>
             veda
           </span>
-          <span style={{ color: "var(--muted-ink)", fontFamily: "var(--font-display)" }} className="text-[18px]">
+          <span style={{ color: "var(--muted-ink)", fontFamily: "var(--font-display)" }} className="text-[26px] leading-none">
             वेद
           </span>
         </Link>
