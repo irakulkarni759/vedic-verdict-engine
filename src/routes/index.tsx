@@ -365,75 +365,8 @@ function ArchSVG({ archPath }: { archPath: string }) {
 }
 
 
-function Lotus({ size = 20 }: { size?: number }) {
-  const petals = 8;
-  return (
-    <g>
-      {Array.from({ length: petals }).map((_, i) => {
-        const angle = (360 / petals) * i;
-        return (
-          <ellipse
-            key={i}
-            cx="0"
-            cy={-size * 0.45}
-            rx={size * 0.18}
-            ry={size * 0.45}
-            fill="var(--terracotta)"
-            opacity="0.85"
-            transform={`rotate(${angle})`}
-          />
-        );
-      })}
-      <circle cx="0" cy="0" r={size * 0.22} fill="var(--parchment)" stroke="var(--terracotta)" strokeWidth="0.8" />
-    </g>
-  );
-}
 
-/**
- * Small Mughal-inspired corner ornament — a single hand-drawn medallion
- * instead of intricate branching vines. Subtle, slow, and far less busy.
- */
-function Ornament({ side }: { side: "left" | "right" }) {
-  const flip = side === "right";
-  return (
-    <div
-      className="pointer-events-none absolute top-10 z-0 hidden md:block"
-      style={{
-        [side]: 24,
-        width: 120,
-        height: 120,
-        opacity: 0.5,
-        transform: flip ? "scaleX(-1)" : undefined,
-        animation: "fade-up 2s ease-out 0.6s both",
-      }}
-    >
-      <svg viewBox="0 0 120 120" className="w-full h-full" style={{ overflow: "visible" }}>
-        {/* outer dotted ring */}
-        {Array.from({ length: 12 }).map((_, i) => {
-          const a = (i / 12) * Math.PI * 2;
-          const r = 52;
-          return (
-            <circle
-              key={i}
-              cx={60 + Math.cos(a) * r}
-              cy={60 + Math.sin(a) * r}
-              r="1.2"
-              fill="var(--ink)"
-              opacity="0.5"
-            />
-          );
-        })}
-        {/* inner medallion ring */}
-        <circle cx="60" cy="60" r="34" fill="none" stroke="var(--ink)" strokeOpacity="0.45" strokeWidth="0.8" />
-        <circle cx="60" cy="60" r="22" fill="none" stroke="var(--terracotta)" strokeOpacity="0.55" strokeWidth="0.8" />
-        {/* central lotus */}
-        <g transform="translate(60 60)">
-          <Lotus size={18} />
-        </g>
-      </svg>
-    </div>
-  );
-}
+
 
 function CountUp({ value, duration = 2400 }: { value: number; duration?: number }) {
   const [display, setDisplay] = useState(value);
