@@ -62,7 +62,7 @@ function Veda() {
   );
 
   const [marks, setMarks] = useState<Mark[]>(initialMarks);
-  const [count, setCount] = useState(48213);
+  const [count, setCount] = useState(35);
   const [query, setQuery] = useState("");
   const navigate = useNavigate();
 
