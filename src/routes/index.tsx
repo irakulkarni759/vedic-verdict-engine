@@ -173,9 +173,6 @@ function Hero({
 
   return (
     <section className="relative" style={{ minHeight: "100vh" }}>
-      <Ornament side="left" />
-      <Ornament side="right" />
-
       <div className="relative z-10 flex min-h-screen flex-col items-center justify-center px-6 pt-8 pb-12">
         <h1
           className="font-display text-center leading-[0.95]"
@@ -199,10 +196,11 @@ function Hero({
             animation: "fade-up 1.2s ease-out 0.6s both",
           }}
         >
-          Search any ingredient, product, or wellness ritual.
+          Search any ingredient, product, or ritual — paired with the goal you care about.
           <br />
-          We cross-reference the clinical evidence <em>and</em> what the community actually reports back.
+          Try <em>“creatine for muscle growth”</em>, <em>“magnesium for sleep”</em>, or <em>“rosemary oil for hair”</em>.
         </p>
+
 
         <div
           className="relative mt-6"
