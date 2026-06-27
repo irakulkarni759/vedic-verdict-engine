@@ -126,8 +126,8 @@ function Nav() {
       style={{ backgroundColor: "color-mix(in oklab, var(--parchment) 92%, transparent)" }}
     >
       <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-8 pl-4 pr-8 py-5">
-        <Link to="/" className="flex items-baseline gap-2">
-          <span style={{ color: "var(--terracotta)" }} className="text-base">◆</span>
+        <Link to="/" className="flex items-center gap-2">
+          <span style={{ color: "var(--terracotta)", fontSize: 18, lineHeight: 1, position: "relative", top: "-2px" }}>◆</span>
           <span className="font-display text-[34px] leading-none" style={{ color: "var(--ink)" }}>
             veda
           </span>
@@ -172,7 +172,7 @@ function Hero({
 
   return (
     <section className="relative" style={{ minHeight: "100vh" }}>
-      <div className="relative z-10 flex min-h-screen flex-col items-center justify-center px-4 pt-8 pb-12">
+      <div className="relative z-10 flex min-h-screen flex-col items-center justify-center px-4 pb-12" style={{ paddingTop: "clamp(2rem, 12vh, 10rem)" }}>
         <p
           className="font-label text-center"
           style={{
