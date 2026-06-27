@@ -151,10 +151,11 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
           if (cls === "pos") pos++;
           else if (cls === "neg") neg++;
           else neutral++;
-          if (bullets.length < 5) {
-            const sentence = abstract.split(/(?<=[.!?])\s+/)[0]?.slice(0, 240);
-            if (sentence) bullets.push(sentence);
-          }
+          if (bullets.length < 4) {
+          const sentences = abstract.split(/(?<=[.!?])\s+/);
+          const best = sentences.find(s => s.length > 40 && s.length < 180) ?? sentences[0];
+          if (best) bullets.push(best.trim().replace(/^[A-Z]{2,}[^a-z]*:\s*/, "").slice(0, 180));
+        }
         }
       }
 
