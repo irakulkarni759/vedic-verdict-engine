@@ -526,12 +526,6 @@ function MarkWall({ marks }: { marks: Mark[] }) {
 
 function MarkSeal({ m, index }: { m: Mark; index: number }) {
   const color = verdictColor(m.verdict);
-  // monogram: up to 2 letters from the first word(s)
-  const monogram = m.name
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? "")
-    .join("");
 
   const seal = (
     <div
@@ -547,39 +541,21 @@ function MarkSeal({ m, index }: { m: Mark; index: number }) {
       <div
         className="relative flex items-center justify-center transition-transform group-hover:-translate-y-0.5"
         style={{
-          width: 48,
-          height: 48,
+          width: 56,
+          height: 56,
           transform: `rotate(${m.rot}deg) translate(${m.dx * 0.3}px, ${m.dy * 0.3}px)`,
         }}
       >
-        {/* outer ink ring */}
-        <svg viewBox="0 0 48 48" className="absolute inset-0" style={{ overflow: "visible" }}>
-          <circle cx="24" cy="24" r="22" fill="var(--parchment-deep)" stroke="var(--ink)" strokeOpacity="0.55" strokeWidth="0.8" />
-          <circle cx="24" cy="24" r="19" fill="none" stroke={color} strokeOpacity="0.85" strokeWidth="1.2" />
-          {/* tiny notches */}
-          {Array.from({ length: 8 }).map((_, i) => {
-            const a = (i / 8) * Math.PI * 2;
-            return (
-              <circle
-                key={i}
-                cx={24 + Math.cos(a) * 22}
-                cy={24 + Math.sin(a) * 22}
-                r="0.6"
-                fill="var(--ink)"
-                opacity="0.5"
-              />
-            );
-          })}
+        <svg viewBox="0 0 56 56" className="absolute inset-0" style={{ overflow: "visible" }}>
+          <circle cx="28" cy="28" r="26" fill="var(--parchment-deep)" stroke="var(--ink)" strokeOpacity="0.45" strokeWidth="0.8" />
+          <circle cx="28" cy="28" r="22" fill="none" stroke={color} strokeOpacity="0.85" strokeWidth="1.2" />
         </svg>
-        <span
-          className="relative font-display"
-          style={{ color: "var(--ink)", fontSize: 16, lineHeight: 1 }}
-        >
-          {monogram}
-        </span>
+        <div className="relative" style={{ color }}>
+          <TrendIcon name={m.name} slug={m.slug} size={26} />
+        </div>
       </div>
       <span
-        className="mt-1.5 max-w-[88px] truncate text-center font-mono"
+        className="mt-1.5 max-w-[96px] truncate text-center font-mono"
         style={{ color: "var(--muted-ink)", fontSize: 9, letterSpacing: "0.04em" }}
         title={m.name}
       >
@@ -597,6 +573,182 @@ function MarkSeal({ m, index }: { m: Mark; index: number }) {
   }
   return seal;
 }
+
+/**
+ * Hand-drawn icon for a trend. Picks by slug when known, falls back to
+ * keyword-matching the free-text query so user-added marks still get a real icon.
+ */
+function TrendIcon({ name, slug, size = 24 }: { name: string; slug?: string; size?: number }) {
+  const key = pickIconKey(slug, name);
+  const Icon = ICONS[key];
+  return <Icon size={size} />;
+}
+
+type IconKey =
+  | "sun" | "vial" | "capsule" | "droplet" | "leaf" | "brush"
+  | "roller" | "stone" | "mask" | "clock" | "glass" | "muscle"
+  | "tube" | "mortar" | "moon" | "flame" | "spark";
+
+const SLUG_ICON: Record<string, IconKey> = {
+  "daily-spf": "sun",
+  "retinol": "vial",
+  "vitamin-c-serum": "vial",
+  "niacinamide": "vial",
+  "hyaluronic-acid": "droplet",
+  "snail-mucin": "vial",
+  "slugging": "tube",
+  "jade-roller": "roller",
+  "gua-sha": "stone",
+  "activated-charcoal": "mask",
+  "dry-brushing": "brush",
+  "rosemary-oil": "leaf",
+  "biotin": "capsule",
+  "collagen-peptides": "capsule",
+  "ashwagandha": "mortar",
+  "creatine": "muscle",
+  "melatonin": "moon",
+  "magnesium-sleep": "moon",
+  "celery-juice": "glass",
+  "turmeric": "mortar",
+  "intermittent-fasting": "clock",
+  "oil-pulling": "droplet",
+  "castor-oil": "droplet",
+  "beef-liver": "capsule",
+};
+
+function pickIconKey(slug: string | undefined, name: string): IconKey {
+  if (slug && SLUG_ICON[slug]) return SLUG_ICON[slug];
+  const n = name.toLowerCase();
+  if (/spf|sunscreen|sun\b/.test(n)) return "sun";
+  if (/serum|retinol|vitamin c|niacinamide|peptide.*serum/.test(n)) return "vial";
+  if (/oil|drop/.test(n)) return "droplet";
+  if (/cream|balm|slug|moisturi[sz]er/.test(n)) return "tube";
+  if (/roller/.test(n)) return "roller";
+  if (/gua sha|stone/.test(n)) return "stone";
+  if (/mask|charcoal/.test(n)) return "mask";
+  if (/brush|exfolia/.test(n)) return "brush";
+  if (/leaf|rosemary|herb|tea/.test(n)) return "leaf";
+  if (/capsule|pill|tablet|biotin|collagen|liver/.test(n)) return "capsule";
+  if (/muscle|creatine|protein|gym|strength/.test(n)) return "muscle";
+  if (/sleep|melatonin|magnesium|night|insomn/.test(n)) return "moon";
+  if (/fast|clock|hour|timing/.test(n)) return "clock";
+  if (/juice|drink|water|smoothie|tonic/.test(n)) return "glass";
+  if (/turmeric|ashwagandha|adaptogen|powder|root/.test(n)) return "mortar";
+  if (/inflam|fire|hot/.test(n)) return "flame";
+  return "spark";
+}
+
+const SW = 1.4;
+const ICONS: Record<IconKey, React.FC<{ size?: number }>> = {
+  sun: ({ size = 24 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="4" />
+      {Array.from({ length: 8 }).map((_, i) => {
+        const a = (i / 8) * Math.PI * 2;
+        return <line key={i} x1={12 + Math.cos(a) * 7} y1={12 + Math.sin(a) * 7} x2={12 + Math.cos(a) * 9.5} y2={12 + Math.sin(a) * 9.5} />;
+      })}
+    </svg>
+  ),
+  vial: ({ size = 24 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 3h4" />
+      <path d="M11 3v4l-2.5 4.5a4 4 0 0 0 3.5 6 4 4 0 0 0 3.5-6L13 7V3" />
+      <path d="M9.5 14h5" />
+    </svg>
+  ),
+  capsule: ({ size = 24 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="9" width="18" height="6" rx="3" transform="rotate(-25 12 12)" />
+      <path d="M9.5 7.5l4.5 9" />
+    </svg>
+  ),
+  droplet: ({ size = 24 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3c-3.5 5-6 8-6 11a6 6 0 0 0 12 0c0-3-2.5-6-6-11z" />
+    </svg>
+  ),
+  leaf: ({ size = 24 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 4c-9 0-15 4-15 11 0 3 2 5 5 5 7 0 11-6 11-15z" />
+      <path d="M5 20c2-5 6-9 12-12" />
+    </svg>
+  ),
+  brush: ({ size = 24 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+      <rect x="6" y="3" width="12" height="7" rx="1.5" />
+      <path d="M8 10v3M10.5 10v4M13.5 10v4M16 10v3" />
+      <path d="M11 18h2v3h-2z" />
+    </svg>
+  ),
+  roller: ({ size = 24 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+      <ellipse cx="7" cy="8" rx="3.5" ry="2.5" />
+      <ellipse cx="17" cy="16" rx="3.5" ry="2.5" />
+      <path d="M9.5 9.5l5 5" />
+    </svg>
+  ),
+  stone: ({ size = 24 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 14c0-4 4-9 9-9 4 0 7 2 7 5s-3 4-3 7-3 5-7 5-6-3-6-8z" />
+    </svg>
+  ),
+  mask: ({ size = 24 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 6c2-2 14-2 16 0 1 4 0 12-3 14-2 1-8 1-10 0-3-2-4-10-3-14z" />
+      <circle cx="9" cy="11" r="1" /><circle cx="15" cy="11" r="1" />
+    </svg>
+  ),
+  clock: ({ size = 24 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </svg>
+  ),
+  glass: ({ size = 24 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M7 4h10l-1.5 16h-7z" />
+      <path d="M7.5 9h9" />
+    </svg>
+  ),
+  muscle: ({ size = 24 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 10c2-3 6-3 8-1l5 4c2 1.5 2 5-1 6-2 .5-4-.5-5-2" />
+      <path d="M6 10c-.5 3 .5 6 4 7" />
+      <circle cx="18" cy="8" r="2" />
+    </svg>
+  ),
+  tube: ({ size = 24 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 5h12l-1 14a2 2 0 0 1-2 2h-6a2 2 0 0 1-2-2z" />
+      <path d="M6 5l1-2h10l1 2" />
+      <path d="M9 11h6" />
+    </svg>
+  ),
+  mortar: ({ size = 24 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 12h16l-2 6a2 2 0 0 1-2 1.5H8a2 2 0 0 1-2-1.5z" />
+      <path d="M3 12h18" />
+      <path d="M15 11l4-7" />
+    </svg>
+  ),
+  moon: ({ size = 24 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 14a8 8 0 1 1-10-10 6 6 0 0 0 10 10z" />
+    </svg>
+  ),
+  flame: ({ size = 24 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3c1 3 5 5 5 10a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3-1-5 1-9z" />
+    </svg>
+  ),
+  spark: ({ size = 24 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3v6M12 15v6M3 12h6M15 12h6M6 6l4 4M14 14l4 4M18 6l-4 4M10 14l-4 4" />
+    </svg>
+  ),
+};
+
+
 
 function Footer() {
   return (
