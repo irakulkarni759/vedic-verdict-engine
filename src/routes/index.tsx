@@ -230,7 +230,7 @@ function Hero({
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="try 'creatine' or 'magnesium for sleep'..."
+                placeholder="try 'creatine for muscle growth'..."
                 className="flex-1 bg-transparent outline-none placeholder:opacity-70"
                 style={{ color: "var(--ink)", fontSize: 15, fontWeight: 300 }}
               />
