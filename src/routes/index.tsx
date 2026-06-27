@@ -87,10 +87,8 @@ function Veda() {
       return;
     }
 
-    // Otherwise leave a mark
-    const verdict: Verdict = (["BACKED", "MIXED", "DEBUNKED"] as Verdict[])[
-      Math.floor(Math.random() * 3)
-    ];
+    // Drop a mark, then route to a freshly-generated card
+    const verdict: Verdict = "MIXED";
     const id = Date.now();
     setMarks((prev) => [
       {
@@ -105,6 +103,7 @@ function Veda() {
     ]);
     setCount((c) => c + 1);
     setQuery("");
+    navigate({ to: "/search/$query", params: { query: encodeURIComponent(q) } });
   }
 
   return (
