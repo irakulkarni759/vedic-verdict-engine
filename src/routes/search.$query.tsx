@@ -56,7 +56,7 @@ function PendingPage() {
 }
 
 function SearchPage() {
-  const data = Route.useLoaderData();
+  const data = Route.useLoaderData() as EvidenceVerdict;
   const { query } = Route.useParams();
   const q = decodeURIComponent(query);
   const color = verdictColor(data.verdict);
