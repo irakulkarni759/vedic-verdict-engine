@@ -1,4 +1,4 @@
-import type { Verdict } from "@/data/trends";
+import type { Verdict } from "@/lib/trends";
 
 export const VERDICT_META: Record<
   Verdict,

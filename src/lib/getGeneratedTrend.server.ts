@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getSupabaseServiceClient } from "./supabase.server";
-import { CATEGORIES, type Trend } from "@/data/trends";
+import { CATEGORIES, type Trend } from "@/lib/trends";
 
 // Row shape of the `generated_trends` table. Mirrors the mapping in
 // verifyTrend.server.ts so the trend detail page can hydrate a generated
