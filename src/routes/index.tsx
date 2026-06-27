@@ -172,7 +172,7 @@ function Hero({
 
   return (
     <section className="relative" style={{ minHeight: "100vh" }}>
-      <div className="relative z-10 flex min-h-screen flex-col items-center justify-center px-4 pt-8 pb-12">
+      <div className="relative z-10 flex min-h-screen flex-col items-center justify-center px-4 pb-12" style={{ paddingTop: "clamp(2rem, 12vh, 10rem)" }}>
         <p
           className="font-label text-center"
           style={{
