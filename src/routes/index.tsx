@@ -111,9 +111,9 @@ function Veda() {
     <div className="min-h-screen" style={{ backgroundColor: "var(--parchment)" }}>
       <Nav />
       <Hero query={query} setQuery={setQuery} onSubmit={submit} count={count} />
-      <WavyDivider from="var(--parchment)" to="var(--blush)" />
+      <WavyDivider from="var(--parchment)" to="var(--ink)" />
       <Stats />
-      <WavyDivider from="var(--blush)" to="var(--parchment)" />
+      <WavyDivider from="var(--ink)" to="var(--parchment)" />
       <MarkWall marks={marks} />
       <Footer />
     </div>
@@ -173,33 +173,51 @@ function Hero({
 
   return (
     <section className="relative" style={{ minHeight: "100vh" }}>
-      <div className="relative z-10 flex min-h-screen flex-col items-center justify-center px-6 pt-8 pb-12">
-        <h1
-          className="font-display text-center leading-[0.95]"
+      <div className="relative z-10 flex min-h-screen flex-col items-center justify-center px-4 pt-8 pb-12">
+        <p
+          className="font-label text-center"
           style={{
-            fontSize: "clamp(56px, 9vw, 96px)",
+            color: "var(--terracotta)",
+            fontSize: 11,
+            animation: "fade-up 1.2s ease-out 0.1s both",
+          }}
+        >
+          THE WELLNESS EVIDENCE ENGINE
+        </p>
+
+        <h1
+          className="font-display text-center leading-[0.9] mt-3 whitespace-nowrap"
+          style={{
+            fontSize: "clamp(56px, 14vw, 220px)",
             color: "var(--ink)",
+            letterSpacing: "-0.02em",
             animation: "fade-up 1.2s ease-out 0.2s both",
           }}
         >
-          Is it actually
-          <br />
-          <span style={{ color: "var(--terracotta)" }}>worth it?</span>
+          Is it actually <span style={{ color: "var(--terracotta)" }}>worth it?</span>
         </h1>
 
         <p
-          className="mt-4 max-w-xl text-center leading-snug"
+          className="mt-6 max-w-2xl text-center leading-snug"
           style={{
-            color: "var(--muted-ink)",
-            fontSize: 15,
+            color: "var(--ink)",
+            fontSize: 16,
             fontWeight: 300,
             animation: "fade-up 1.2s ease-out 0.6s both",
           }}
         >
-          Search any ingredient, product, or ritual — paired with the goal you care about.
+          Veda tells you what actually works. Search any ingredient, product, or ritual —
+          we cross-reference clinical research with what real people report, then label it{" "}
+          <strong style={{ color: "var(--verdict-backed)", fontWeight: 500 }}>BACKED</strong>,{" "}
+          <strong style={{ color: "var(--verdict-mixed)", fontWeight: 500 }}>MIXED</strong>, or{" "}
+          <strong style={{ color: "var(--verdict-debunked)", fontWeight: 500 }}>DEBUNKED</strong>.
           <br />
-          Try <em>“creatine for muscle growth”</em>, <em>“magnesium for sleep”</em>, or <em>“rosemary oil for hair”</em>.
+          <span style={{ color: "var(--muted-ink)", fontSize: 14 }}>
+            Try <em>“creatine for muscle growth”</em>, <em>“magnesium for sleep”</em>, or <em>“rosemary oil for hair”</em>.
+          </span>
         </p>
+
+
 
 
         <div
@@ -418,25 +436,25 @@ function Stats() {
   ];
 
   return (
-    <section style={{ backgroundColor: "var(--blush)" }} className="py-20">
+    <section style={{ backgroundColor: "var(--ink)" }} className="py-20">
       <div className="mx-auto grid max-w-[1200px] grid-cols-1 gap-12 px-8 md:grid-cols-3 md:gap-0">
         {stats.map((s, i) => (
           <div
             key={i}
             className="px-8 text-center"
             style={{
-              borderLeft: i > 0 ? "0.5px solid color-mix(in oklab, var(--ink) 20%, transparent)" : undefined,
+              borderLeft: i > 0 ? "0.5px solid color-mix(in oklab, var(--parchment) 25%, transparent)" : undefined,
             }}
           >
             <div
               className="font-display leading-none"
-              style={{ color: "var(--ink)", fontSize: s.size }}
+              style={{ color: "var(--parchment)", fontSize: s.size }}
             >
               <StatCountUp text={s.num} />
             </div>
             <p
               className="mx-auto mt-5 max-w-[260px]"
-              style={{ color: "var(--ink)", fontSize: 13, fontWeight: 300, lineHeight: 1.5 }}
+              style={{ color: "var(--parchment)", fontSize: 13, fontWeight: 300, lineHeight: 1.5, opacity: 0.85 }}
             >
               {s.label}
             </p>
@@ -527,52 +545,36 @@ function MarkWall({ marks }: { marks: Mark[] }) {
 function MarkSeal({ m, index }: { m: Mark; index: number }) {
   const color = verdictColor(m.verdict);
 
-  const seal = (
+  const icon = (
     <div
-      className="group relative flex flex-col items-center"
+      className="group relative flex items-center justify-center transition-transform hover:-translate-y-0.5 hover:scale-110"
+      title={`${m.name} — ${m.verdict}`}
       style={
         {
+          width: 44,
+          height: 44,
+          color,
+          transform: `rotate(${m.rot}deg) translate(${m.dx * 0.3}px, ${m.dy * 0.3}px)`,
           ["--rot-start" as string]: `${m.rot - 6}deg`,
           ["--rot-end" as string]: `${m.rot}deg`,
           animation: index < TRENDS.length ? undefined : "drop-in 0.9s cubic-bezier(.4,1.4,.6,1) both",
         } as React.CSSProperties
       }
     >
-      <div
-        className="relative flex items-center justify-center transition-transform group-hover:-translate-y-0.5"
-        style={{
-          width: 56,
-          height: 56,
-          transform: `rotate(${m.rot}deg) translate(${m.dx * 0.3}px, ${m.dy * 0.3}px)`,
-        }}
-      >
-        <svg viewBox="0 0 56 56" className="absolute inset-0" style={{ overflow: "visible" }}>
-          <circle cx="28" cy="28" r="26" fill="var(--parchment-deep)" stroke="var(--ink)" strokeOpacity="0.45" strokeWidth="0.8" />
-          <circle cx="28" cy="28" r="22" fill="none" stroke={color} strokeOpacity="0.85" strokeWidth="1.2" />
-        </svg>
-        <div className="relative" style={{ color }}>
-          <TrendIcon name={m.name} slug={m.slug} size={26} />
-        </div>
-      </div>
-      <span
-        className="mt-1.5 max-w-[96px] truncate text-center font-mono"
-        style={{ color: "var(--muted-ink)", fontSize: 9, letterSpacing: "0.04em" }}
-        title={m.name}
-      >
-        {m.name}
-      </span>
+      <TrendIcon name={m.name} slug={m.slug} size={36} />
     </div>
   );
 
   if (m.slug) {
     return (
       <Link to="/trend/$slug" params={{ slug: m.slug }} className="no-underline">
-        {seal}
+        {icon}
       </Link>
     );
   }
-  return seal;
+  return icon;
 }
+
 
 /**
  * Hand-drawn icon for a trend. Picks by slug when known, falls back to
