@@ -127,7 +127,7 @@ function Nav() {
     >
       <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-8 pl-4 pr-8 py-5">
         <Link to="/" className="flex items-center gap-2">
-          <span style={{ color: "var(--terracotta)", fontSize: 18, lineHeight: 1, position: "relative", top: "-2px" }}>◆</span>
+          <span style={{ color: "var(--terracotta)", fontSize: 20, lineHeight: 1, display: "inline-flex", alignItems: "center", height: "34px" }}>◆</span>
           <span className="font-display text-[34px] leading-none" style={{ color: "var(--ink)" }}>
             veda
           </span>
