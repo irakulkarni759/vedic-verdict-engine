@@ -436,25 +436,25 @@ function Stats() {
   ];
 
   return (
-    <section style={{ backgroundColor: "var(--blush)" }} className="py-20">
+    <section style={{ backgroundColor: "var(--ink)" }} className="py-20">
       <div className="mx-auto grid max-w-[1200px] grid-cols-1 gap-12 px-8 md:grid-cols-3 md:gap-0">
         {stats.map((s, i) => (
           <div
             key={i}
             className="px-8 text-center"
             style={{
-              borderLeft: i > 0 ? "0.5px solid color-mix(in oklab, var(--ink) 20%, transparent)" : undefined,
+              borderLeft: i > 0 ? "0.5px solid color-mix(in oklab, var(--parchment) 25%, transparent)" : undefined,
             }}
           >
             <div
               className="font-display leading-none"
-              style={{ color: "var(--ink)", fontSize: s.size }}
+              style={{ color: "var(--parchment)", fontSize: s.size }}
             >
               <StatCountUp text={s.num} />
             </div>
             <p
               className="mx-auto mt-5 max-w-[260px]"
-              style={{ color: "var(--ink)", fontSize: 13, fontWeight: 300, lineHeight: 1.5 }}
+              style={{ color: "var(--parchment)", fontSize: 13, fontWeight: 300, lineHeight: 1.5, opacity: 0.85 }}
             >
               {s.label}
             </p>
