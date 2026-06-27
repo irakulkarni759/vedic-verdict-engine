@@ -586,15 +586,16 @@ function TrendIcon({ name, slug, size = 24 }: { name: string; slug?: string; siz
 type IconKey =
   | "sun" | "vial" | "capsule" | "droplet" | "leaf" | "brush"
   | "roller" | "stone" | "mask" | "clock" | "glass" | "muscle"
-  | "tube" | "mortar" | "moon" | "flame" | "spark";
+  | "tube" | "mortar" | "moon" | "flame" | "spark"
+  | "dropper" | "beaker" | "jar" | "bottle" | "pillow" | "root" | "mouth" | "snail";
 
 const SLUG_ICON: Record<string, IconKey> = {
   "daily-spf": "sun",
   "retinol": "vial",
-  "vitamin-c-serum": "vial",
-  "niacinamide": "vial",
+  "vitamin-c-serum": "dropper",
+  "niacinamide": "beaker",
   "hyaluronic-acid": "droplet",
-  "snail-mucin": "vial",
+  "snail-mucin": "snail",
   "slugging": "tube",
   "jade-roller": "roller",
   "gua-sha": "stone",
@@ -602,17 +603,17 @@ const SLUG_ICON: Record<string, IconKey> = {
   "dry-brushing": "brush",
   "rosemary-oil": "leaf",
   "biotin": "capsule",
-  "collagen-peptides": "capsule",
+  "collagen-peptides": "bottle",
   "ashwagandha": "mortar",
   "creatine": "muscle",
   "melatonin": "moon",
-  "magnesium-sleep": "moon",
+  "magnesium-sleep": "pillow",
   "celery-juice": "glass",
-  "turmeric": "mortar",
+  "turmeric": "root",
   "intermittent-fasting": "clock",
-  "oil-pulling": "droplet",
-  "castor-oil": "droplet",
-  "beef-liver": "capsule",
+  "oil-pulling": "mouth",
+  "castor-oil": "jar",
+  "beef-liver": "flame",
 };
 
 function pickIconKey(slug: string | undefined, name: string): IconKey {
