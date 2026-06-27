@@ -1,4 +1,4 @@
-import { comments } from "@/components/comments";   // ← NEW
+import { Comments } from "@/components/Comments";   // ← NEW
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { trendBySlug, type Trend, type Verdict } from "@/lib/trends";
 import { TrendCard } from "@/components/TrendCard";
@@ -299,7 +299,7 @@ function TrendPage() {
             </div>
           </section>
         )}
-        <comments slug={trend.slug} />
+        <Comments slug={trend.slug} />
       </div>
     </div>
   );
