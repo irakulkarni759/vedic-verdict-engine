@@ -111,9 +111,9 @@ function Veda() {
     <div className="min-h-screen" style={{ backgroundColor: "var(--parchment)" }}>
       <Nav />
       <Hero query={query} setQuery={setQuery} onSubmit={submit} count={count} />
-      <WavyDivider from="var(--parchment)" to="var(--blush)" />
+      <WavyDivider from="var(--parchment)" to="var(--ink)" />
       <Stats />
-      <WavyDivider from="var(--blush)" to="var(--parchment)" />
+      <WavyDivider from="var(--ink)" to="var(--parchment)" />
       <MarkWall marks={marks} />
       <Footer />
     </div>
