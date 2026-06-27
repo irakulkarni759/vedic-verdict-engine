@@ -266,8 +266,8 @@ function TrendPage() {
             <div className="mt-6 space-y-5">
               {trend.quotes.map((q: { handle: string; text: string }, i: number) => (
                 <div key={i}>
-                  <p className="italic" style={{ color: "var(--ink)", fontSize: 14, lineHeight: 1.5 }}>
-                    "{q.text}"
+                  <p className="italic line-clamp-4" style={{ color: "var(--ink)", fontSize: 14, lineHeight: 1.5 }}>
+                  "{q.text}"
                   </p>
                   <a
                     href={redditHandleUrl(q.handle)}
