@@ -185,7 +185,7 @@ function TrendPage() {
             </div>
 
             <div className="mt-8 space-y-8">
-              {trend.quotes.map((q) => (
+              {trend.quotes.map((q: { handle: string; text: string }) => (
                 <div key={`${q.handle}-${q.text}`}>
                   <p className="text-lg italic leading-8 text-[var(--ink)]">
                     “{q.text}”
