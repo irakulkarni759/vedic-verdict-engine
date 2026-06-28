@@ -123,7 +123,7 @@ function SearchPage() {
           )}
 
           <div className="relative mt-6 flex flex-wrap gap-2">
-            
+            <a
               href={data.pubmedSearchUrl}
               target="_blank"
               rel="noopener noreferrer"
@@ -132,7 +132,7 @@ function SearchPage() {
             >
               ALL PUBMED RESULTS ↗
             </a>
-            
+            <a
               href={data.redditSearchUrl}
               target="_blank"
               rel="noopener noreferrer"
