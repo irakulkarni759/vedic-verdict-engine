@@ -32,15 +32,15 @@ function PendingPage() {
   const q = decodeURIComponent(query);
   return (
     <div className="min-h-screen pb-24" style={{ backgroundColor: "var(--parchment)" }}>
-      <div className="mx-auto max-w-[900px] px-6 pt-8">
-        <Link to="/" className="font-label text-[10px] hover:opacity-70" style={{ color: "var(--muted-ink)" }}>
+      <div className="mx-auto max-w-[1120px] px-6 pt-8">
+        <Link to="/" className="font-label text-xs hover:opacity-70" style={{ color: "var(--muted-ink)" }}>
           ← BACK TO VEDA
         </Link>
-        <div className="mt-6 rounded-3xl p-10" style={{ backgroundColor: "#fff", border: "1px solid color-mix(in oklab, var(--ink) 10%, transparent)" }}>
-          <p className="font-label text-[10px]" style={{ color: "var(--muted-ink)" }}>
+        <div className="mt-6 rounded-[30px] border border-white/70 bg-[linear-gradient(135deg,#fff_0%,#fbf4e8_100%)] p-8 shadow-[0_22px_70px_rgba(27,52,72,0.08)] sm:p-12">
+          <p className="font-label text-xs" style={{ color: "var(--muted-ink)" }}>
             GATHERING EVIDENCE
           </p>
-          <h1 className="font-display mt-3" style={{ color: "var(--ink)", fontSize: "clamp(28px, 4vw, 44px)", lineHeight: 1.05 }}>
+          <h1 className="font-display mt-3 text-5xl leading-[0.95] tracking-[-0.04em] text-[var(--ink)] sm:text-7xl md:text-8xl">
             {q}
           </h1>
           <p className="mt-4 font-mono text-xs" style={{ color: "var(--muted-ink)" }}>
@@ -69,91 +69,78 @@ function SearchPage() {
   const isUnknown = data.verdict === "UNKNOWN" || data.studies === 0;
 
   return (
-    <div className="min-h-screen pb-24" style={{ backgroundColor: "var(--parchment)" }}>
-      <div className="mx-auto max-w-[900px] px-6 pt-8">
-        <Link to="/" className="font-label text-[10px] hover:opacity-70" style={{ color: "var(--muted-ink)" }}>
+    <main className="min-h-screen bg-[var(--parchment)] px-5 py-8 sm:px-8 sm:py-10">
+      <div className="mx-auto max-w-[1120px]">
+        <Link
+          to="/"
+          className="font-label mb-6 inline-block text-xs text-[var(--muted-ink)] transition hover:text-[var(--terracotta)]"
+        >
           ← BACK TO VEDA
         </Link>
 
-        <article
-          className="relative mt-6 overflow-hidden rounded-3xl p-8 md:p-10"
-          style={{
-            backgroundColor: "#fff",
-            border: "1px solid color-mix(in oklab, var(--ink) 10%, transparent)",
-          }}
-        >
-          <div className="relative flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <p className="font-label text-[10px]" style={{ color: "var(--muted-ink)" }}>
-                {isUnknown ? "FRESH SEARCH · NOT YET INDEXED" : "FRESH SEARCH · GENERATED FROM PUBMED"}
-              </p>
-              <h1
-                className="font-display mt-3"
-                style={{ color: "var(--ink)", fontSize: "clamp(32px, 5vw, 52px)", lineHeight: 1 }}
-              >
-                {q}
-              </h1>
-            </div>
-            <span
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 font-label"
+        <section className="rounded-[30px] border border-white/70 bg-[linear-gradient(135deg,#fff_0%,#fbf4e8_100%)] p-8 shadow-[0_22px_70px_rgba(27,52,72,0.08)] sm:p-12">
+          <div className="mb-7 flex items-start justify-between gap-4">
+            <p className="font-label text-xs text-[var(--muted-ink)]">
+              {isUnknown ? "FRESH SEARCH · NOT YET INDEXED" : "FRESH SEARCH · GENERATED FROM PUBMED"}
+            </p>
+            <div
+              className="font-label rounded-full border px-4 py-2 text-xs"
               style={{
-                fontSize: 10,
                 color,
-                backgroundColor: `color-mix(in oklab, ${color} 12%, transparent)`,
-                border: `1px solid color-mix(in oklab, ${color} 35%, transparent)`,
+                borderColor: `color-mix(in oklab, ${color} 45%, transparent)`,
+                backgroundColor: `color-mix(in oklab, ${color} 10%, transparent)`,
               }}
             >
-              <span className="inline-block rounded-full" style={{ width: 5, height: 5, backgroundColor: color }} />
-              {isUnknown ? "PENDING REVIEW" : data.verdict}
-            </span>
+              • {isUnknown ? "PENDING REVIEW" : data.verdict}
+            </div>
           </div>
 
-          <p
-            className="relative mt-5 max-w-2xl"
-            style={{ color: "var(--ink)", fontSize: 15, lineHeight: 1.6, fontWeight: 300 }}
-          >
+          <h1 className="font-display max-w-4xl text-5xl leading-[0.95] tracking-[-0.04em] text-[var(--ink)] sm:text-7xl md:text-8xl">
+            {q}
+          </h1>
+
+          <p className="mt-7 max-w-3xl text-lg leading-8 text-[var(--ink)] sm:text-xl">
             {data.oneLiner}
           </p>
 
           {!isUnknown && (
-            <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 font-mono text-[11px] uppercase tracking-[0.18em]" style={{ color: "var(--muted-ink)" }}>
+            <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 font-mono text-[11px] uppercase tracking-[0.18em]" style={{ color: "var(--muted-ink)" }}>
               <span>{data.studies} studies</span>
+              <span>·</span>
               <span>Confidence: {data.confidence}</span>
             </div>
           )}
 
-          <div className="relative mt-6 flex flex-wrap gap-2">
-            <a
+          <div className="mt-8 flex flex-wrap gap-3">
+            
               href={data.pubmedSearchUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 font-label transition-opacity hover:opacity-80"
-              style={{ backgroundColor: "var(--ink)", color: "var(--parchment)", fontSize: 10, letterSpacing: "0.14em" }}
+              className="font-label rounded-full bg-[var(--ink)] px-5 py-3 text-xs text-white transition hover:translate-y-[-1px]"
             >
               ALL PUBMED RESULTS ↗
             </a>
-            <a
+            
               href={data.redditSearchUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 font-label transition-opacity hover:opacity-80"
-              style={{ backgroundColor: "var(--terracotta)", color: "var(--parchment)", fontSize: 10, letterSpacing: "0.14em" }}
+              className="font-label rounded-full bg-[var(--terracotta)] px-5 py-3 text-xs text-white transition hover:translate-y-[-1px]"
             >
               REDDIT THREADS ↗
             </a>
           </div>
-        </article>
+        </section>
 
         {data.bullets.length > 0 && (
-          <section className="mt-10">
+          <section className="mt-14">
             <SectionHeader
               left="WHAT THE RESEARCH SAYS"
               right="ALL ON PUBMED ↗"
               href={data.pubmedSearchUrl}
             />
-            <ul className="mt-3 space-y-3">
+            <div className="mt-4 space-y-3">
               {data.bullets.map((b, i) => (
-                <li
+                <article
                   key={i}
                   className="grid gap-4 rounded-[22px] border border-white/75 bg-white/90 p-7 shadow-[0_12px_35px_rgba(27,52,72,0.04)] sm:grid-cols-[48px_1fr] sm:p-8"
                 >
@@ -171,9 +158,9 @@ function SearchPage() {
                       view on pubmed ↗
                     </a>
                   </div>
-                </li>
+                </article>
               ))}
-            </ul>
+            </div>
           </section>
         )}
 
@@ -205,11 +192,9 @@ function SearchPage() {
         )}
 
         {related.length > 0 && (
-          <section className="mt-10">
-            <p className="font-label text-[10px]" style={{ color: "var(--sage)" }}>
-              MAYBE YOU MEANT
-            </p>
-            <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <section className="mt-14">
+            <p className="font-label mb-4 text-xs text-[var(--sage)]">MAYBE YOU MEANT</p>
+            <div className="grid gap-4 md:grid-cols-3">
               {related.map((r) => (
                 <TrendCard key={r.slug} trend={r} compact />
               ))}
@@ -217,7 +202,7 @@ function SearchPage() {
           </section>
         )}
       </div>
-    </div>
+    </main>
   );
 }
 
