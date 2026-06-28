@@ -158,9 +158,9 @@ function SearchPage() {
                     {String(i + 1).padStart(2, "0")}
                   </div>
                   <div>
-                    <p className="text-lg leading-8 text-[var(--ink)]">{b}</p>
+                    <p className="text-lg leading-8 text-[var(--ink)]">{b.text}</p>
                     <a
-                      href={data.pubmedSearchUrl}
+                      href={b.url}
                       target="_blank"
                       rel="noreferrer"
                       className="font-mono mt-5 inline-block text-xs text-[var(--terracotta)]"

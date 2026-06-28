@@ -8,13 +8,18 @@ export type EvidenceArticle = {
   url: string;
 };
 
+export type EvidenceBullet = {
+  text: string;
+  url: string;
+};
+
 export type EvidenceVerdict = {
   query: string;
   verdict: "BACKED" | "MIXED" | "DEBUNKED" | "UNKNOWN";
   confidence: "high" | "moderate" | "low";
   oneLiner: string;
   studies: number;
-  bullets: string[];
+  bullets: EvidenceBullet[];
   articles: EvidenceArticle[];
   pubmedSearchUrl: string;
   redditSearchUrl: string;
@@ -39,32 +44,16 @@ function pickAll(xml: string, tag: string): string[] {
 function classifyAbstract(text: string): "pos" | "neg" | "neutral" {
   const t = text.toLowerCase();
   const pos = [
-    "significant improvement",
-    "significantly improved",
-    "effective",
-    "efficacy",
-    "beneficial",
-    "reduced",
-    "reduction in",
-    "improved",
-    "supports",
-    "associated with improvement",
-    "positive effect",
+    "significant improvement", "significantly improved", "effective",
+    "efficacy", "beneficial", "reduced", "reduction in", "improved",
+    "supports", "associated with improvement", "positive effect",
   ];
   const neg = [
-    "no significant",
-    "not effective",
-    "no evidence",
-    "no benefit",
-    "ineffective",
-    "did not improve",
-    "no difference",
-    "insufficient evidence",
-    "lack of evidence",
-    "no effect",
+    "no significant", "not effective", "no evidence", "no benefit",
+    "ineffective", "did not improve", "no difference",
+    "insufficient evidence", "lack of evidence", "no effect",
   ];
-  let p = 0,
-    n = 0;
+  let p = 0, n = 0;
   for (const k of pos) if (t.includes(k)) p++;
   for (const k of neg) if (t.includes(k)) n++;
   if (p > n) return "pos";
@@ -79,6 +68,23 @@ function decodeEntities(s: string): string {
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'");
+}
+
+function bestBullet(abstract: string): string | null {
+  const sentences = abstract.split(/(?<=[.!?])\s+/);
+  // prefer sentences with numbers/stats or outcome words
+  const outcome = sentences.find(s =>
+    s.length > 50 && s.length < 200 &&
+    /(\d+%?|significant|improve|reduc|effect|associat|result)/i.test(s)
+  );
+  const fallback = sentences.find(s => s.length > 50 && s.length < 200);
+  const best = outcome ?? fallback ?? sentences[0];
+  if (!best) return null;
+  return best
+    .replace(/^[A-Z]{2,}[^a-z]*:\s*/, "")  // strip "BACKGROUND: " etc
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 200);
 }
 
 export const generateEvidenceVerdict = createServerFn({ method: "GET" })
@@ -105,17 +111,17 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
     if (!query) return empty("Enter a search to generate a verdict.");
 
     try {
+      // Use Title/Abstract filter for tighter, more relevant results
+      const searchTerm = `${query}[Title/Abstract]`;
       const esearch = await fetch(
-        `${EUTILS}/esearch.fcgi?db=pubmed&retmode=json&retmax=15&sort=relevance&term=${encodeURIComponent(query)}`,
+        `${EUTILS}/esearch.fcgi?db=pubmed&retmode=json&retmax=8&sort=relevance&term=${encodeURIComponent(searchTerm)}`,
       );
       if (!esearch.ok) return empty("Couldn't reach PubMed right now. Try again in a moment.");
+
       const sj = (await esearch.json()) as { esearchresult?: { idlist?: string[]; count?: string } };
       const ids = sj.esearchresult?.idlist ?? [];
       if (ids.length === 0) {
-        return {
-          ...empty("No PubMed results — this one isn't well-studied yet."),
-          verdict: "UNKNOWN",
-        };
+        return { ...empty("No PubMed results — this one isn't well-studied yet."), verdict: "UNKNOWN" };
       }
 
       const efetch = await fetch(
@@ -125,10 +131,8 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
       const articleBlocks = xml.split(/<PubmedArticle[>\s]/).slice(1);
 
       const articles: EvidenceArticle[] = [];
-      const bullets: string[] = [];
-      let pos = 0,
-        neg = 0,
-        neutral = 0;
+      const bullets: EvidenceBullet[] = [];
+      let pos = 0, neg = 0, neutral = 0;
 
       for (const raw of articleBlocks) {
         const block = decodeEntities(raw);
@@ -139,32 +143,28 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
         const abstractParts = pickAll(block, "AbstractText");
         const abstract = abstractParts.join(" ");
         if (!pmid) continue;
-        articles.push({
-          pmid,
-          title,
-          journal,
-          year,
-          url: `https://pubmed.ncbi.nlm.nih.gov/${pmid}/`,
-        });
+
+        const articleUrl = `https://pubmed.ncbi.nlm.nih.gov/${pmid}/`;
+        articles.push({ pmid, title, journal, year, url: articleUrl });
+
         if (abstract) {
           const cls = classifyAbstract(abstract);
           if (cls === "pos") pos++;
           else if (cls === "neg") neg++;
           else neutral++;
+
           if (bullets.length < 4) {
-          const sentences = abstract.split(/(?<=[.!?])\s+/);
-          const best = sentences.find(s => s.length > 40 && s.length < 180) ?? sentences[0];
-          if (best) bullets.push(best.trim().replace(/^[A-Z]{2,}[^a-z]*:\s*/, "").slice(0, 180));
-        }
+            const text = bestBullet(abstract);
+            if (text) bullets.push({ text, url: articleUrl });
+          }
         }
       }
 
       const studies = articles.length;
-      let verdict: EvidenceVerdict["verdict"] = "MIXED";
       const total = pos + neg + neutral || 1;
+      let verdict: EvidenceVerdict["verdict"] = "MIXED";
       if (pos / total >= 0.55 && pos > neg) verdict = "BACKED";
       else if (neg / total >= 0.45 && neg > pos) verdict = "DEBUNKED";
-      else verdict = "MIXED";
 
       const confidence: EvidenceVerdict["confidence"] =
         studies >= 10 ? "high" : studies >= 4 ? "moderate" : "low";
@@ -177,16 +177,9 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
           : `Across ${studies} PubMed studies, findings are mixed for "${query}".`;
 
       return {
-        query,
-        verdict,
-        confidence,
-        oneLiner,
-        studies,
-        bullets,
-        articles: articles.slice(0, 8),
-        pubmedSearchUrl,
-        redditSearchUrl,
-        generatedAt,
+        query, verdict, confidence, oneLiner, studies,
+        bullets, articles: articles.slice(0, 6),
+        pubmedSearchUrl, redditSearchUrl, generatedAt,
       };
     } catch {
       return empty("Couldn't reach PubMed right now. Try again in a moment.");
