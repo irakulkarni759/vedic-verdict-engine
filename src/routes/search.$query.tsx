@@ -159,12 +159,12 @@ function SearchPage() {
                   </div>
                   <div>
                     <p className="text-lg leading-8 text-[var(--ink)]">{b}</p>
-                    
+                    <a
                       href={data.pubmedSearchUrl}
                       target="_blank"
                       rel="noreferrer"
                       className="font-mono mt-5 inline-block text-xs text-[var(--terracotta)]"
-                    {">"}
+                    >
                       view on pubmed ↗
                     </a>
                   </div>
