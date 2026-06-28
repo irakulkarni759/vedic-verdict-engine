@@ -19,6 +19,8 @@ export type EvidenceVerdict = {
   confidence: "high" | "moderate" | "low";
   oneLiner: string;
   studies: number;
+  sentiment: number;
+  updated: string;
   bullets: EvidenceBullet[];
   quotes: { handle: string; text: string }[];
   articles: EvidenceArticle[];
@@ -74,18 +76,19 @@ function decodeEntities(s: string): string {
 async function generateBulletsAndQuotes(
   query: string,
   abstracts: { abstract: string; url: string }[]
-): Promise<{ bullets: EvidenceBullet[]; quotes: { handle: string; text: string }[] }> {
+): Promise<{ bullets: EvidenceBullet[]; quotes: { handle: string; text: string }[]; sentiment: number }> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return { bullets: [], quotes: [] };
+  if (!apiKey) return { bullets: [], quotes: [], sentiment: 50 };
 
   const abstractText = abstracts
     .map((a, i) => `[${i + 1}] (url: ${a.url})\n${a.abstract}`)
     .join("\n\n");
 
-  const prompt = `You are a health research analyst. Given these PubMed abstracts about "${query}", return a JSON object with two fields:
+  const prompt = `You are a health research analyst. Given these PubMed abstracts about "${query}", return a JSON object with three fields:
 
 1. "bullets": 3-4 key findings directly relevant to "${query}". Each finding: 1 sentence, 50-150 chars, specific with numbers/stats when available. Skip irrelevant abstracts.
 2. "quotes": 2 realistic Reddit-style community quotes about "${query}" from real users. Short, conversational, opinionated. Each has a "handle" (like "@username") and "text".
+3. "sentiment": a number 0-100 representing how positive the community sentiment is about "${query}" based on the evidence and typical user experience.
 
 Abstracts:
 ${abstractText}
@@ -93,7 +96,8 @@ ${abstractText}
 Return ONLY this JSON shape, no other text:
 {
   "bullets": [{"text": "...", "index": 1}, ...],
-  "quotes": [{"handle": "@username", "text": "..."}, ...]
+  "quotes": [{"handle": "@username", "text": "..."}, ...],
+  "sentiment": 75
 }`;
 
   try {
@@ -116,6 +120,7 @@ Return ONLY this JSON shape, no other text:
     const parsed = JSON.parse(text.replace(/```json|```/g, "").trim()) as {
       bullets: { text: string; index: number }[];
       quotes: { handle: string; text: string }[];
+      sentiment: number;
     };
 
     const bullets = (parsed.bullets ?? []).map((item) => ({
@@ -123,9 +128,9 @@ Return ONLY this JSON shape, no other text:
       url: abstracts[item.index - 1]?.url ?? abstracts[0]?.url,
     }));
 
-    return { bullets, quotes: parsed.quotes ?? [] };
+    return { bullets, quotes: parsed.quotes ?? [], sentiment: parsed.sentiment ?? 50 };
   } catch {
-    return { bullets: [], quotes: [] };
+    return { bullets: [], quotes: [], sentiment: 50 };
   }
 }
 
@@ -136,10 +141,12 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
     const pubmedSearchUrl = `https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(query)}`;
     const redditSearchUrl = `https://www.reddit.com/search/?q=${encodeURIComponent(query)}`;
     const generatedAt = new Date().toISOString();
+    const updated = new Date().toISOString().split("T")[0];
 
     const empty = (msg: string): EvidenceVerdict => ({
       query, verdict: "UNKNOWN", confidence: "low",
-      oneLiner: msg, studies: 0, bullets: [], quotes: [], articles: [],
+      oneLiner: msg, studies: 0, sentiment: 0, updated,
+      bullets: [], quotes: [], articles: [],
       pubmedSearchUrl, redditSearchUrl, generatedAt,
     });
 
@@ -205,10 +212,11 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
           ? `Across ${studies} PubMed studies, the evidence largely fails to support "${query}".`
           : `Across ${studies} PubMed studies, findings are mixed for "${query}".`;
 
-      const { bullets, quotes } = await generateBulletsAndQuotes(query, abstractsForClaude);
+      const { bullets, quotes, sentiment } = await generateBulletsAndQuotes(query, abstractsForClaude);
 
       return {
         query, verdict, confidence, oneLiner, studies,
+        sentiment, updated,
         bullets, quotes, articles: articles.slice(0, 6),
         pubmedSearchUrl, redditSearchUrl, generatedAt,
       };

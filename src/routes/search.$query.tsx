@@ -104,10 +104,11 @@ function SearchPage() {
           </p>
 
           {!isUnknown && (
-            <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 font-mono text-[11px] uppercase tracking-[0.18em]" style={{ color: "var(--muted-ink)" }}>
-              <span>{data.studies} studies</span>
-              <span>·</span>
-              <span>Confidence: {data.confidence}</span>
+            <div className="mt-10 grid grid-cols-2 gap-7 sm:grid-cols-4">
+              <Stat label="STUDIES" value={String(data.studies)} />
+              <Stat label="CONFIDENCE" value={data.confidence} />
+              <Stat label="SENTIMENT" value={`${data.sentiment}%`} />
+              <Stat label="UPDATED" value={data.updated} />
             </div>
           )}
 
@@ -121,8 +122,11 @@ function SearchPage() {
               ALL PUBMED RESULTS ↗
             </a>
             <a
+<<<<<<< HEAD
 
             
+=======
+>>>>>>> e4f9947 (add all 4 stats to search hero)
               href={data.redditSearchUrl}
               target="_blank"
               rel="noopener noreferrer"
@@ -202,9 +206,18 @@ function SearchPage() {
               ))}
             </div>
           </section>
-        )}
-      </div>
-    </main>
+              )}
+            </div>
+          </main>
+        );
+        }
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="font-label mb-3 text-xs text-[var(--muted-ink)]">{label}</p>
+      <p className="font-mono text-lg text-[var(--ink)]">{value}</p>
+    </div>
   );
 }
 
