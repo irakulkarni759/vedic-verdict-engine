@@ -74,6 +74,7 @@ function SearchPage() {
         <Link to="/" className="font-label text-[10px] hover:opacity-70" style={{ color: "var(--muted-ink)" }}>
           ← BACK TO VEDA
         </Link>
+
         <article
           className="relative mt-6 overflow-hidden rounded-3xl p-8 md:p-10"
           style={{
@@ -122,7 +123,7 @@ function SearchPage() {
           )}
 
           <div className="relative mt-6 flex flex-wrap gap-2">
-            <a
+            
               href={data.pubmedSearchUrl}
               target="_blank"
               rel="noopener noreferrer"
@@ -131,7 +132,7 @@ function SearchPage() {
             >
               ALL PUBMED RESULTS ↗
             </a>
-            <a
+            
               href={data.redditSearchUrl}
               target="_blank"
               rel="noopener noreferrer"
@@ -145,9 +146,11 @@ function SearchPage() {
 
         {data.bullets.length > 0 && (
           <section className="mt-10">
-            <p className="font-label text-[10px]" style={{ color: "var(--sage)" }}>
-              RESEARCH EVIDENCE
-            </p>
+            <SectionHeader
+              left="WHAT THE RESEARCH SAYS"
+              right="ALL ON PUBMED ↗"
+              href={data.pubmedSearchUrl}
+            />
             <ul className="mt-3 space-y-3">
               {data.bullets.map((b, i) => (
                 <li
@@ -159,7 +162,7 @@ function SearchPage() {
                   </div>
                   <div>
                     <p className="text-lg leading-8 text-[var(--ink)]">{b.text}</p>
-                    <a
+                    
                       href={b.url}
                       target="_blank"
                       rel="noreferrer"
@@ -171,6 +174,33 @@ function SearchPage() {
                 </li>
               ))}
             </ul>
+          </section>
+        )}
+
+        {data.quotes && data.quotes.length > 0 && (
+          <section className="mt-14">
+            <SectionHeader
+              left="WHAT PEOPLE SAY"
+              right="READ THREADS ON REDDIT ↗"
+              href={data.redditSearchUrl}
+            />
+            <article className="mt-4 rounded-[22px] border border-white/75 bg-white/90 p-8 shadow-[0_12px_35px_rgba(27,52,72,0.04)]">
+              <div className="mt-4 space-y-8">
+                {data.quotes.map((q) => (
+                  <div key={`${q.handle}-${q.text}`}>
+                    <p className="text-lg italic leading-8 text-[var(--ink)]">"{q.text}"</p>
+                    
+                      href={data.redditSearchUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-mono mt-3 inline-block text-xs text-[var(--terracotta)]"
+                    >
+                      {q.handle.toUpperCase()} ↗
+                    </a>
+                  </div>
+                ))}
+              </div>
+            </article>
           </section>
         )}
 
@@ -187,6 +217,22 @@ function SearchPage() {
           </section>
         )}
       </div>
+    </div>
+  );
+}
+
+function SectionHeader({ left, right, href }: { left: string; right: string; href: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <p className="font-label text-xs text-[var(--sage)]">{left}</p>
+      
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        className="font-label text-xs text-[var(--terracotta)] transition hover:opacity-70"
+      >
+        {right}
+      </a>
     </div>
   );
 }

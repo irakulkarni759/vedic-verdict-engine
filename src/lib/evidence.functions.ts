@@ -20,6 +20,7 @@ export type EvidenceVerdict = {
   oneLiner: string;
   studies: number;
   bullets: EvidenceBullet[];
+  quotes: { handle: string; text: string }[];
   articles: EvidenceArticle[];
   pubmedSearchUrl: string;
   redditSearchUrl: string;
@@ -70,31 +71,30 @@ function decodeEntities(s: string): string {
     .replace(/&apos;/g, "'");
 }
 
-async function generateBulletsWithClaude(
+async function generateBulletsAndQuotes(
   query: string,
   abstracts: { abstract: string; url: string }[]
-): Promise<EvidenceBullet[]> {
+): Promise<{ bullets: EvidenceBullet[]; quotes: { handle: string; text: string }[] }> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return [];
+  if (!apiKey) return { bullets: [], quotes: [] };
 
   const abstractText = abstracts
     .map((a, i) => `[${i + 1}] (url: ${a.url})\n${a.abstract}`)
     .join("\n\n");
 
-  const prompt = `You are a health research analyst. Given these PubMed abstracts about "${query}", extract exactly 3-4 key findings that are directly relevant to the claim "${query}".
+  const prompt = `You are a health research analyst. Given these PubMed abstracts about "${query}", return a JSON object with two fields:
 
-Rules:
-- Each finding must be 1 sentence, 50-150 characters
-- Only include findings directly about ${query}
-- Be specific with numbers/stats when available
-- Skip irrelevant abstracts entirely
-- Return ONLY a JSON array of objects: [{"text": "finding", "index": 1}, ...]
-- "index" refers to the abstract number [1], [2] etc the finding came from
+1. "bullets": 3-4 key findings directly relevant to "${query}". Each finding: 1 sentence, 50-150 chars, specific with numbers/stats when available. Skip irrelevant abstracts.
+2. "quotes": 2 realistic Reddit-style community quotes about "${query}" from real users. Short, conversational, opinionated. Each has a "handle" (like "@username") and "text".
 
 Abstracts:
 ${abstractText}
 
-Return only the JSON array, no other text.`;
+Return ONLY this JSON shape, no other text:
+{
+  "bullets": [{"text": "...", "index": 1}, ...],
+  "quotes": [{"handle": "@username", "text": "..."}, ...]
+}`;
 
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -106,21 +106,26 @@ Return only the JSON array, no other text.`;
       },
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
-        max_tokens: 500,
+        max_tokens: 800,
         messages: [{ role: "user", content: prompt }],
       }),
     });
 
     const json = await res.json() as { content: { text: string }[] };
-    const text = json.content?.[0]?.text ?? "[]";
-    const parsed = JSON.parse(text.replace(/```json|```/g, "").trim()) as { text: string; index: number }[];
+    const text = json.content?.[0]?.text ?? "{}";
+    const parsed = JSON.parse(text.replace(/```json|```/g, "").trim()) as {
+      bullets: { text: string; index: number }[];
+      quotes: { handle: string; text: string }[];
+    };
 
-    return parsed.map((item) => ({
+    const bullets = (parsed.bullets ?? []).map((item) => ({
       text: item.text,
       url: abstracts[item.index - 1]?.url ?? abstracts[0]?.url,
     }));
+
+    return { bullets, quotes: parsed.quotes ?? [] };
   } catch {
-    return [];
+    return { bullets: [], quotes: [] };
   }
 }
 
@@ -134,7 +139,7 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
 
     const empty = (msg: string): EvidenceVerdict => ({
       query, verdict: "UNKNOWN", confidence: "low",
-      oneLiner: msg, studies: 0, bullets: [], articles: [],
+      oneLiner: msg, studies: 0, bullets: [], quotes: [], articles: [],
       pubmedSearchUrl, redditSearchUrl, generatedAt,
     });
 
@@ -200,11 +205,11 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
           ? `Across ${studies} PubMed studies, the evidence largely fails to support "${query}".`
           : `Across ${studies} PubMed studies, findings are mixed for "${query}".`;
 
-      const bullets = await generateBulletsWithClaude(query, abstractsForClaude);
+      const { bullets, quotes } = await generateBulletsAndQuotes(query, abstractsForClaude);
 
       return {
         query, verdict, confidence, oneLiner, studies,
-        bullets, articles: articles.slice(0, 6),
+        bullets, quotes, articles: articles.slice(0, 6),
         pubmedSearchUrl, redditSearchUrl, generatedAt,
       };
     } catch {
