@@ -152,43 +152,22 @@ function SearchPage() {
               {data.bullets.map((b, i) => (
                 <li
                   key={i}
-                  className="rounded-2xl p-5"
-                  style={{
-                    backgroundColor: "#fff",
-                    border: "1px solid color-mix(in oklab, var(--ink) 8%, transparent)",
-                    color: "var(--ink)",
-                    fontSize: 14,
-                    lineHeight: 1.55,
-                  }}
+                  className="grid gap-4 rounded-[22px] border border-white/75 bg-white/90 p-7 shadow-[0_12px_35px_rgba(27,52,72,0.04)] sm:grid-cols-[48px_1fr] sm:p-8"
                 >
-                  {b}
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        {data.articles.length > 0 && (
-          <section className="mt-10">
-            <p className="font-label text-[10px]" style={{ color: "var(--sage)" }}>
-              SOURCE ARTICLES · PUBMED
-            </p>
-            <ul className="mt-3 divide-y" style={{ borderColor: "color-mix(in oklab, var(--ink) 10%, transparent)" }}>
-              {data.articles.map((a) => (
-                <li key={a.pmid} className="py-3">
-                  <a
-                    href={a.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group block"
-                  >
-                    <p className="font-display group-hover:underline" style={{ color: "var(--ink)", fontSize: 17, lineHeight: 1.25 }}>
-                      {a.title}
-                    </p>
-                    <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.14em]" style={{ color: "var(--muted-ink)" }}>
-                      {[a.journal, a.year, `PMID ${a.pmid}`].filter(Boolean).join(" · ")}
-                    </p>
-                  </a>
+                  <div className="font-mono text-sm text-[var(--sage)]">
+                    {String(i + 1).padStart(2, "0")}
+                  </div>
+                  <div>
+                    <p className="text-lg leading-8 text-[var(--ink)]">{b}</p>
+                    
+                      href={data.pubmedSearchUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-mono mt-5 inline-block text-xs text-[var(--terracotta)]"
+                    {">"}
+                      view on pubmed ↗
+                    </a>
+                  </div>
                 </li>
               ))}
             </ul>
