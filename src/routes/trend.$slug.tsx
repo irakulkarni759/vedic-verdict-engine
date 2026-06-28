@@ -133,7 +133,7 @@ function TrendPage() {
           />
 
           <div className="mt-4 space-y-3">
-            {trend.evidence.map((e, i) => (
+            {trend.evidence.map((e: string, i: number) => (
               <article
                 key={e}
                 className="grid gap-4 rounded-[22px] border border-white/75 bg-white/90 p-7 shadow-[0_12px_35px_rgba(27,52,72,0.04)] sm:grid-cols-[48px_1fr] sm:p-8"
