@@ -162,7 +162,7 @@ function SearchPage() {
                   </div>
                   <div>
                     <p className="text-lg leading-8 text-[var(--ink)]">{b.text}</p>
-                    
+                    <a
                       href={b.url}
                       target="_blank"
                       rel="noreferrer"
@@ -189,7 +189,7 @@ function SearchPage() {
                 {data.quotes.map((q) => (
                   <div key={`${q.handle}-${q.text}`}>
                     <p className="text-lg italic leading-8 text-[var(--ink)]">"{q.text}"</p>
-                    
+                    <a
                       href={data.redditSearchUrl}
                       target="_blank"
                       rel="noreferrer"
