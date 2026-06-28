@@ -70,21 +70,58 @@ function decodeEntities(s: string): string {
     .replace(/&apos;/g, "'");
 }
 
-function bestBullet(abstract: string): string | null {
-  const sentences = abstract.split(/(?<=[.!?])\s+/);
-  // prefer sentences with numbers/stats or outcome words
-  const outcome = sentences.find(s =>
-    s.length > 50 && s.length < 200 &&
-    /(\d+%?|significant|improve|reduc|effect|associat|result)/i.test(s)
-  );
-  const fallback = sentences.find(s => s.length > 50 && s.length < 200);
-  const best = outcome ?? fallback ?? sentences[0];
-  if (!best) return null;
-  return best
-    .replace(/^[A-Z]{2,}[^a-z]*:\s*/, "")  // strip "BACKGROUND: " etc
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 200);
+async function generateBulletsWithClaude(
+  query: string,
+  abstracts: { abstract: string; url: string }[]
+): Promise<EvidenceBullet[]> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return [];
+
+  const abstractText = abstracts
+    .map((a, i) => `[${i + 1}] (url: ${a.url})\n${a.abstract}`)
+    .join("\n\n");
+
+  const prompt = `You are a health research analyst. Given these PubMed abstracts about "${query}", extract exactly 3-4 key findings that are directly relevant to the claim "${query}".
+
+Rules:
+- Each finding must be 1 sentence, 50-150 characters
+- Only include findings directly about ${query}
+- Be specific with numbers/stats when available
+- Skip irrelevant abstracts entirely
+- Return ONLY a JSON array of objects: [{"text": "finding", "index": 1}, ...]
+- "index" refers to the abstract number [1], [2] etc the finding came from
+
+Abstracts:
+${abstractText}
+
+Return only the JSON array, no other text.`;
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 500,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+
+    const json = await res.json() as { content: { text: string }[] };
+    const text = json.content?.[0]?.text ?? "[]";
+    const parsed = JSON.parse(text.replace(/```json|```/g, "").trim()) as { text: string; index: number }[];
+
+    return parsed.map((item) => ({
+      text: item.text,
+      url: abstracts[item.index - 1]?.url ?? abstracts[0]?.url,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 export const generateEvidenceVerdict = createServerFn({ method: "GET" })
@@ -96,29 +133,20 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
     const generatedAt = new Date().toISOString();
 
     const empty = (msg: string): EvidenceVerdict => ({
-      query,
-      verdict: "UNKNOWN",
-      confidence: "low",
-      oneLiner: msg,
-      studies: 0,
-      bullets: [],
-      articles: [],
-      pubmedSearchUrl,
-      redditSearchUrl,
-      generatedAt,
+      query, verdict: "UNKNOWN", confidence: "low",
+      oneLiner: msg, studies: 0, bullets: [], articles: [],
+      pubmedSearchUrl, redditSearchUrl, generatedAt,
     });
 
     if (!query) return empty("Enter a search to generate a verdict.");
 
     try {
-      // Use Title/Abstract filter for tighter, more relevant results
-      const searchTerm = `${query}[Title/Abstract]`;
       const esearch = await fetch(
-        `${EUTILS}/esearch.fcgi?db=pubmed&retmode=json&retmax=8&sort=relevance&term=${encodeURIComponent(searchTerm)}`,
+        `${EUTILS}/esearch.fcgi?db=pubmed&retmode=json&retmax=8&sort=relevance&term=${encodeURIComponent(query)}`,
       );
       if (!esearch.ok) return empty("Couldn't reach PubMed right now. Try again in a moment.");
 
-      const sj = (await esearch.json()) as { esearchresult?: { idlist?: string[]; count?: string } };
+      const sj = (await esearch.json()) as { esearchresult?: { idlist?: string[] } };
       const ids = sj.esearchresult?.idlist ?? [];
       if (ids.length === 0) {
         return { ...empty("No PubMed results — this one isn't well-studied yet."), verdict: "UNKNOWN" };
@@ -131,7 +159,7 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
       const articleBlocks = xml.split(/<PubmedArticle[>\s]/).slice(1);
 
       const articles: EvidenceArticle[] = [];
-      const bullets: EvidenceBullet[] = [];
+      const abstractsForClaude: { abstract: string; url: string }[] = [];
       let pos = 0, neg = 0, neutral = 0;
 
       for (const raw of articleBlocks) {
@@ -152,11 +180,7 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
           if (cls === "pos") pos++;
           else if (cls === "neg") neg++;
           else neutral++;
-
-          if (bullets.length < 4) {
-            const text = bestBullet(abstract);
-            if (text) bullets.push({ text, url: articleUrl });
-          }
+          abstractsForClaude.push({ abstract: abstract.slice(0, 800), url: articleUrl });
         }
       }
 
@@ -175,6 +199,8 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
           : verdict === "DEBUNKED"
           ? `Across ${studies} PubMed studies, the evidence largely fails to support "${query}".`
           : `Across ${studies} PubMed studies, findings are mixed for "${query}".`;
+
+      const bullets = await generateBulletsWithClaude(query, abstractsForClaude);
 
       return {
         query, verdict, confidence, oneLiner, studies,
