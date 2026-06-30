@@ -1,10 +1,11 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { trendBySlug, type Trend, type Verdict } from "@/lib/trends";
+import { getGeneratedTrendBySlug } from "@/lib/generatedTrends.functions";
 import { TrendCard } from "@/components/TrendCard";
 
 export const Route = createFileRoute("/trend/$slug")({
-  loader: ({ params }) => {
-    const trend = trendBySlug(params.slug);
+  loader: async ({ params }) => {
+    const trend = trendBySlug(params.slug) ?? (await getGeneratedTrendBySlug({ data: { slug: params.slug } }));
     if (!trend) throw notFound();
 
     const related = trend.related

@@ -1,12 +1,17 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { categoryBySlug, trendsByCategory, type Trend } from "@/lib/trends";
+import { getGeneratedTrendsByCategory } from "@/lib/generatedTrends.functions";
 import { TrendCard } from "@/components/TrendCard";
 
 export const Route = createFileRoute("/category/$slug")({
-  loader: ({ params }) => {
+  loader: async ({ params }) => {
     const cat = categoryBySlug(params.slug);
     if (!cat) throw notFound();
-    return { category: cat, trends: trendsByCategory(cat.slug) };
+    const generated = await getGeneratedTrendsByCategory({ data: { category: cat.slug } });
+    const staticTrends = trendsByCategory(cat.slug);
+    const seenSlugs = new Set(staticTrends.map((t) => t.slug));
+    const merged = [...generated.filter((t) => !seenSlugs.has(t.slug)), ...staticTrends];
+    return { category: cat, trends: merged };
   },
   head: ({ loaderData }) => ({
     meta: loaderData

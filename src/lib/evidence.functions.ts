@@ -1,4 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
+import {
+  CATEGORY_SLUGS,
+  guessCategoryFallback,
+  saveGeneratedTrend,
+  slugify,
+} from "./generatedTrends.functions";
 
 export type EvidenceArticle = {
   pmid: string;
@@ -15,6 +21,8 @@ export type EvidenceBullet = {
 
 export type EvidenceVerdict = {
   query: string;
+  slug: string;
+  category: string;
   verdict: "BACKED" | "MIXED" | "DEBUNKED" | "UNKNOWN";
   confidence: "high" | "moderate" | "low";
   oneLiner: string;
@@ -76,19 +84,25 @@ function decodeEntities(s: string): string {
 async function generateBulletsAndQuotes(
   query: string,
   abstracts: { abstract: string; url: string }[]
-): Promise<{ bullets: EvidenceBullet[]; quotes: { handle: string; text: string }[]; sentiment: number }> {
+): Promise<{
+  bullets: EvidenceBullet[];
+  quotes: { handle: string; text: string }[];
+  sentiment: number;
+  category: string;
+}> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return { bullets: [], quotes: [], sentiment: 50 };
+  if (!apiKey) return { bullets: [], quotes: [], sentiment: 50, category: guessCategoryFallback(query) };
 
   const abstractText = abstracts
     .map((a, i) => `[${i + 1}] (url: ${a.url})\n${a.abstract}`)
     .join("\n\n");
 
-  const prompt = `You are a health research analyst. Given these PubMed abstracts about "${query}", return a JSON object with three fields:
+  const prompt = `You are a health research analyst. Given these PubMed abstracts about "${query}", return a JSON object with four fields:
 
 1. "bullets": 3-4 key findings directly relevant to "${query}". Each finding: 1 sentence, 50-150 chars, specific with numbers/stats when available. Skip irrelevant abstracts.
 2. "quotes": 2 realistic Reddit-style community quotes about "${query}" from real users. Short, conversational, opinionated. Each has a "handle" (like "@username") and "text".
 3. "sentiment": a number 0-100 representing how positive the community sentiment is about "${query}" based on the evidence and typical user experience.
+4. "category": the single best-fit category slug for "${query}", chosen ONLY from this exact list: ${CATEGORY_SLUGS.join(", ")}.
 
 Abstracts:
 ${abstractText}
@@ -97,7 +111,8 @@ Return ONLY this JSON shape, no other text:
 {
   "bullets": [{"text": "...", "index": 1}, ...],
   "quotes": [{"handle": "@username", "text": "..."}, ...],
-  "sentiment": 75
+  "sentiment": 75,
+  "category": "supplements"
 }`;
 
   try {
@@ -121,6 +136,7 @@ Return ONLY this JSON shape, no other text:
       bullets: { text: string; index: number }[];
       quotes: { handle: string; text: string }[];
       sentiment: number;
+      category?: string;
     };
 
     const bullets = (parsed.bullets ?? []).map((item) => ({
@@ -128,9 +144,13 @@ Return ONLY this JSON shape, no other text:
       url: abstracts[item.index - 1]?.url ?? abstracts[0]?.url,
     }));
 
-    return { bullets, quotes: parsed.quotes ?? [], sentiment: parsed.sentiment ?? 50 };
+    const category = parsed.category && CATEGORY_SLUGS.includes(parsed.category)
+      ? parsed.category
+      : guessCategoryFallback(query);
+
+    return { bullets, quotes: parsed.quotes ?? [], sentiment: parsed.sentiment ?? 50, category };
   } catch {
-    return { bullets: [], quotes: [], sentiment: 50 };
+    return { bullets: [], quotes: [], sentiment: 50, category: guessCategoryFallback(query) };
   }
 }
 
@@ -138,13 +158,14 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
   .inputValidator((d: { query: string }) => ({ query: String(d.query || "").slice(0, 200) }))
   .handler(async ({ data }): Promise<EvidenceVerdict> => {
     const query = data.query.trim();
+    const slug = slugify(query);
     const pubmedSearchUrl = `https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(query)}`;
     const redditSearchUrl = `https://www.reddit.com/search/?q=${encodeURIComponent(query)}`;
     const generatedAt = new Date().toISOString();
     const updated = new Date().toISOString().split("T")[0];
 
     const empty = (msg: string): EvidenceVerdict => ({
-      query, verdict: "UNKNOWN", confidence: "low",
+      query, slug, category: guessCategoryFallback(query), verdict: "UNKNOWN", confidence: "low",
       oneLiner: msg, studies: 0, sentiment: 0, updated,
       bullets: [], quotes: [], articles: [],
       pubmedSearchUrl, redditSearchUrl, generatedAt,
@@ -161,7 +182,17 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
       const sj = (await esearch.json()) as { esearchresult?: { idlist?: string[] } };
       const ids = sj.esearchresult?.idlist ?? [];
       if (ids.length === 0) {
-        return { ...empty("No PubMed results — this one isn't well-studied yet."), verdict: "UNKNOWN" };
+        const result = { ...empty("No PubMed results — this one isn't well-studied yet."), verdict: "UNKNOWN" as const };
+        // Still record the attempt, so it counts toward "trends searched" — but
+        // as "unmapped" so it never renders as a real verdict card anywhere.
+        await saveGeneratedTrend({
+          data: {
+            slug, query, name: query, category: result.category, verdict: "unmapped",
+            summary: result.oneLiner, studyCount: 0, confidence: "low", updated,
+            evidencePoints: [], sentiment: 0, opinions: [], sourceUrls: [pubmedSearchUrl],
+          },
+        });
+        return result;
       }
 
       const efetch = await fetch(
@@ -212,10 +243,19 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
           ? `Across ${studies} PubMed studies, the evidence largely fails to support "${query}".`
           : `Across ${studies} PubMed studies, findings are mixed for "${query}".`;
 
-      const { bullets, quotes, sentiment } = await generateBulletsAndQuotes(query, abstractsForClaude);
+      const { bullets, quotes, sentiment, category } = await generateBulletsAndQuotes(query, abstractsForClaude);
+
+      await saveGeneratedTrend({
+        data: {
+          slug, query, name: query, category, verdict: verdict.toLowerCase() as "backed" | "mixed" | "debunked",
+          summary: oneLiner, studyCount: studies, confidence, updated,
+          evidencePoints: bullets.map((b) => b.text), sentiment, opinions: quotes,
+          sourceUrls: articles.slice(0, 6).map((a) => a.url),
+        },
+      });
 
       return {
-        query, verdict, confidence, oneLiner, studies,
+        query, slug, category, verdict, confidence, oneLiner, studies,
         sentiment, updated,
         bullets, quotes, articles: articles.slice(0, 6),
         pubmedSearchUrl, redditSearchUrl, generatedAt,

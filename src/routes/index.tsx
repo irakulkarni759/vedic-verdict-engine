@@ -1,8 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CATEGORIES, TRENDS, trendBySlug, type Verdict } from "@/lib/trends";
+import { getGeneratedTrendsMeta } from "@/lib/generatedTrends.functions";
 
 export const Route = createFileRoute("/")({
+  loader: async () => getGeneratedTrendsMeta(),
   head: () => ({
     meta: [
       { title: "Veda — Is it actually worth it?" },
@@ -29,6 +31,7 @@ type Mark = {
   dx: number;
   dy: number;
   id: number;
+  isNew?: boolean;
 };
 
 const TRENDING_SLUGS = ["rosemary-oil", "collagen-peptides", "ashwagandha", "slugging"];
@@ -47,29 +50,37 @@ function verdictColor(v: Verdict) {
 }
 
 function Veda() {
-  const initialMarks = useMemo<Mark[]>(
-    () =>
-      TRENDS.map((t, i) => ({
-        name: t.name.toLowerCase(),
-        slug: t.slug,
-        verdict: t.verdict,
-        id: i,
-        rot: (rand(i + 1) - 0.5) * 14,
-        dx: (rand(i + 11) - 0.5) * 18,
-        dy: (rand(i + 31) - 0.5) * 14,
-      })),
-    [],
-  );
+  const { count: generatedCount, recent } = Route.useLoaderData() as {
+    count: number;
+    recent: import("@/lib/trends").Trend[];
+  };
+
+  const initialMarks = useMemo<Mark[]>(() => {
+    const staticMarks = TRENDS.map((t, i) => ({
+      name: t.name.toLowerCase(),
+      slug: t.slug,
+      verdict: t.verdict,
+      id: i,
+      rot: (rand(i + 1) - 0.5) * 14,
+      dx: (rand(i + 11) - 0.5) * 18,
+      dy: (rand(i + 31) - 0.5) * 14,
+    }));
+    const generatedMarks = recent.map((t, i) => ({
+      name: t.name.toLowerCase(),
+      slug: t.slug,
+      verdict: t.verdict,
+      id: -(i + 1), // negative ids keep these distinct from static TRENDS indices
+      rot: (rand(i + 101) - 0.5) * 14,
+      dx: (rand(i + 111) - 0.5) * 18,
+      dy: (rand(i + 131) - 0.5) * 14,
+    }));
+    return [...generatedMarks, ...staticMarks];
+  }, [recent]);
 
   const [marks, setMarks] = useState<Mark[]>(initialMarks);
-  const [count, setCount] = useState(22);
+  const [count, setCount] = useState<number>(TRENDS.length + generatedCount);
   const [query, setQuery] = useState("");
   const navigate = useNavigate();
-
-  useEffect(() => {
-    const t = setInterval(() => setCount((c) => c + 1), 12000);
-    return () => clearInterval(t);
-  }, []);
 
   function submit(name?: string) {
     const q = (name ?? query).trim();
@@ -95,6 +106,7 @@ function Veda() {
         name: q.toLowerCase(),
         verdict,
         id,
+        isNew: true,
         rot: (Math.random() - 0.5) * 14,
         dx: (Math.random() - 0.5) * 18,
         dy: (Math.random() - 0.5) * 14,
@@ -550,7 +562,7 @@ function MarkSeal({ m, index }: { m: Mark; index: number }) {
           transform: `rotate(${m.rot}deg) translate(${m.dx * 0.3}px, ${m.dy * 0.3}px)`,
           ["--rot-start" as string]: `${m.rot - 6}deg`,
           ["--rot-end" as string]: `${m.rot}deg`,
-          animation: index < TRENDS.length ? undefined : "drop-in 0.9s cubic-bezier(.4,1.4,.6,1) both",
+          animation: m.isNew ? "drop-in 0.9s cubic-bezier(.4,1.4,.6,1) both" : undefined,
         } as React.CSSProperties
       }
     >
