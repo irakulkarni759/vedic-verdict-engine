@@ -177,9 +177,7 @@ export function Comments({ slug }: Props) {
             {error ? (
               <p className="font-mono text-xs text-[var(--verdict-debunked)]">{error}</p>
             ) : (
-              <p className="font-mono text-[11px] text-[var(--muted-ink)]">
-                Public. You can edit your own comments from this device.
-              </p>
+              <span />
             )}
 
             <button
