@@ -159,24 +159,46 @@ Return ONLY this JSON shape, no other text:
   }
 }
 
+type FallbackReason = "product" | "terminology";
+
+type FallbackTerms = {
+  reason: FallbackReason;
+  terms: string[];
+};
+
 /**
- * Called only when a direct PubMed search returns zero hits. Determines
- * whether the query is likely a branded/commercial product (which PubMed
- * will never index by name) and, if so, returns its most likely active
- * ingredients so we can retry the search against those instead.
+ * Called only when a direct PubMed search returns zero hits. Two cases:
+ *
+ * 1. "product" — the query is a branded/commercial product (PubMed indexes
+ *    research, not product names). Returns its most likely active ingredients.
+ * 2. "terminology" — the query is a real, studied practice or ingredient
+ *    described in colloquial wellness-culture phrasing that doesn't match
+ *    PubMed's academic indexing terms (e.g. "cold plunging" vs "cold water
+ *    immersion", "de-stressing" vs "stress reduction cortisol"). Returns the
+ *    scientific/academic search terms most likely to surface real research.
+ *
+ * Returns null if the query is genuinely obscure/novel with no findable
+ * research under any framing.
  */
-async function identifyIngredients(query: string): Promise<string[]> {
+async function identifyFallbackTerms(query: string): Promise<FallbackTerms | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return [];
+  if (!apiKey) return null;
 
-  const prompt = `"${query}" returned zero results on a direct PubMed search. This usually means it's a specific commercial/branded product (PubMed indexes research, not product names).
+  const prompt = `"${query}" returned zero results on a direct PubMed search. PubMed only indexes academic literature, so this happens for two common reasons — figure out which one applies, if either:
 
-If "${query}" is a specific branded or commercial product, list its 2-4 most likely active/key ingredients as plain scientific or common names suitable for a PubMed search query (e.g. "centella asiatica", "niacinamide", "zinc oxide").
+1. PRODUCT: "${query}" is a specific branded/commercial product. PubMed won't index it by name, but its active ingredients likely are studied.
+2. TERMINOLOGY: "${query}" describes a real practice, ingredient, or activity using colloquial/wellness-culture phrasing that doesn't match academic vocabulary (e.g. "cold plunging" → "cold water immersion", "gut health" → "gut microbiota", "de-stressing" → "stress reduction cortisol"). The underlying topic likely does have real research under different search terms.
 
-If "${query}" is already a generic ingredient, supplement, food, or activity (not a specific branded product) — meaning a PubMed search genuinely turned up nothing relevant — return an empty ingredients list.
+If neither applies — "${query}" is already phrased in a way that should have matched relevant research, and genuinely doesn't (obscure, novel, or nonsensical) — return "reason": null.
 
 Return ONLY this JSON shape, no other text:
-{"isProduct": true, "ingredients": ["centella asiatica", "zinc oxide"]}`;
+{"reason": "product", "terms": ["centella asiatica", "zinc oxide"]}
+or
+{"reason": "terminology", "terms": ["cold water immersion", "deliberate cold exposure stress"]}
+or
+{"reason": null, "terms": []}
+
+"terms" should be 2-4 plain scientific/academic search phrases suitable for a PubMed query.`;
 
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -196,14 +218,17 @@ Return ONLY this JSON shape, no other text:
     const json = (await res.json()) as { content: { text: string }[] };
     const text = json.content?.[0]?.text ?? "{}";
     const parsed = JSON.parse(text.replace(/```json|```/g, "").trim()) as {
-      isProduct?: boolean;
-      ingredients?: string[];
+      reason?: FallbackReason | null;
+      terms?: string[];
     };
 
-    if (!parsed.isProduct) return [];
-    return (parsed.ingredients ?? []).filter(Boolean).slice(0, 4);
+    if (parsed.reason !== "product" && parsed.reason !== "terminology") return null;
+    const terms = (parsed.terms ?? []).filter(Boolean).slice(0, 4);
+    if (terms.length === 0) return null;
+
+    return { reason: parsed.reason, terms };
   } catch {
-    return [];
+    return null;
   }
 }
 
@@ -216,9 +241,9 @@ async function buildResultFromIds(opts: {
   generatedAt: string;
   pubmedSearchUrl: string;
   redditSearchUrl: string;
-  ingredientFallback: string[] | null;
+  fallback: FallbackTerms | null;
 }): Promise<EvidenceVerdict> {
-  const { ids, query, name, slug, updated, generatedAt, pubmedSearchUrl, redditSearchUrl, ingredientFallback } = opts;
+  const { ids, query, name, slug, updated, generatedAt, pubmedSearchUrl, redditSearchUrl, fallback } = opts;
 
   const efetch = await fetch(`${EUTILS}/efetch.fcgi?db=pubmed&retmode=xml&id=${ids.join(",")}`);
   const xml = await efetch.text();
@@ -259,9 +284,13 @@ async function buildResultFromIds(opts: {
   const confidence: EvidenceVerdict["confidence"] =
     studies >= 10 ? "high" : studies >= 4 ? "moderate" : "low";
 
-  const subjectLabel = ingredientFallback
-    ? `its key ingredients (${ingredientFallback.map(toTitleCase).join(", ")})`
-    : `"${name}"`;
+  const termsLabel = fallback ? fallback.terms.map(toTitleCase).join(", ") : "";
+  const subjectLabel =
+    fallback?.reason === "product"
+      ? `its key ingredients (${termsLabel})`
+      : fallback?.reason === "terminology"
+      ? `related research (${termsLabel})`
+      : `"${name}"`;
 
   const verdictClause =
     verdict === "BACKED"
@@ -270,11 +299,16 @@ async function buildResultFromIds(opts: {
       ? `the evidence largely fails to support ${subjectLabel}`
       : `findings are mixed for ${subjectLabel}`;
 
-  const oneLiner = ingredientFallback
-    ? `No direct studies on "${name}" as a product. Across ${studies} PubMed studies, ${verdictClause}.`
-    : `Across ${studies} PubMed studies, ${verdictClause}.`;
+  const prefix =
+    fallback?.reason === "product"
+      ? `No direct studies on "${name}" as a product. `
+      : fallback?.reason === "terminology"
+      ? `No PubMed results for that exact phrase, but the underlying topic is studied. `
+      : "";
 
-  const searchSubject = ingredientFallback ? ingredientFallback.join(" ") : query;
+  const oneLiner = `${prefix}Across ${studies} PubMed studies, ${verdictClause}.`;
+
+  const searchSubject = fallback ? fallback.terms.join(" ") : query;
   const { bullets, quotes, sentiment, category } = await generateBulletsAndQuotes(searchSubject, abstractsForClaude);
 
   await saveGeneratedTrend({
@@ -290,7 +324,8 @@ async function buildResultFromIds(opts: {
     query, name, slug, category, verdict, confidence, oneLiner, studies,
     sentiment, updated,
     bullets, quotes, articles: articles.slice(0, 6),
-    pubmedSearchUrl, redditSearchUrl, generatedAt, ingredientFallback,
+    pubmedSearchUrl, redditSearchUrl, generatedAt,
+    ingredientFallback: fallback ? fallback.terms : null,
   };
 }
 
@@ -324,13 +359,14 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
       const ids = sj.esearchresult?.idlist ?? [];
 
       if (ids.length === 0) {
-        // Zero direct hits usually means this is a branded/commercial product —
-        // PubMed indexes research, not product names. Try its likely active
-        // ingredients before giving up.
-        const ingredients = await identifyIngredients(query);
+        // Zero direct hits usually means either (a) a branded product PubMed
+        // won't index by name, or (b) colloquial phrasing that doesn't match
+        // academic vocabulary for a topic that IS studied. Try alternate
+        // search terms before giving up.
+        const fallback = await identifyFallbackTerms(query);
 
-        if (ingredients.length > 0) {
-          const fallbackTerm = ingredients.join(" OR ");
+        if (fallback) {
+          const fallbackTerm = fallback.terms.join(" OR ");
           const fallbackSearch = await fetch(
             `${EUTILS}/esearch.fcgi?db=pubmed&retmode=json&retmax=8&sort=relevance&term=${encodeURIComponent(fallbackTerm)}`,
           );
@@ -345,7 +381,7 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
                 query, name, slug, updated, generatedAt,
                 pubmedSearchUrl: `https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(fallbackTerm)}`,
                 redditSearchUrl,
-                ingredientFallback: ingredients,
+                fallback,
               });
             }
           }
@@ -366,7 +402,7 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
 
       return await buildResultFromIds({
         ids, query, name, slug, updated, generatedAt,
-        pubmedSearchUrl, redditSearchUrl, ingredientFallback: null,
+        pubmedSearchUrl, redditSearchUrl, fallback: null,
       });
     } catch {
       return empty("Couldn't reach PubMed right now. Try again in a moment.");
