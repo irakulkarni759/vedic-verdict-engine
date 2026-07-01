@@ -94,26 +94,31 @@ async function generateBulletsAndQuotes(
   quotes: { handle: string; text: string }[];
   sentiment: number;
   category: string;
+  verdict: "BACKED" | "MIXED" | "DEBUNKED" | null;
 }> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return { bullets: [], quotes: [], sentiment: 50, category: guessCategoryFallback(query) };
+  if (!apiKey) {
+    return { bullets: [], quotes: [], sentiment: 50, category: guessCategoryFallback(query), verdict: null };
+  }
 
   const abstractText = abstracts
     .map((a, i) => `[${i + 1}] (url: ${a.url})\n${a.abstract}`)
     .join("\n\n");
 
-  const prompt = `You are a health research analyst. Given these PubMed abstracts about "${query}", return a JSON object with four fields:
+  const prompt = `You are a health research analyst. Given these PubMed abstracts about "${query}", return a JSON object with five fields:
 
-1. "bullets": 3-4 key findings directly relevant to "${query}". Each finding: 1 sentence, 50-150 chars, specific with numbers/stats when available. Skip irrelevant abstracts.
-2. "quotes": 2 realistic Reddit-style community quotes about "${query}" from real users. Short, conversational, opinionated. Each has a "handle" (like "@username") and "text".
-3. "sentiment": a number 0-100 representing how positive the community sentiment is about "${query}" based on the evidence and typical user experience.
-4. "category": the single best-fit category slug for "${query}", chosen ONLY from this exact list: ${CATEGORY_SLUGS.join(", ")}.
+1. "verdict": your overall read of the evidence, one of "BACKED" (the bulk of studies support it working/being beneficial), "MIXED" (evidence is genuinely split or inconclusive), or "DEBUNKED" (the bulk of studies contradict it or find no effect). Base this on your actual understanding of what each abstract found, not just keyword counting — e.g. abstracts describing consistent, specific mechanisms and positive outcomes across most studies should read as BACKED even if few use the literal phrase "significant improvement".
+2. "bullets": 3-4 key findings directly relevant to "${query}". Each finding: 1 sentence, 50-150 chars, specific with numbers/stats when available. Skip irrelevant abstracts.
+3. "quotes": 2 realistic Reddit-style community quotes about "${query}" from real users. Short, conversational, opinionated. Each has a "handle" (like "@username") and "text".
+4. "sentiment": a number 0-100 representing how positive the community sentiment is about "${query}" based on the evidence and typical user experience.
+5. "category": the single best-fit category slug for "${query}", chosen ONLY from this exact list: ${CATEGORY_SLUGS.join(", ")}.
 
 Abstracts:
 ${abstractText}
 
 Return ONLY this JSON shape, no other text:
 {
+  "verdict": "BACKED",
   "bullets": [{"text": "...", "index": 1}, ...],
   "quotes": [{"handle": "@username", "text": "..."}, ...],
   "sentiment": 75,
@@ -138,6 +143,7 @@ Return ONLY this JSON shape, no other text:
     const json = await res.json() as { content: { text: string }[] };
     const text = json.content?.[0]?.text ?? "{}";
     const parsed = JSON.parse(text.replace(/```json|```/g, "").trim()) as {
+      verdict?: string;
       bullets: { text: string; index: number }[];
       quotes: { handle: string; text: string }[];
       sentiment: number;
@@ -153,9 +159,14 @@ Return ONLY this JSON shape, no other text:
       ? parsed.category
       : guessCategoryFallback(query);
 
-    return { bullets, quotes: parsed.quotes ?? [], sentiment: parsed.sentiment ?? 50, category };
+    const verdict =
+      parsed.verdict === "BACKED" || parsed.verdict === "MIXED" || parsed.verdict === "DEBUNKED"
+        ? parsed.verdict
+        : null;
+
+    return { bullets, quotes: parsed.quotes ?? [], sentiment: parsed.sentiment ?? 50, category, verdict };
   } catch {
-    return { bullets: [], quotes: [], sentiment: 50, category: guessCategoryFallback(query) };
+    return { bullets: [], quotes: [], sentiment: 50, category: guessCategoryFallback(query), verdict: null };
   }
 }
 
@@ -277,12 +288,22 @@ async function buildResultFromIds(opts: {
 
   const studies = articles.length;
   const total = pos + neg + neutral || 1;
-  let verdict: EvidenceVerdict["verdict"] = "MIXED";
-  if (pos / total >= 0.55 && pos > neg) verdict = "BACKED";
-  else if (neg / total >= 0.45 && neg > pos) verdict = "DEBUNKED";
+  let keywordVerdict: EvidenceVerdict["verdict"] = "MIXED";
+  if (pos / total >= 0.55 && pos > neg) keywordVerdict = "BACKED";
+  else if (neg / total >= 0.45 && neg > pos) keywordVerdict = "DEBUNKED";
 
   const confidence: EvidenceVerdict["confidence"] =
     studies >= 10 ? "high" : studies >= 4 ? "moderate" : "low";
+
+  const searchSubject = fallback ? fallback.terms.join(" ") : query;
+  const { bullets, quotes, sentiment, category, verdict: claudeVerdict } =
+    await generateBulletsAndQuotes(searchSubject, abstractsForClaude);
+
+  // Claude reads and understands every abstract to write the bullets, so its
+  // verdict reflects that same understanding. The keyword scan is a much
+  // cruder signal (literal phrase matching) — only fall back to it when
+  // Claude's call fails or there's no API key configured.
+  const verdict = claudeVerdict ?? keywordVerdict;
 
   const termsLabel = fallback ? fallback.terms.map(toTitleCase).join(", ") : "";
   const subjectLabel =
@@ -307,9 +328,6 @@ async function buildResultFromIds(opts: {
       : "";
 
   const oneLiner = `${prefix}Across ${studies} PubMed studies, ${verdictClause}.`;
-
-  const searchSubject = fallback ? fallback.terms.join(" ") : query;
-  const { bullets, quotes, sentiment, category } = await generateBulletsAndQuotes(searchSubject, abstractsForClaude);
 
   await saveGeneratedTrend({
     data: {

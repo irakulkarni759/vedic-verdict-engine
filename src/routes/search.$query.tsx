@@ -173,9 +173,8 @@ function SearchPage() {
 
           {/* Stats row after buttons */}
           {!isUnknown && (
-            <div className="mt-10 grid grid-cols-2 gap-7 sm:grid-cols-4">
+            <div className="mt-10 grid grid-cols-3 gap-7">
               <Stat label="STUDIES" value={String(data.studies)} />
-              <Stat label="CONFIDENCE" value={data.confidence} />
               <Stat label="SENTIMENT" value={`${data.sentiment}%`} />
               <Stat label="UPDATED" value={data.updated} />
             </div>

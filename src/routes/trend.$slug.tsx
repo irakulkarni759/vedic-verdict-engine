@@ -119,9 +119,8 @@ function TrendPage() {
             </a>
           </div>
 
-          <div className="mt-10 grid grid-cols-2 gap-7 sm:grid-cols-4">
+          <div className="mt-10 grid grid-cols-3 gap-7">
             <Stat label="STUDIES" value={String(trend.studies)} />
-            <Stat label="CONFIDENCE" value={trend.confidence} />
             <Stat label="SENTIMENT" value={`${trend.sentiment}%`} />
             <Stat label="UPDATED" value={trend.updated} />
           </div>
