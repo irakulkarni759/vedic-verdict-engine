@@ -590,33 +590,127 @@ function MarkSeal({ m, index }: { m: Mark; index: number }) {
 
 
 /**
- * Hand-drawn icon for a trend. Picks by slug when known, falls back to
- * keyword-matching the free-text query so user-added marks still get a real icon.
- * Applies a small deterministic jitter (rotation / scale / stroke weight) seeded
- * from the search's own identity, so two searches sharing an icon bucket (e.g.
- * two "vial" results) still don't render as pixel-identical stamps.
+ * Icon for a trend. Tries, in order: (1) the curated per-trend icon for the
+ * original static trend list, (2) a literal keyword match against a large
+ * library of specific, recognizable objects (lemon for vitamin C, bean for
+ * castor oil, fish for omega-3, etc.) — not generic category buckets, one
+ * specific real thing per specific real search term — (3) if genuinely
+ * nothing matches, a one-off generated seal unique to that search's hash.
  */
 function TrendIcon({ name, slug, size = 24 }: { name: string; slug?: string; size?: number }) {
-  const key = pickIconKey(slug, name);
-  const Icon = ICONS[key];
-
   const seed = hashString(slug || name);
   const jitterRotate = (rand(seed) - 0.5) * 26; // ±13deg
   const jitterScale = 0.88 + rand(seed + 1) * 0.24; // 0.88–1.12x
   const jitterStroke = 1.15 + rand(seed + 2) * 0.5; // 1.15–1.65
 
+  const key = (slug ? SLUG_ICON[slug] : undefined) ?? pickLiteralIconKey(name);
+  const inner = key ? (
+    (() => {
+      const Icon = ICONS[key];
+      return <Icon size={size} strokeWidth={jitterStroke} />;
+    })()
+  ) : (
+    <GeneratedSeal seed={seed} size={size} strokeWidth={jitterStroke} />
+  );
+
   return (
     <div style={{ transform: `rotate(${jitterRotate}deg) scale(${jitterScale})` }}>
-      <Icon size={size} strokeWidth={jitterStroke} />
+      {inner}
     </div>
+  );
+}
+
+/**
+ * Matches a search to a specific, literal object icon when one obviously
+ * fits — "vitamin c" -> a lemon, "castor oil" -> a bean, "omega 3" -> a fish.
+ * Returns null (not a generic fallback key) when nothing genuinely fits, so
+ * the caller can fall through to a generated seal instead of forcing a
+ * mismatched literal icon onto an unrelated search.
+ */
+function pickLiteralIconKey(name: string): IconKey | null {
+  const n = name.toLowerCase();
+  if (/vitamin c|citrus|lemon|orange peel/.test(n)) return "lemon";
+  if (/castor oil|castor bean|seed oil|flax ?seed|chia/.test(n)) return "bean";
+  if (/avocado/.test(n)) return "avocado";
+  if (/\begg\b|eggs\b/.test(n)) return "egg";
+  if (/fish oil|omega.?3|salmon|sardine/.test(n)) return "fish";
+  if (/mushroom|reishi|lion'?s mane|chaga|cordyceps/.test(n)) return "mushroom";
+  if (/garlic|allicin/.test(n)) return "garlic";
+  if (/honey|manuka|propolis/.test(n)) return "honey";
+  if (/banana|potassium/.test(n)) return "banana";
+  if (/dumbbell|weight ?lift|resistance train/.test(n)) return "dumbbell";
+  if (/brain|cognit|nootropic|focus\b|memory/.test(n)) return "brain";
+  if (/heart|cardio ?vascular|cholesterol/.test(n)) return "heart";
+  if (/gut|probiotic|digest|microbiome|bloat|stomach/.test(n)) return "stomach";
+  if (/tooth|teeth|oral|dental|gum health/.test(n)) return "tooth";
+  if (/seedling|sprout|grow|plant.based/.test(n)) return "seedling";
+  if (/patch|bandaid|band-aid|topical patch/.test(n)) return "patch";
+  if (/\btea\b|matcha|chamomile|herbal tea/.test(n)) return "teacup";
+  if (/coffee|caffeine|espresso/.test(n)) return "coffee";
+  if (/chili|capsaicin|spicy|cayenne/.test(n)) return "chili";
+  if (/berry|blueberr|antioxidant|acai/.test(n)) return "berry";
+  if (/carrot|beta.?carotene/.test(n)) return "carrot";
+  if (/sauna|infrared|heat therapy/.test(n)) return "sauna";
+  if (/cold plunge|ice bath|cold water immersion|cryo/.test(n)) return "coldTub";
+  if (/thermometer|temperature|fever/.test(n)) return "thermometer";
+  if (/pill bottle|prescription|medication/.test(n)) return "pillBottle";
+  if (/gummy|gummies|chewable/.test(n)) return "gummy";
+  if (/soap|cleanser|body wash/.test(n)) return "soap";
+  if (/\bice\b|cryotherapy|cold roller/.test(n)) return "ice";
+  return null;
+}
+
+/**
+ * A one-off procedural mark: an irregular 5-8 sided polygon (vertex count,
+ * radius, and rotation all derived from `seed`) plus 1-2 short interior rune
+ * ticks at seeded angles. Continuous parameter space, not discrete buckets —
+ * two different searches essentially never produce the same seal.
+ */
+function GeneratedSeal({ seed, size = 24, strokeWidth = 1.4 }: { seed: number; size?: number; strokeWidth?: number }) {
+  const cx = 12, cy = 12;
+  const sides = 5 + Math.floor(rand(seed + 3) * 4); // 5-8
+  const baseR = 7 + rand(seed + 4) * 2; // 7-9
+  const rotOffset = rand(seed + 5) * Math.PI * 2;
+
+  const points: string[] = [];
+  for (let i = 0; i < sides; i++) {
+    const angle = rotOffset + (i / sides) * Math.PI * 2;
+    const rJitter = baseR * (0.72 + rand(seed + 10 + i) * 0.5); // 0.72-1.22x per vertex
+    points.push(`${(cx + Math.cos(angle) * rJitter).toFixed(2)},${(cy + Math.sin(angle) * rJitter).toFixed(2)}`);
+  }
+  const outline = `M ${points.join(" L ")} Z`;
+
+  const markCount = 1 + Math.floor(rand(seed + 30) * 2); // 1-2
+  const marks = Array.from({ length: markCount }).map((_, i) => {
+    const a = rand(seed + 40 + i * 7) * Math.PI * 2;
+    const r1 = 1.5 + rand(seed + 50 + i * 7) * 1;
+    const r2 = r1 + 2 + rand(seed + 60 + i * 7) * 2;
+    return (
+      <line
+        key={i}
+        x1={cx + Math.cos(a) * r1} y1={cy + Math.sin(a) * r1}
+        x2={cx + Math.cos(a) * r2} y2={cy + Math.sin(a) * r2}
+      />
+    );
+  });
+
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <path d={outline} />
+      {marks}
+    </svg>
   );
 }
 
 type IconKey =
   | "sun" | "vial" | "capsule" | "droplet" | "leaf" | "brush"
   | "roller" | "stone" | "mask" | "clock" | "glass" | "muscle"
-  | "tube" | "mortar" | "moon" | "flame" | "spark"
-  | "dropper" | "beaker" | "jar" | "bottle" | "pillow" | "root" | "mouth" | "snail";
+  | "tube" | "mortar" | "moon" | "flame" | "spark" | "footprints"
+  | "dropper" | "beaker" | "jar" | "bottle" | "pillow" | "root" | "mouth" | "snail"
+  | "lemon" | "bean" | "avocado" | "egg" | "fish" | "mushroom" | "garlic" | "honey"
+  | "banana" | "dumbbell" | "brain" | "heart" | "stomach" | "tooth" | "seedling"
+  | "patch" | "teacup" | "coffee" | "chili" | "berry" | "carrot" | "sauna"
+  | "coldTub" | "thermometer" | "pillBottle" | "gummy" | "soap" | "ice";
 
 const SLUG_ICON: Record<string, IconKey> = {
   "daily-spf": "sun",
@@ -644,33 +738,6 @@ const SLUG_ICON: Record<string, IconKey> = {
   "castor-oil": "jar",
   "beef-liver": "flame",
 };
-
-function pickIconKey(slug: string | undefined, name: string): IconKey {
-  if (slug && SLUG_ICON[slug]) return SLUG_ICON[slug];
-  const n = name.toLowerCase();
-  if (/spf|sunscreen|sun\b/.test(n)) return "sun";
-  if (/serum|retinol|vitamin c|niacinamide|peptide.*serum/.test(n)) return "vial";
-  if (/oil|drop/.test(n)) return "droplet";
-  if (/cream|balm|slug|moisturi[sz]er|lotion|barrier repair|cicaplast/.test(n)) return "tube";
-  if (/roller/.test(n)) return "roller";
-  if (/gua sha|stone|jade/.test(n)) return "stone";
-  if (/mask|charcoal|clay/.test(n)) return "mask";
-  if (/brush|exfolia|scrub/.test(n)) return "brush";
-  if (/leaf|rosemary|herb|tea|mint|basil/.test(n)) return "leaf";
-  if (/capsule|pill|tablet|biotin|collagen|liver|supplement/.test(n)) return "capsule";
-  if (/muscle|creatine|protein|gym|strength|workout|exercise|fitness|plung|cold\b/.test(n)) return "muscle";
-  if (/sleep|melatonin|magnesium|night|insomn|rest\b/.test(n)) return "moon";
-  if (/fast|clock|hour|timing|schedule/.test(n)) return "clock";
-  if (/juice|drink|water|smoothie|tonic|electrolyte/.test(n)) return "glass";
-  if (/turmeric|ashwagandha|adaptogen|powder|root|ginger|reishi|mushroom/.test(n)) return "mortar";
-  if (/inflam|fire|hot|sauna/.test(n)) return "flame";
-  if (/gut|probiotic|digest|microbiome|fiber|bloat/.test(n)) return "beaker";
-  if (/stress|anxiety|mood|mental|meditat|breath|calm|cortisol/.test(n)) return "spark";
-  if (/hair|scalp|shampoo|conditioner/.test(n)) return "leaf";
-  if (/pillow|cushion/.test(n)) return "pillow";
-  if (/bottle|shake/.test(n)) return "bottle";
-  return "spark";
-}
 
 const SW = 1.4;
 const ICONS: Record<IconKey, React.FC<{ size?: number; strokeWidth?: number }>> = {
@@ -753,9 +820,8 @@ const ICONS: Record<IconKey, React.FC<{ size?: number; strokeWidth?: number }>> 
   ),
   tube: ({ size = 24, strokeWidth = SW }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M6 5h12l-1 14a2 2 0 0 1-2 2h-6a2 2 0 0 1-2-2z" />
-      <path d="M6 5l1-2h10l1 2" />
-      <path d="M9 11h6" />
+      <path d="M8 6c0-2 2-3 4-3s4 1 4 3v3H8z" />
+      <path d="M7 9h10l-1 11a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2z" />
     </svg>
   ),
   mortar: ({ size = 24, strokeWidth = SW }) => (
@@ -772,12 +838,21 @@ const ICONS: Record<IconKey, React.FC<{ size?: number; strokeWidth?: number }>> 
   ),
   flame: ({ size = 24, strokeWidth = SW }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 3c1 3 5 5 5 10a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3-1-5 1-9z" />
+      <path d="M12 3c2.5 3 5 5 4 9-0.5 2-2 3-4 3s-3.5-1-4-3c-1-4 1.5-6 4-9z" />
+      <path d="M12 9c1 1.5 0.5 3-0.5 4" />
     </svg>
   ),
   spark: ({ size = 24, strokeWidth = SW }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 3v6M12 15v6M3 12h6M15 12h6M6 6l4 4M14 14l4 4M18 6l-4 4M10 14l-4 4" />
+      <path d="M12 2c0 4-1.5 7-4 9 2.5 2 4 5 4 9 0-4 1.5-7 4-9-2.5-2-4-5-4-9z" />
+    </svg>
+  ),
+  footprints: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <ellipse cx="7.5" cy="15.5" rx="2.1" ry="3.1" transform="rotate(-18 7.5 15.5)" />
+      <circle cx="8.4" cy="11.2" r="0.9" />
+      <ellipse cx="16.2" cy="8.8" rx="2.1" ry="3.1" transform="rotate(16 16.2 8.8)" />
+      <circle cx="15.4" cy="4.5" r="0.9" />
     </svg>
   ),
   dropper: ({ size = 24, strokeWidth = SW }) => (
@@ -796,9 +871,9 @@ const ICONS: Record<IconKey, React.FC<{ size?: number; strokeWidth?: number }>> 
   ),
   jar: ({ size = 24, strokeWidth = SW }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
-      <rect x="6" y="3" width="12" height="3" rx="1" />
-      <path d="M7 6h10v13a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2z" />
-      <path d="M9 12h6" />
+      <ellipse cx="12" cy="6" rx="6" ry="2.2" />
+      <path d="M6 6v11c0 2 2.5 3.5 6 3.5s6-1.5 6-3.5V6" />
+      <path d="M6 11c1.5 1 3.5 1.5 6 1.5s4.5-.5 6-1.5" />
     </svg>
   ),
   bottle: ({ size = 24, strokeWidth = SW }) => (
@@ -816,8 +891,10 @@ const ICONS: Record<IconKey, React.FC<{ size?: number; strokeWidth?: number }>> 
   ),
   root: ({ size = 24, strokeWidth = SW }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 3c-2 3-5 4-5 8s3 6 5 6 5-2 5-6-3-5-5-8z" />
-      <path d="M12 17v4M9 19l-2 2M15 19l2 2" />
+      <path d="M9 9c-2 0-3-1.5-2-3 1-1.5 3-1 3 1" />
+      <path d="M15 9c2 0 3-1.5 2-3-1-1.5-3-1-3 1" />
+      <path d="M12 8c-1.5 0-3 1.5-3 4 0 3 1.5 6 3 8 1.5-2 3-5 3-8 0-2.5-1.5-4-3-4z" />
+      <path d="M12 20v2M9.5 21l-1 1M14.5 21l1 1" />
     </svg>
   ),
   mouth: ({ size = 24, strokeWidth = SW }) => (
@@ -830,6 +907,183 @@ const ICONS: Record<IconKey, React.FC<{ size?: number; strokeWidth?: number }>> 
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
       <path d="M2 18h14a6 6 0 1 0-6-6c0 2 1 3 3 3s3-1 3-3" />
       <path d="M16 8V4M14 4l2-1 2 1" />
+    </svg>
+  ),
+  lemon: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <ellipse cx="12" cy="13" rx="7" ry="6" />
+      <path d="M17 3c1 1 1.5 2.5 1 4" />
+      <path d="M12 7v12M8 9c1.5 1.5 6.5 1.5 8 0M8 17c1.5-1.5 6.5-1.5 8 0" />
+    </svg>
+  ),
+  bean: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <ellipse cx="12" cy="12" rx="5" ry="8.5" transform="rotate(20 12 12)" />
+      <circle cx="10" cy="8" r="0.6" fill="currentColor" />
+      <circle cx="14" cy="11" r="0.6" fill="currentColor" />
+      <circle cx="9.5" cy="15" r="0.6" fill="currentColor" />
+    </svg>
+  ),
+  avocado: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3c4 2 6 6 6 10a6 6 0 0 1-12 0c0-4 2-8 6-10z" />
+      <circle cx="12" cy="14" r="3" />
+    </svg>
+  ),
+  egg: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <ellipse cx="12" cy="13" rx="6" ry="8" />
+    </svg>
+  ),
+  fish: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 12c3-4 8-6 13-4 2 .8 4 2.5 5 4-1 1.5-3 3.2-5 4-5 2-10 0-13-4z" />
+      <path d="M16 8l3-2v3M16 16l3 2v-3" />
+      <circle cx="7" cy="11" r="0.6" fill="currentColor" />
+    </svg>
+  ),
+  mushroom: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 11c0-4 4-7 8-7s8 3 8 7H4z" />
+      <path d="M9 11v5a3 3 0 0 0 6 0v-5" />
+    </svg>
+  ),
+  garlic: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 5c3 0 5 3 5 7a5 5 0 0 1-10 0c0-4 2-7 5-7z" />
+      <path d="M12 5V2M9 8v6M15 8v6M12 8v6" />
+    </svg>
+  ),
+  honey: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3v9" />
+      <path d="M8 6c1.5 1 6.5 1 8 0" />
+      <path d="M12 12c2 1 3 3 3 5a3 3 0 0 1-6 0c0-2 1-4 3-5z" />
+    </svg>
+  ),
+  banana: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 17c0-6 3-11 9-13-1 1-1 3 0 4-4 2-6 6-6 10 0 2-3 2-3-1z" />
+    </svg>
+  ),
+  dumbbell: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <rect x="10" y="6" width="4" height="12" rx="1" />
+      <rect x="4" y="9" width="3" height="6" rx="1" />
+      <rect x="17" y="9" width="3" height="6" rx="1" />
+    </svg>
+  ),
+  brain: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 4a3 3 0 0 0-3 3 3 3 0 0 0-1 5 3 3 0 0 0 2 5h1a3 3 0 0 0 3-3V7a3 3 0 0 0-2-3z" />
+      <path d="M15 4a3 3 0 0 1 3 3 3 3 0 0 1 1 5 3 3 0 0 1-2 5h-1a3 3 0 0 1-3-3V7a3 3 0 0 1 2-3z" />
+    </svg>
+  ),
+  heart: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 20c-5-3.5-9-7-9-11a4.5 4.5 0 0 1 9-1 4.5 4.5 0 0 1 9 1c0 4-4 7.5-9 11z" />
+    </svg>
+  ),
+  stomach: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 4c-2 0-3 2-3 5 0 2 1 3 1 5 0 4 3 6 6 6s6-2 6-6c0-3-2-4-2-7 0-2-1-3-3-3-1 2 0 4-2 4s-1-4-3-4z" />
+    </svg>
+  ),
+  tooth: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M7 5c2-1.5 3-1.5 5 0 2-1.5 3-1.5 5 0 1.5 1.5 1 4 0 6-.7 1.4-1 3-1 5 0 1.5-2 1.5-2 0 0-2-.5-4-2-4s-2 2-2 4c0 1.5-2 1.5-2 0 0-2-.3-3.6-1-5-1-2-1.5-4.5 0-6z" />
+    </svg>
+  ),
+  seedling: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 21v-9" />
+      <path d="M12 12c-4 0-7-2-7-6 4 0 7 2 7 6z" />
+      <path d="M12 12c4 0 7-3 7-7-4 0-7 3-7 7z" />
+    </svg>
+  ),
+  patch: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="9" width="16" height="6" rx="3" />
+      <circle cx="9" cy="12" r="1" />
+      <circle cx="15" cy="12" r="1" />
+    </svg>
+  ),
+  teacup: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 9h13v4a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z" />
+      <path d="M17 10c2 0 3 1 3 3s-1 3-3 3" />
+      <path d="M4 9c0-2 1-4 3-5" />
+    </svg>
+  ),
+  coffee: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 9h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z" />
+      <path d="M17 10c2 0 3 1 3 3s-1 3-3 3" />
+      <path d="M8 5c0-1 1-1 1-2M12 5c0-1 1-1 1-2" />
+    </svg>
+  ),
+  chili: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 4c3 0 5 2 5 5 0 5-3 12-3 12s-5-8-5-13c0-2 1-4 3-4z" />
+      <path d="M6 4c0-1 1-2 2-2" />
+    </svg>
+  ),
+  berry: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="9" cy="10" r="3" />
+      <circle cx="15" cy="10" r="3" />
+      <circle cx="12" cy="15" r="3" />
+      <path d="M12 5c1-1 2-1 3 0" />
+    </svg>
+  ),
+  carrot: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M11 3c1 2 3 2 4 0 1 2-1 4-1 4z" />
+      <path d="M13 7c3 3 3 9-1 13-4-4-4-10-1-13z" />
+    </svg>
+  ),
+  sauna: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="14" width="16" height="6" rx="1" />
+      <path d="M8 14c0-2-1-3-1-5s1-2 1-4M13 14c0-2-1-3-1-5s1-2 1-4M17 14c0-2-1-3-1-5s1-2 1-4" />
+    </svg>
+  ),
+  coldTub: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 10h16v6a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3z" />
+      <path d="M4 10c0-2 2-3 4-3M20 10c0-2-2-3-4-3" />
+      <path d="M8 13h8" />
+    </svg>
+  ),
+  thermometer: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3a2 2 0 0 0-2 2v9a4 4 0 1 0 4 0V5a2 2 0 0 0-2-2z" />
+      <circle cx="12" cy="18" r="2" />
+    </svg>
+  ),
+  pillBottle: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <rect x="7" y="7" width="10" height="14" rx="2" />
+      <rect x="9" y="3" width="6" height="4" rx="1" />
+      <path d="M7 12h10" />
+    </svg>
+  ),
+  gummy: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 6a3 3 0 1 1 6 0 3 3 0 0 1 3 3 3 3 0 0 1-1 8 3 3 0 0 1-5 1 3 3 0 0 1-5-1 3 3 0 0 1-1-8 3 3 0 0 1 3-3z" />
+    </svg>
+  ),
+  soap: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="10" width="16" height="8" rx="3" />
+      <circle cx="17" cy="6" r="1.5" />
+      <circle cx="14" cy="4" r="1" />
+    </svg>
+  ),
+  ice: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <rect x="5" y="5" width="14" height="14" rx="1" />
+      <path d="M5 5l14 14M19 5L5 19" />
     </svg>
   ),
 };
