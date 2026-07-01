@@ -629,8 +629,13 @@ function TrendIcon({ name, slug, size = 24 }: { name: string; slug?: string; siz
  */
 function pickLiteralIconKey(name: string): IconKey | null {
   const n = name.toLowerCase();
+  // Every match here depicts the actual real-world source/object tied
+  // specifically to that thing (lemon *is* vitamin C's iconic source,
+  // turmeric/ashwagandha *are* literally roots) — never a generic
+  // container shared across unrelated products (that's the "vial for any
+  // serum" pattern this deliberately avoids).
   if (/vitamin c|citrus|lemon|orange peel/.test(n)) return "lemon";
-  if (/castor oil|castor bean|seed oil|flax ?seed|chia/.test(n)) return "bean";
+  if (/castor oil|castor bean|flax ?seed|chia/.test(n)) return "bean";
   if (/avocado/.test(n)) return "avocado";
   if (/\begg\b|eggs\b/.test(n)) return "egg";
   if (/fish oil|omega.?3|salmon|sardine/.test(n)) return "fish";
@@ -639,24 +644,34 @@ function pickLiteralIconKey(name: string): IconKey | null {
   if (/honey|manuka|propolis/.test(n)) return "honey";
   if (/banana|potassium/.test(n)) return "banana";
   if (/dumbbell|weight ?lift|resistance train/.test(n)) return "dumbbell";
-  if (/brain|cognit|nootropic|focus\b|memory/.test(n)) return "brain";
+  if (/brain|cognit|nootropic|\bfocus\b|memory/.test(n)) return "brain";
   if (/heart|cardio ?vascular|cholesterol/.test(n)) return "heart";
-  if (/gut|probiotic|digest|microbiome|bloat|stomach/.test(n)) return "stomach";
+  if (/gut|probiotic|digest|microbiome|bloat/.test(n)) return "stomach";
   if (/tooth|teeth|oral|dental|gum health/.test(n)) return "tooth";
-  if (/seedling|sprout|grow|plant.based/.test(n)) return "seedling";
+  if (/seedling|sprout|plant.based/.test(n)) return "seedling";
   if (/patch|bandaid|band-aid|topical patch/.test(n)) return "patch";
   if (/\btea\b|matcha|chamomile|herbal tea/.test(n)) return "teacup";
   if (/coffee|caffeine|espresso/.test(n)) return "coffee";
   if (/chili|capsaicin|spicy|cayenne/.test(n)) return "chili";
   if (/berry|blueberr|antioxidant|acai/.test(n)) return "berry";
-  if (/carrot|beta.?carotene/.test(n)) return "carrot";
+  if (/carrot|beta.?carotene|retinol|vitamin a\b/.test(n)) return "carrot";
   if (/sauna|infrared|heat therapy/.test(n)) return "sauna";
-  if (/cold plunge|ice bath|cold water immersion|cryo/.test(n)) return "coldTub";
+  if (/cold plunge|cold plung|ice bath|cold water immersion|cryo/.test(n)) return "coldTub";
   if (/thermometer|temperature|fever/.test(n)) return "thermometer";
   if (/pill bottle|prescription|medication/.test(n)) return "pillBottle";
   if (/gummy|gummies|chewable/.test(n)) return "gummy";
   if (/soap|cleanser|body wash/.test(n)) return "soap";
-  if (/\bice\b|cryotherapy|cold roller/.test(n)) return "ice";
+  if (/\bice roller|cryotherapy/.test(n)) return "ice";
+  if (/step|walk|10k|footstep|jog|\brun\b|running|hike|hiking|treadmill/.test(n)) return "footprints";
+  if (/turmeric|ashwagandha/.test(n)) return "root"; // both are literally roots
+  if (/sleep|melatonin|insomn|\bnight\b/.test(n)) return "moon";
+  if (/rosemary|basil|\bmint\b/.test(n)) return "leaf"; // literal leaf-form herbs
+  if (/gua sha|jade stone/.test(n)) return "stone";
+  if (/jade roller|face roller/.test(n)) return "roller";
+  if (/sheet mask|charcoal mask|clay mask/.test(n)) return "mask";
+  if (/dry brush|exfoliating brush/.test(n)) return "brush";
+  if (/\bpillow\b|\bcushion\b/.test(n)) return "pillow";
+
   return null;
 }
 
