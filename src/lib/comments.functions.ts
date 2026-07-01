@@ -7,6 +7,7 @@ export type Comment = {
   author: string;
   body: string;
   createdAt: string;
+  editedAt: string | null;
 };
 
 export type AdminComment = Comment & { trendSlug: string };
@@ -26,12 +27,19 @@ type CommentRow = {
   author: string;
   body: string;
   created_at: string;
+  edited_at: string | null;
 };
 
 type AdminCommentRow = CommentRow & { trend_slug: string };
 
 function rowToComment(row: CommentRow): Comment {
-  return { id: row.id, author: row.author, body: row.body, createdAt: row.created_at };
+  return {
+    id: row.id,
+    author: row.author,
+    body: row.body,
+    createdAt: row.created_at,
+    editedAt: row.edited_at,
+  };
 }
 
 async function hashIp(ip: string): Promise<string> {
@@ -59,7 +67,7 @@ export const getComments = createServerFn({ method: "GET" })
       const supabase = getSupabaseServiceClient();
       const { data: rows, error } = await supabase
         .from("comments")
-        .select("id, author, body, created_at")
+        .select("id, author, body, created_at, edited_at")
         .eq("trend_slug", data.slug)
         .order("created_at", { ascending: true })
         .limit(200);
@@ -72,7 +80,7 @@ export const getComments = createServerFn({ method: "GET" })
 
 export const postComment = createServerFn({ method: "POST" })
   .inputValidator((d: { slug: string; author: string; body: string; website?: string }) => d)
-  .handler(async ({ data }): Promise<{ ok: boolean; comment?: Comment; error?: string }> => {
+  .handler(async ({ data }): Promise<{ ok: boolean; comment?: Comment; editToken?: string; error?: string }> => {
     // Honeypot: real users never see or fill this field. If it's filled, it's a bot —
     // pretend success without persisting anything, so the bot doesn't learn it was caught.
     if (data.website && data.website.trim().length > 0) {
@@ -118,14 +126,44 @@ export const postComment = createServerFn({ method: "POST" })
       const { data: row, error } = await supabase
         .from("comments")
         .insert({ trend_slug: slug, author, body, ip_hash: ip === "unknown" ? null : ipHash })
-        .select("id, author, body, created_at")
+        .select("id, author, body, created_at, edited_at, edit_token")
         .single();
 
       if (error || !row) return { ok: false, error: "Couldn't post comment. Try again." };
 
-      return { ok: true, comment: rowToComment(row as CommentRow) };
+      return {
+        ok: true,
+        comment: rowToComment(row as CommentRow),
+        editToken: (row as CommentRow & { edit_token: string }).edit_token,
+      };
     } catch {
       return { ok: false, error: "Couldn't post comment. Try again." };
+    }
+  });
+
+export const updateComment = createServerFn({ method: "POST" })
+  .inputValidator((d: { id: string; editToken: string; body: string }) => d)
+  .handler(async ({ data }): Promise<{ ok: boolean; comment?: Comment; error?: string }> => {
+    const body = data.body.trim().slice(0, MAX_BODY_LEN);
+    if (body.length < 2) return { ok: false, error: "Comment is too short." };
+    if (!data.editToken) return { ok: false, error: "Can't edit this comment." };
+
+    try {
+      const supabase = getSupabaseServiceClient();
+      const { data: row, error } = await supabase
+        .from("comments")
+        .update({ body, edited_at: new Date().toISOString() })
+        .eq("id", data.id)
+        .eq("edit_token", data.editToken)
+        .select("id, author, body, created_at, edited_at")
+        .maybeSingle();
+
+      if (error) return { ok: false, error: "Couldn't save your edit." };
+      if (!row) return { ok: false, error: "Can't edit this comment." };
+
+      return { ok: true, comment: rowToComment(row as CommentRow) };
+    } catch {
+      return { ok: false, error: "Couldn't save your edit." };
     }
   });
 
@@ -142,7 +180,7 @@ export const adminListComments = createServerFn({ method: "POST" })
       const supabase = getSupabaseServiceClient();
       const { data: rows, error } = await supabase
         .from("comments")
-        .select("id, author, body, created_at, trend_slug")
+        .select("id, author, body, created_at, edited_at, trend_slug")
         .order("created_at", { ascending: false })
         .limit(300);
       if (error || !rows) return { ok: false, error: "Couldn't load comments." };
