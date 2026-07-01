@@ -41,6 +41,14 @@ function rand(seed: number) {
   return x - Math.floor(x);
 }
 
+/** Deterministic string -> number hash (djb2), so the same search always
+ *  produces the same "random" jitter — stable across reloads and visitors. */
+function hashString(s: string): number {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = (h * 33) ^ s.charCodeAt(i);
+  return h >>> 0;
+}
+
 function verdictColor(v: Verdict) {
   return v === "BACKED"
     ? "var(--verdict-backed)"
@@ -584,11 +592,24 @@ function MarkSeal({ m, index }: { m: Mark; index: number }) {
 /**
  * Hand-drawn icon for a trend. Picks by slug when known, falls back to
  * keyword-matching the free-text query so user-added marks still get a real icon.
+ * Applies a small deterministic jitter (rotation / scale / stroke weight) seeded
+ * from the search's own identity, so two searches sharing an icon bucket (e.g.
+ * two "vial" results) still don't render as pixel-identical stamps.
  */
 function TrendIcon({ name, slug, size = 24 }: { name: string; slug?: string; size?: number }) {
   const key = pickIconKey(slug, name);
   const Icon = ICONS[key];
-  return <Icon size={size} />;
+
+  const seed = hashString(slug || name);
+  const jitterRotate = (rand(seed) - 0.5) * 26; // ±13deg
+  const jitterScale = 0.88 + rand(seed + 1) * 0.24; // 0.88–1.12x
+  const jitterStroke = 1.15 + rand(seed + 2) * 0.5; // 1.15–1.65
+
+  return (
+    <div style={{ transform: `rotate(${jitterRotate}deg) scale(${jitterScale})` }}>
+      <Icon size={size} strokeWidth={jitterStroke} />
+    </div>
+  );
 }
 
 type IconKey =
@@ -630,26 +651,31 @@ function pickIconKey(slug: string | undefined, name: string): IconKey {
   if (/spf|sunscreen|sun\b/.test(n)) return "sun";
   if (/serum|retinol|vitamin c|niacinamide|peptide.*serum/.test(n)) return "vial";
   if (/oil|drop/.test(n)) return "droplet";
-  if (/cream|balm|slug|moisturi[sz]er/.test(n)) return "tube";
+  if (/cream|balm|slug|moisturi[sz]er|lotion|barrier repair|cicaplast/.test(n)) return "tube";
   if (/roller/.test(n)) return "roller";
-  if (/gua sha|stone/.test(n)) return "stone";
-  if (/mask|charcoal/.test(n)) return "mask";
-  if (/brush|exfolia/.test(n)) return "brush";
-  if (/leaf|rosemary|herb|tea/.test(n)) return "leaf";
-  if (/capsule|pill|tablet|biotin|collagen|liver/.test(n)) return "capsule";
-  if (/muscle|creatine|protein|gym|strength/.test(n)) return "muscle";
-  if (/sleep|melatonin|magnesium|night|insomn/.test(n)) return "moon";
-  if (/fast|clock|hour|timing/.test(n)) return "clock";
-  if (/juice|drink|water|smoothie|tonic/.test(n)) return "glass";
-  if (/turmeric|ashwagandha|adaptogen|powder|root/.test(n)) return "mortar";
-  if (/inflam|fire|hot/.test(n)) return "flame";
+  if (/gua sha|stone|jade/.test(n)) return "stone";
+  if (/mask|charcoal|clay/.test(n)) return "mask";
+  if (/brush|exfolia|scrub/.test(n)) return "brush";
+  if (/leaf|rosemary|herb|tea|mint|basil/.test(n)) return "leaf";
+  if (/capsule|pill|tablet|biotin|collagen|liver|supplement/.test(n)) return "capsule";
+  if (/muscle|creatine|protein|gym|strength|workout|exercise|fitness|plung|cold\b/.test(n)) return "muscle";
+  if (/sleep|melatonin|magnesium|night|insomn|rest\b/.test(n)) return "moon";
+  if (/fast|clock|hour|timing|schedule/.test(n)) return "clock";
+  if (/juice|drink|water|smoothie|tonic|electrolyte/.test(n)) return "glass";
+  if (/turmeric|ashwagandha|adaptogen|powder|root|ginger|reishi|mushroom/.test(n)) return "mortar";
+  if (/inflam|fire|hot|sauna/.test(n)) return "flame";
+  if (/gut|probiotic|digest|microbiome|fiber|bloat/.test(n)) return "beaker";
+  if (/stress|anxiety|mood|mental|meditat|breath|calm|cortisol/.test(n)) return "spark";
+  if (/hair|scalp|shampoo|conditioner/.test(n)) return "leaf";
+  if (/pillow|cushion/.test(n)) return "pillow";
+  if (/bottle|shake/.test(n)) return "bottle";
   return "spark";
 }
 
 const SW = 1.4;
-const ICONS: Record<IconKey, React.FC<{ size?: number }>> = {
-  sun: ({ size = 24 }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+const ICONS: Record<IconKey, React.FC<{ size?: number; strokeWidth?: number }>> = {
+  sun: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="4" />
       {Array.from({ length: 8 }).map((_, i) => {
         const a = (i / 8) * Math.PI * 2;
@@ -657,151 +683,151 @@ const ICONS: Record<IconKey, React.FC<{ size?: number }>> = {
       })}
     </svg>
   ),
-  vial: ({ size = 24 }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+  vial: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
       <path d="M10 3h4" />
       <path d="M11 3v4l-2.5 4.5a4 4 0 0 0 3.5 6 4 4 0 0 0 3.5-6L13 7V3" />
       <path d="M9.5 14h5" />
     </svg>
   ),
-  capsule: ({ size = 24 }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+  capsule: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="9" width="18" height="6" rx="3" transform="rotate(-25 12 12)" />
       <path d="M9.5 7.5l4.5 9" />
     </svg>
   ),
-  droplet: ({ size = 24 }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+  droplet: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 3c-3.5 5-6 8-6 11a6 6 0 0 0 12 0c0-3-2.5-6-6-11z" />
     </svg>
   ),
-  leaf: ({ size = 24 }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+  leaf: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
       <path d="M20 4c-9 0-15 4-15 11 0 3 2 5 5 5 7 0 11-6 11-15z" />
       <path d="M5 20c2-5 6-9 12-12" />
     </svg>
   ),
-  brush: ({ size = 24 }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+  brush: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
       <rect x="6" y="3" width="12" height="7" rx="1.5" />
       <path d="M8 10v3M10.5 10v4M13.5 10v4M16 10v3" />
       <path d="M11 18h2v3h-2z" />
     </svg>
   ),
-  roller: ({ size = 24 }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+  roller: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
       <ellipse cx="7" cy="8" rx="3.5" ry="2.5" />
       <ellipse cx="17" cy="16" rx="3.5" ry="2.5" />
       <path d="M9.5 9.5l5 5" />
     </svg>
   ),
-  stone: ({ size = 24 }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+  stone: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
       <path d="M4 14c0-4 4-9 9-9 4 0 7 2 7 5s-3 4-3 7-3 5-7 5-6-3-6-8z" />
     </svg>
   ),
-  mask: ({ size = 24 }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+  mask: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
       <path d="M4 6c2-2 14-2 16 0 1 4 0 12-3 14-2 1-8 1-10 0-3-2-4-10-3-14z" />
       <circle cx="9" cy="11" r="1" /><circle cx="15" cy="11" r="1" />
     </svg>
   ),
-  clock: ({ size = 24 }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+  clock: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="9" />
       <path d="M12 7v5l3 2" />
     </svg>
   ),
-  glass: ({ size = 24 }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+  glass: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
       <path d="M7 4h10l-1.5 16h-7z" />
       <path d="M7.5 9h9" />
     </svg>
   ),
-  muscle: ({ size = 24 }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+  muscle: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
       <path d="M4 10c2-3 6-3 8-1l5 4c2 1.5 2 5-1 6-2 .5-4-.5-5-2" />
       <path d="M6 10c-.5 3 .5 6 4 7" />
       <circle cx="18" cy="8" r="2" />
     </svg>
   ),
-  tube: ({ size = 24 }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+  tube: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
       <path d="M6 5h12l-1 14a2 2 0 0 1-2 2h-6a2 2 0 0 1-2-2z" />
       <path d="M6 5l1-2h10l1 2" />
       <path d="M9 11h6" />
     </svg>
   ),
-  mortar: ({ size = 24 }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+  mortar: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
       <path d="M4 12h16l-2 6a2 2 0 0 1-2 1.5H8a2 2 0 0 1-2-1.5z" />
       <path d="M3 12h18" />
       <path d="M15 11l4-7" />
     </svg>
   ),
-  moon: ({ size = 24 }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+  moon: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
       <path d="M20 14a8 8 0 1 1-10-10 6 6 0 0 0 10 10z" />
     </svg>
   ),
-  flame: ({ size = 24 }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+  flame: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 3c1 3 5 5 5 10a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3-1-5 1-9z" />
     </svg>
   ),
-  spark: ({ size = 24 }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+  spark: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 3v6M12 15v6M3 12h6M15 12h6M6 6l4 4M14 14l4 4M18 6l-4 4M10 14l-4 4" />
     </svg>
   ),
-  dropper: ({ size = 24 }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+  dropper: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
       <rect x="10" y="2" width="4" height="10" rx="1" />
       <path d="M9 12h6" />
       <path d="M12 12v6c0 2-2 3-2 3" />
       <circle cx="10" cy="21" r="0.6" fill="currentColor" />
     </svg>
   ),
-  beaker: ({ size = 24 }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+  beaker: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
       <path d="M8 3h8M9 3v6l-4 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-4-9V3" />
       <path d="M6 15h12" />
     </svg>
   ),
-  jar: ({ size = 24 }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+  jar: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
       <rect x="6" y="3" width="12" height="3" rx="1" />
       <path d="M7 6h10v13a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2z" />
       <path d="M9 12h6" />
     </svg>
   ),
-  bottle: ({ size = 24 }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+  bottle: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
       <path d="M10 2h4v3h-4z" />
       <path d="M9 5h6l1 4v10a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2V9z" />
       <path d="M9 11h6" />
     </svg>
   ),
-  pillow: ({ size = 24 }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+  pillow: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
       <path d="M3 9c0-2 2-3 4-3h10c2 0 4 1 4 3v6c0 2-2 3-4 3H7c-2 0-4-1-4-3z" />
       <path d="M6 9c2 1 2 5 0 6M18 9c-2 1-2 5 0 6" />
     </svg>
   ),
-  root: ({ size = 24 }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+  root: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 3c-2 3-5 4-5 8s3 6 5 6 5-2 5-6-3-5-5-8z" />
       <path d="M12 17v4M9 19l-2 2M15 19l2 2" />
     </svg>
   ),
-  mouth: ({ size = 24 }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+  mouth: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
       <path d="M3 12c3-4 15-4 18 0-3 4-15 4-18 0z" />
       <path d="M8 12c1-1 7-1 8 0" />
     </svg>
   ),
-  snail: ({ size = 24 }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
+  snail: ({ size = 24, strokeWidth = SW }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
       <path d="M2 18h14a6 6 0 1 0-6-6c0 2 1 3 3 3s3-1 3-3" />
       <path d="M16 8V4M14 4l2-1 2 1" />
     </svg>
