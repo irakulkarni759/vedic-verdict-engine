@@ -2,6 +2,7 @@ import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { trendBySlug, type Trend, type Verdict } from "@/lib/trends";
 import { getGeneratedTrendBySlug } from "@/lib/generatedTrends.functions";
 import { TrendCard } from "@/components/TrendCard";
+import { Comments } from "@/components/Comments";
 
 export const Route = createFileRoute("/trend/$slug")({
   loader: async ({ params }) => {
@@ -205,6 +206,8 @@ function TrendPage() {
             </div>
           </article>
         </section>
+
+        <Comments slug={trend.slug} />
 
         {related.length > 0 && (
           <section className="mt-14">

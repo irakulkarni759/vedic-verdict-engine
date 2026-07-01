@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { TRENDS } from "@/lib/trends";
 import { TrendCard } from "@/components/TrendCard";
+import { Comments } from "@/components/Comments";
 import { toTitleCase } from "@/lib/utils";
 import {
   generateEvidenceVerdict,
@@ -268,6 +269,8 @@ function SearchPage() {
             </article>
           </section>
         )}
+
+        <Comments slug={data.slug} />
 
         {/* ── RELATED STATIC TRENDS ── */}
         {related.length > 0 && (
