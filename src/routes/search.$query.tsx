@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { TRENDS } from "@/lib/trends";
 import { TrendCard } from "@/components/TrendCard";
+import { toTitleCase } from "@/lib/utils";
 import {
   generateEvidenceVerdict,
   type EvidenceVerdict,
@@ -62,7 +63,7 @@ function PendingPage() {
           </p>
 
           <h1 className="font-display mt-3 text-5xl leading-[0.95] tracking-[-0.04em] text-[var(--ink)] sm:text-7xl md:text-8xl">
-            {q}
+            {toTitleCase(q)}
           </h1>
 
           <p
@@ -141,7 +142,7 @@ function SearchPage() {
           </div>
 
           <h1 className="font-display max-w-4xl text-5xl leading-[0.95] tracking-[-0.04em] text-[var(--ink)] sm:text-7xl md:text-8xl">
-            {q}
+            {data.name}
           </h1>
 
           <p className="mt-7 max-w-3xl text-lg leading-8 text-[var(--ink)] sm:text-xl">

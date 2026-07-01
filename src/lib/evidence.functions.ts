@@ -5,6 +5,7 @@ import {
   saveGeneratedTrend,
   slugify,
 } from "./generatedTrends.functions";
+import { toTitleCase } from "./utils";
 
 export type EvidenceArticle = {
   pmid: string;
@@ -21,6 +22,7 @@ export type EvidenceBullet = {
 
 export type EvidenceVerdict = {
   query: string;
+  name: string;
   slug: string;
   category: string;
   verdict: "BACKED" | "MIXED" | "DEBUNKED" | "UNKNOWN";
@@ -158,6 +160,7 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
   .inputValidator((d: { query: string }) => ({ query: String(d.query || "").slice(0, 200) }))
   .handler(async ({ data }): Promise<EvidenceVerdict> => {
     const query = data.query.trim();
+    const name = toTitleCase(query);
     const slug = slugify(query);
     const pubmedSearchUrl = `https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(query)}`;
     const redditSearchUrl = `https://www.reddit.com/search/?q=${encodeURIComponent(query)}`;
@@ -165,7 +168,7 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
     const updated = new Date().toISOString().split("T")[0];
 
     const empty = (msg: string): EvidenceVerdict => ({
-      query, slug, category: guessCategoryFallback(query), verdict: "UNKNOWN", confidence: "low",
+      query, name, slug, category: guessCategoryFallback(query), verdict: "UNKNOWN", confidence: "low",
       oneLiner: msg, studies: 0, sentiment: 0, updated,
       bullets: [], quotes: [], articles: [],
       pubmedSearchUrl, redditSearchUrl, generatedAt,
@@ -187,7 +190,7 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
         // as "unmapped" so it never renders as a real verdict card anywhere.
         await saveGeneratedTrend({
           data: {
-            slug, query, name: query, category: result.category, verdict: "unmapped",
+            slug, query, name, category: result.category, verdict: "unmapped",
             summary: result.oneLiner, studyCount: 0, confidence: "low", updated,
             evidencePoints: [], sentiment: 0, opinions: [], sourceUrls: [pubmedSearchUrl],
           },
@@ -238,16 +241,16 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
 
       const oneLiner =
         verdict === "BACKED"
-          ? `Across ${studies} PubMed studies, the bulk of findings support "${query}".`
+          ? `Across ${studies} PubMed studies, the bulk of findings support "${name}".`
           : verdict === "DEBUNKED"
-          ? `Across ${studies} PubMed studies, the evidence largely fails to support "${query}".`
-          : `Across ${studies} PubMed studies, findings are mixed for "${query}".`;
+          ? `Across ${studies} PubMed studies, the evidence largely fails to support "${name}".`
+          : `Across ${studies} PubMed studies, findings are mixed for "${name}".`;
 
       const { bullets, quotes, sentiment, category } = await generateBulletsAndQuotes(query, abstractsForClaude);
 
       await saveGeneratedTrend({
         data: {
-          slug, query, name: query, category, verdict: verdict.toLowerCase() as "backed" | "mixed" | "debunked",
+          slug, query, name, category, verdict: verdict.toLowerCase() as "backed" | "mixed" | "debunked",
           summary: oneLiner, studyCount: studies, confidence, updated,
           evidencePoints: bullets.map((b) => b.text), sentiment, opinions: quotes,
           sourceUrls: articles.slice(0, 6).map((a) => a.url),
@@ -255,7 +258,7 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
       });
 
       return {
-        query, slug, category, verdict, confidence, oneLiner, studies,
+        query, name, slug, category, verdict, confidence, oneLiner, studies,
         sentiment, updated,
         bullets, quotes, articles: articles.slice(0, 6),
         pubmedSearchUrl, redditSearchUrl, generatedAt,
