@@ -377,10 +377,9 @@ function StatCountUp({ text }: { text: string }) {
 function Footer() {
   return (
     <footer
-      className="border-t px-8 py-10"
+      className="px-8 py-10"
       style={{
         backgroundColor: "var(--parchment)",
-        borderColor: "color-mix(in oklab, var(--ink) 12%, transparent)",
       }}
     >
       <div className="mx-auto flex max-w-[1400px] flex-col items-center justify-between gap-4 text-center md:flex-row md:text-left">
