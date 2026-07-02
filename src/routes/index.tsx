@@ -78,7 +78,9 @@ function Veda() {
     <div className="min-h-screen" style={{ backgroundColor: "var(--parchment)" }}>
       <Nav />
       <Hero query={query} setQuery={setQuery} onSubmit={submit} count={count} trending={trendingRow} />
+      <WavyDivider from="var(--parchment)" to="var(--ink)" />
       <Stats />
+      <WavyDivider from="var(--ink)" to="var(--parchment)" />
       <Footer />
     </div>
   );
@@ -266,6 +268,19 @@ function CountUp({ value, duration = 2400 }: { value: number; duration?: number 
     return () => cancelAnimationFrame(raf);
   }, [value, duration]);
   return <span>{display.toLocaleString()}</span>;
+}
+
+function WavyDivider({ from, to }: { from: string; to: string }) {
+  return (
+    <div style={{ backgroundColor: from, lineHeight: 0 }}>
+      <svg viewBox="0 0 1440 60" preserveAspectRatio="none" className="w-full" style={{ height: "clamp(36px, 6vw, 60px)", display: "block" }}>
+        <path
+          d="M0,30 C180,55 360,5 540,30 C720,55 900,5 1080,30 C1260,55 1440,5 1440,30 L1440,60 L0,60 Z"
+          fill={to}
+        />
+      </svg>
+    </div>
+  );
 }
 
 function Stats() {
