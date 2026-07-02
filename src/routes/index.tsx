@@ -90,17 +90,41 @@ function Nav() {
       className="sticky top-0 z-40 backdrop-blur-[2px]"
       style={{ backgroundColor: "color-mix(in oklab, var(--parchment) 92%, transparent)" }}
     >
-      <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-8 pl-4 pr-8 py-3 sm:py-5">
-        <Link to="/" className="flex items-center gap-2">
-          <span style={{ color: "var(--terracotta)", fontSize: 20, lineHeight: 1, display: "inline-flex", alignItems: "center", height: "34px" }}>◆</span>
-          <span className="font-display text-[34px] leading-none" style={{ color: "var(--ink)" }}>
-            veda
-          </span>
-          <span style={{ color: "var(--muted-ink)", fontFamily: "var(--font-display)", fontSize: 26, lineHeight: 1, display: "inline-flex", alignItems: "center", height: "34px", position: "relative", top: "4px" }}>
-            वेदा
-          </span>
-        </Link>
-        <div className="hidden md:flex items-center gap-3 font-label" style={{ fontSize: 10, color: "var(--ink)" }}>
+      <div className="mx-auto max-w-[1400px]">
+        <div className="flex items-center justify-between gap-8 pl-4 pr-8 py-3 sm:py-5">
+          <Link to="/" className="flex items-center gap-2">
+            <span style={{ color: "var(--terracotta)", fontSize: 20, lineHeight: 1, display: "inline-flex", alignItems: "center", height: "34px" }}>◆</span>
+            <span className="font-display text-[34px] leading-none" style={{ color: "var(--ink)" }}>
+              veda
+            </span>
+            <span style={{ color: "var(--muted-ink)", fontFamily: "var(--font-display)", fontSize: 26, lineHeight: 1, display: "inline-flex", alignItems: "center", height: "34px", position: "relative", top: "4px" }}>
+              वेदा
+            </span>
+          </Link>
+          <div className="hidden md:flex items-center gap-3 font-label" style={{ fontSize: 10, color: "var(--ink)" }}>
+            {CATEGORIES.map((c, i) => (
+              <span key={c.slug} className="flex items-center gap-3">
+                <Link
+                  to="/category/$slug"
+                  params={{ slug: c.slug }}
+                  className="hover:opacity-60 transition-opacity"
+                >
+                  {c.label}
+                </Link>
+                {i < CATEGORIES.length - 1 && (
+                  <span style={{ color: "var(--muted-ink)", opacity: 0.5 }}>·</span>
+                )}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* Mobile-only: same category list as a horizontally scrollable strip
+            under the logo row, since there's no room for it inline. */}
+        <div
+          className="flex md:hidden items-center gap-3 overflow-x-auto whitespace-nowrap px-4 pb-3 font-label"
+          style={{ fontSize: 10, color: "var(--ink)" }}
+        >
           {CATEGORIES.map((c, i) => (
             <span key={c.slug} className="flex items-center gap-3">
               <Link
