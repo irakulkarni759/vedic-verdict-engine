@@ -90,6 +90,7 @@ async function generateBulletsAndQuotes(
   query: string,
   abstracts: { abstract: string; url: string }[]
 ): Promise<{
+  displayName: string | null;
   bullets: EvidenceBullet[];
   quotes: { handle: string; text: string }[];
   sentiment: number;
@@ -98,26 +99,28 @@ async function generateBulletsAndQuotes(
 }> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    return { bullets: [], quotes: [], sentiment: 50, category: guessCategoryFallback(query), verdict: null };
+    return { displayName: null, bullets: [], quotes: [], sentiment: 50, category: guessCategoryFallback(query), verdict: null };
   }
 
   const abstractText = abstracts
     .map((a, i) => `[${i + 1}] (url: ${a.url})\n${a.abstract}`)
     .join("\n\n");
 
-  const prompt = `You are a health research analyst. Given these PubMed abstracts about "${query}", return a JSON object with five fields:
+  const prompt = `You are a health research analyst. Given these PubMed abstracts about "${query}", return a JSON object with six fields:
 
-1. "verdict": your overall read of the evidence, one of "BACKED" (the bulk of studies support it working/being beneficial), "MIXED" (evidence is genuinely split or inconclusive), or "DEBUNKED" (the bulk of studies contradict it or find no effect). Base this on your actual understanding of what each abstract found, not just keyword counting — e.g. abstracts describing consistent, specific mechanisms and positive outcomes across most studies should read as BACKED even if few use the literal phrase "significant improvement".
-2. "bullets": 3-4 key findings directly relevant to "${query}". Each finding: 1 sentence, 50-150 chars, specific with numbers/stats when available. Skip irrelevant abstracts.
-3. "quotes": 2 realistic Reddit-style community quotes about "${query}" from real users. Short, conversational, opinionated. Each has a "handle" (like "@username") and "text".
-4. "sentiment": a number 0-100 representing how positive the community sentiment is about "${query}" based on the evidence and typical user experience.
-5. "category": the single best-fit category slug for "${query}", chosen ONLY from this exact list: ${CATEGORY_SLUGS.join(", ")}.
+1. "displayName": a standardized title in the exact form "X for Y" — X is the ingredient/product/practice being searched, Y is the specific outcome or purpose it's being evaluated for (e.g. "Rosemary Oil for Hair Growth"). If "${query}" already states a purpose, clean it up into this form (title case, no trailing punctuation). If it doesn't state one, infer the single most common/notable purpose people search this for, based on the abstracts and general knowledge — never leave Y generic like "for Health" or "for Wellness"; be specific (e.g. "for Hair Growth", "for Sleep Quality", "for Inflammation").
+2. "verdict": your overall read of the evidence, one of "BACKED" (the bulk of studies support it working/being beneficial), "MIXED" (evidence is genuinely split or inconclusive), or "DEBUNKED" (the bulk of studies contradict it or find no effect). Base this on your actual understanding of what each abstract found, not just keyword counting — e.g. abstracts describing consistent, specific mechanisms and positive outcomes across most studies should read as BACKED even if few use the literal phrase "significant improvement".
+3. "bullets": 3-4 key findings directly relevant to "${query}". Each finding: 1 sentence, 50-150 chars, specific with numbers/stats when available. Skip irrelevant abstracts.
+4. "quotes": 2 realistic Reddit-style community quotes about "${query}" from real users. Short, conversational, opinionated. Each has a "handle" (like "@username") and "text".
+5. "sentiment": a number 0-100 representing how positive the community sentiment is about "${query}" based on the evidence and typical user experience.
+6. "category": the single best-fit category slug for "${query}", chosen ONLY from this exact list: ${CATEGORY_SLUGS.join(", ")}.
 
 Abstracts:
 ${abstractText}
 
 Return ONLY this JSON shape, no other text:
 {
+  "displayName": "Rosemary Oil for Hair Growth",
   "verdict": "BACKED",
   "bullets": [{"text": "...", "index": 1}, ...],
   "quotes": [{"handle": "@username", "text": "..."}, ...],
@@ -143,6 +146,7 @@ Return ONLY this JSON shape, no other text:
     const json = await res.json() as { content: { text: string }[] };
     const text = json.content?.[0]?.text ?? "{}";
     const parsed = JSON.parse(text.replace(/```json|```/g, "").trim()) as {
+      displayName?: string;
       verdict?: string;
       bullets: { text: string; index: number }[];
       quotes: { handle: string; text: string }[];
@@ -164,9 +168,14 @@ Return ONLY this JSON shape, no other text:
         ? parsed.verdict
         : null;
 
-    return { bullets, quotes: parsed.quotes ?? [], sentiment: parsed.sentiment ?? 50, category, verdict };
+    const displayName =
+      typeof parsed.displayName === "string" && /\bfor\b/i.test(parsed.displayName)
+        ? toTitleCase(parsed.displayName)
+        : null;
+
+    return { displayName, bullets, quotes: parsed.quotes ?? [], sentiment: parsed.sentiment ?? 50, category, verdict };
   } catch {
-    return { bullets: [], quotes: [], sentiment: 50, category: guessCategoryFallback(query), verdict: null };
+    return { displayName: null, bullets: [], quotes: [], sentiment: 50, category: guessCategoryFallback(query), verdict: null };
   }
 }
 
@@ -347,8 +356,13 @@ async function buildResultFromIds(opts: {
     studies >= 10 ? "high" : studies >= 4 ? "moderate" : "low";
 
   const searchSubject = fallback ? fallback.terms.join(" ") : query;
-  const { bullets, quotes, sentiment, category, verdict: claudeVerdict } =
+  const { displayName, bullets, quotes, sentiment, category, verdict: claudeVerdict } =
     await generateBulletsAndQuotes(searchSubject, abstractsForClaude);
+
+  // Standardize the displayed title to "X for Y" — either Claude's inferred
+  // purpose, or the raw title-cased query/name as a fallback when Claude
+  // isn't available or didn't return a usable one.
+  const finalName = displayName ?? name;
 
   // Claude reads and understands every abstract to write the bullets, so its
   // verdict reflects that same understanding. The keyword scan is a much
@@ -362,7 +376,7 @@ async function buildResultFromIds(opts: {
       ? `its key ingredients (${termsLabel})`
       : fallback?.reason === "terminology"
       ? `related research (${termsLabel})`
-      : `"${name}"`;
+      : `"${finalName}"`;
 
   const verdictClause =
     verdict === "BACKED"
@@ -373,7 +387,7 @@ async function buildResultFromIds(opts: {
 
   const prefix =
     fallback?.reason === "product"
-      ? `No direct studies on "${name}" as a product. `
+      ? `No direct studies on "${finalName}" as a product. `
       : fallback?.reason === "terminology"
       ? `No PubMed results for that exact phrase, but the underlying topic is studied. `
       : "";
@@ -382,7 +396,7 @@ async function buildResultFromIds(opts: {
 
   await saveGeneratedTrend({
     data: {
-      slug, query, name, category, verdict: verdict.toLowerCase() as "backed" | "mixed" | "debunked",
+      slug, query, name: finalName, category, verdict: verdict.toLowerCase() as "backed" | "mixed" | "debunked",
       summary: oneLiner, studyCount: studies, confidence, updated,
       evidencePoints: bullets.map((b) => b.text), sentiment, opinions: quotes,
       sourceUrls: articles.slice(0, 6).map((a) => a.url),
@@ -390,7 +404,7 @@ async function buildResultFromIds(opts: {
   });
 
   return {
-    query, name, slug, category, verdict, confidence, oneLiner, studies,
+    query, name: finalName, slug, category, verdict, confidence, oneLiner, studies,
     sentiment, updated,
     bullets, quotes, articles: articles.slice(0, 6),
     pubmedSearchUrl, redditSearchUrl, generatedAt,

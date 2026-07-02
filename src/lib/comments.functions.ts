@@ -167,7 +167,7 @@ export const updateComment = createServerFn({ method: "POST" })
     }
   });
 
-function checkAdminPassword(password: string): boolean {
+export function checkAdminPassword(password: string): boolean {
   const expected = process.env.VEDA_ADMIN_PASSWORD;
   return !!expected && password === expected;
 }

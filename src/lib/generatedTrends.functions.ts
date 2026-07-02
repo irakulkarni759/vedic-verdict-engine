@@ -1,6 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getSupabaseServiceClient } from "./supabase.server";
 import { CATEGORIES, type Trend, type Verdict } from "./trends";
+import { checkAdminPassword } from "./comments.functions";
+import { toTitleCase } from "./utils";
 
 export const CATEGORY_SLUGS = CATEGORIES.map((c) => c.slug);
 
@@ -221,3 +223,98 @@ export const getGeneratedTrendsMeta = createServerFn({ method: "GET" }).handler(
     }
   },
 );
+
+/**
+ * One-off Claude call per row to turn a bare title (e.g. "Rosemary Oil")
+ * into a standardized "X for Y" one (e.g. "Rosemary Oil for Hair Growth"),
+ * inferring the purpose from the query/summary when the original search
+ * didn't specify one. Used only by the admin backfill below.
+ */
+async function inferStandardizedName(row: {
+  query: string;
+  name: string;
+  summary: string;
+}): Promise<string | null> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return null;
+
+  const prompt = `A wellness search result has this title: "${row.name}" (original search: "${row.query}"). Its summary: "${row.summary}"
+
+Rewrite the title into the standardized form "X for Y" — X is the ingredient/product/practice, Y is the specific outcome or purpose it's evaluated for. If the title already states a purpose, just clean it up into this exact form (title case, no trailing punctuation). If it doesn't, infer the single most notable purpose from the summary and general knowledge — be specific (e.g. "for Hair Growth", not "for Health").
+
+Return ONLY the new title text, nothing else — no quotes, no JSON, no explanation.`;
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 60,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+    const json = (await res.json()) as { content: { text: string }[] };
+    const text = (json.content?.[0]?.text ?? "").trim().replace(/^["']|["']$/g, "");
+    if (!text || !/\bfor\b/i.test(text)) return null;
+    return toTitleCase(text);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Admin-only, one-time backfill: rewrites every stored trend's display name
+ * into "X for Y" form. Skips rows whose name already contains " for " so
+ * re-running this is safe/cheap. Password-gated the same way as comment
+ * moderation.
+ */
+export const adminStandardizeTrendNames = createServerFn({ method: "POST" })
+  .inputValidator((d: { password: string }) => d)
+  .handler(
+    async ({ data }): Promise<{ ok: boolean; updated?: number; skipped?: number; total?: number; error?: string }> => {
+      if (!checkAdminPassword(data.password)) return { ok: false, error: "Wrong password." };
+
+      try {
+        const supabase = getSupabaseServiceClient();
+        const { data: rows, error } = await supabase
+          .from("generated_trends")
+          .select("id, query, name, summary")
+          .neq("verdict", "unmapped")
+          .limit(500);
+        if (error || !rows) return { ok: false, error: "Couldn't load trends." };
+
+        let updated = 0;
+        let skipped = 0;
+
+        for (const row of rows as { id: string; query: string; name: string; summary: string }[]) {
+          if (/\bfor\b/i.test(row.name)) {
+            skipped++;
+            continue;
+          }
+          const newName = await inferStandardizedName(row);
+          if (!newName || newName === row.name) {
+            skipped++;
+            continue;
+          }
+          const { error: updateError } = await supabase
+            .from("generated_trends")
+            .update({ name: newName })
+            .eq("id", row.id);
+          if (updateError) {
+            skipped++;
+            continue;
+          }
+          updated++;
+        }
+
+        return { ok: true, updated, skipped, total: rows.length };
+      } catch {
+        return { ok: false, error: "Backfill failed partway through." };
+      }
+    },
+  );

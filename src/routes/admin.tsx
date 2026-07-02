@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import { adminDeleteComment, adminListComments, type AdminComment } from "@/lib/comments.functions";
+import { adminStandardizeTrendNames } from "@/lib/generatedTrends.functions";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -17,6 +18,8 @@ function AdminPage() {
   const [comments, setComments] = useState<AdminComment[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [standardizing, setStandardizing] = useState(false);
+  const [standardizeResult, setStandardizeResult] = useState<string | null>(null);
 
   async function load(pw: string) {
     setLoading(true);
@@ -49,6 +52,19 @@ function AdminPage() {
       return;
     }
     setComments((prev) => prev.filter((c) => c.id !== id));
+  }
+
+  async function standardizeTitles() {
+    const pw = window.sessionStorage.getItem(SESSION_KEY) ?? password;
+    setStandardizing(true);
+    setStandardizeResult(null);
+    const res = await adminStandardizeTrendNames({ data: { password: pw } });
+    setStandardizing(false);
+    if (!res.ok) {
+      setStandardizeResult(res.error ?? "Couldn't standardize titles.");
+      return;
+    }
+    setStandardizeResult(`Updated ${res.updated} of ${res.total} trends (${res.skipped} already fine or skipped).`);
   }
 
   // Try to resume a session on first render.
@@ -107,6 +123,25 @@ function AdminPage() {
         </div>
 
         {error && <p className="font-mono mb-4 text-xs text-[var(--verdict-debunked)]">{error}</p>}
+
+        <div className="mb-6 rounded-[16px] border border-white/75 bg-white/90 p-5 shadow-[0_8px_24px_rgba(27,52,72,0.04)]">
+          <p className="font-label mb-2 text-xs text-[var(--sage)]">TITLE BACKFILL</p>
+          <p className="mb-3 text-sm leading-6 text-[var(--ink)]">
+            Rewrites every stored trend title into "X for Y" form (e.g. "Rosemary Oil for Hair Growth"),
+            inferring a purpose for titles that don't already have one. Safe to re-run — already-standardized
+            titles are skipped.
+          </p>
+          <button
+            onClick={standardizeTitles}
+            disabled={standardizing}
+            className="font-label rounded-full bg-[var(--ink)] px-5 py-2.5 text-xs text-white transition hover:translate-y-[-1px] disabled:opacity-40"
+          >
+            {standardizing ? "STANDARDIZING…" : "STANDARDIZE TITLES"}
+          </button>
+          {standardizeResult && (
+            <p className="font-mono mt-3 text-xs text-[var(--muted-ink)]">{standardizeResult}</p>
+          )}
+        </div>
 
         <div className="space-y-3">
           {comments.map((c) => (
