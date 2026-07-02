@@ -356,8 +356,8 @@ Its stored community quotes (sentiment: ${row.sentiment}% positive):
 ${opinionsText}
 
 Return a JSON object with two fields:
-1. "researchVerdict": ONE sentence (max ~160 chars) that reads as an actual analytical verdict on the evidence — a specific claim about what it does or doesn't do, with a caveat if relevant. NOT a generic template like "Across N studies, findings support X" — it should sound like a knowledgeable person's bottom-line take.
-2. "communityVerdict": ONE sentence (max ~160 chars) synthesizing the overall pattern in how real users experience this, based on the quotes and sentiment score — not a literal quote, a synthesis.
+1. "researchVerdict": ONE sentence (max ~140 chars) giving the plain-language bottom line — write it the way you'd explain it to a friend, not a lab report. Avoid clinical/technical jargon and exact study durations/doses unless genuinely essential. State the real-world takeaway and one honest caveat if relevant. NOT a generic template like "Across N studies, findings support X" and NOT a dense academic sentence stuffed with numbers/mechanisms.
+2. "communityVerdict": ONE sentence (max ~140 chars) in the same plain, conversational style — what people actually notice and talk about, not clinical terms. Base it on the quotes and sentiment score, not a literal quote.
 
 Return ONLY this JSON, no other text:
 {"researchVerdict": "...", "communityVerdict": "..."}`;
