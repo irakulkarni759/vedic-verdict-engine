@@ -250,7 +250,7 @@ function Hero({
             </button>
           </form>
 
-          {searchError ? (
+          {searchError && (
             <p
               className="mt-3 text-center"
               style={{
@@ -260,20 +260,6 @@ function Hero({
               }}
             >
               {searchError}
-            </p>
-          ) : (
-            <p
-              className="mt-3 text-center"
-              style={{
-                color: "var(--muted-ink)",
-                fontSize: "clamp(10.5px, 2.6vw, 12px)",
-                fontWeight: 300,
-                animation: "fade-up 1.2s ease-out 1.2s both",
-              }}
-            >
-              Search "ingredient/practice for purpose" — like{" "}
-              <span style={{ fontStyle: "italic" }}>rosemary oil for hair growth</span> — so we know
-              what evidence to look for.
             </p>
           )}
         </div>
