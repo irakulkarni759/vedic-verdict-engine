@@ -110,7 +110,8 @@ function SearchPage() {
     ),
   ).slice(0, 3);
 
-  const isUnknown = data.verdict === "UNKNOWN" || data.studies === 0;
+  const isPharma = data.verdict === "PHARMA";
+  const isUnknown = !isPharma && (data.verdict === "UNKNOWN" || data.studies === 0);
 
   return (
     <main className="min-h-screen bg-[var(--parchment)] px-5 py-8 sm:px-8 sm:py-10">
@@ -127,7 +128,7 @@ function SearchPage() {
           <div className="mb-7 flex items-start justify-between gap-4">
             {/* FIX 1: no longer says "FRESH SEARCH · GENERATED FROM PUBMED" */}
             <p className="font-label text-xs text-[var(--muted-ink)]">
-              {isUnknown ? "NOT YET INDEXED" : "LIVE ANALYSIS · PUBMED"}
+              {isPharma ? "OUTSIDE OUR SCOPE" : isUnknown ? "NOT YET INDEXED" : "LIVE ANALYSIS · PUBMED"}
             </p>
 
             <div
@@ -138,7 +139,7 @@ function SearchPage() {
                 backgroundColor: `color-mix(in oklab, ${color} 10%, transparent)`,
               }}
             >
-              • {isUnknown ? "PENDING REVIEW" : data.verdict}
+              • {isPharma ? "MEDICATION" : isUnknown ? "PENDING REVIEW" : data.verdict}
             </div>
           </div>
 
@@ -151,28 +152,30 @@ function SearchPage() {
           </p>
 
           {/* FIX 2 + 3: buttons BEFORE stats, label renamed to "PUBMED RESEARCH" */}
-          <div className="mt-8 flex flex-wrap gap-3">
-            <a
-              href={data.pubmedSearchUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-label rounded-full bg-[var(--ink)] px-5 py-3 text-xs text-white transition hover:translate-y-[-1px]"
-            >
-              PUBMED RESEARCH ↗
-            </a>
+          {!isPharma && (
+            <div className="mt-8 flex flex-wrap gap-3">
+              <a
+                href={data.pubmedSearchUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-label rounded-full bg-[var(--ink)] px-5 py-3 text-xs text-white transition hover:translate-y-[-1px]"
+              >
+                PUBMED RESEARCH ↗
+              </a>
 
-            <a
-              href={data.redditSearchUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-label rounded-full bg-[var(--terracotta)] px-5 py-3 text-xs text-white transition hover:translate-y-[-1px]"
-            >
-              REDDIT THREADS ↗
-            </a>
-          </div>
+              <a
+                href={data.redditSearchUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-label rounded-full bg-[var(--terracotta)] px-5 py-3 text-xs text-white transition hover:translate-y-[-1px]"
+              >
+                REDDIT THREADS ↗
+              </a>
+            </div>
+          )}
 
           {/* Stats row after buttons */}
-          {!isUnknown && (
+          {!isUnknown && !isPharma && (
             <div className="mt-10 grid grid-cols-3 gap-7">
               <Stat label="STUDIES" value={String(data.studies)} />
               <Stat label="SENTIMENT" value={`${data.sentiment}%`} />

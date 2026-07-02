@@ -25,7 +25,7 @@ export type EvidenceVerdict = {
   name: string;
   slug: string;
   category: string;
-  verdict: "BACKED" | "MIXED" | "DEBUNKED" | "UNKNOWN";
+  verdict: "BACKED" | "MIXED" | "DEBUNKED" | "UNKNOWN" | "PHARMA";
   confidence: "high" | "moderate" | "low";
   oneLiner: string;
   studies: number;
@@ -243,6 +243,57 @@ or
   }
 }
 
+/**
+ * Veda covers supplements, wellness practices, and cosmetic ingredients —
+ * not pharmaceutical medicines. Prescription and OTC drugs need a doctor
+ * or pharmacist, not a BACKED/MIXED/DEBUNKED verdict, so this runs before
+ * the PubMed pipeline and short-circuits with a clear "not covered" message.
+ * Fails open (returns not-a-medicine) on any error so an API hiccup never
+ * blocks a legitimate search.
+ */
+async function checkIsPharmaceutical(query: string): Promise<{ isMedicine: boolean; name?: string }> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return { isMedicine: false };
+
+  const prompt = `Is "${query}" primarily a pharmaceutical medicine — a prescription drug or a regulator-approved over-the-counter medicine (examples: ibuprofen, metformin, Ozempic, amoxicillin, Prozac, insulin, Tylenol)?
+
+Answer "yes" ONLY for actual medicines/drugs used to treat or manage a diagnosed condition. Answer "no" for supplements, vitamins, herbs, cosmetic ingredients, foods, and general wellness practices — even ones that sound clinical (e.g. "melatonin", "creatine", "electrolytes", "collagen" are NOT medicines for this purpose).
+
+Return ONLY this JSON, no other text:
+{"is_medicine": true, "name": "common name of the medicine"}
+or
+{"is_medicine": false}`;
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 100,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+
+    const json = (await res.json()) as { content: { text: string }[] };
+    const text = json.content?.[0]?.text ?? "{}";
+    const parsed = JSON.parse(text.replace(/```json|```/g, "").trim()) as {
+      is_medicine?: boolean;
+      name?: string;
+    };
+
+    return parsed.is_medicine === true
+      ? { isMedicine: true, name: parsed.name }
+      : { isMedicine: false };
+  } catch {
+    return { isMedicine: false };
+  }
+}
+
 async function buildResultFromIds(opts: {
   ids: string[];
   query: string;
@@ -366,6 +417,19 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
     });
 
     if (!query) return empty("Enter a search to generate a verdict.");
+
+    const pharma = await checkIsPharmaceutical(query);
+    if (pharma.isMedicine) {
+      // Intentionally not saved to Supabase — pharma queries shouldn't count
+      // toward "trends verified" or ever surface as a card anywhere.
+      return {
+        query, name, slug, category: guessCategoryFallback(query), verdict: "PHARMA", confidence: "low",
+        oneLiner: `Veda doesn't cover pharmaceutical medicines like ${pharma.name ?? name} — we focus on supplements, wellness practices, and cosmetic ingredients. For questions about medications, talk to a doctor or pharmacist.`,
+        studies: 0, sentiment: 0, updated,
+        bullets: [], quotes: [], articles: [],
+        pubmedSearchUrl, redditSearchUrl, generatedAt, ingredientFallback: null,
+      };
+    }
 
     try {
       const esearch = await fetch(
