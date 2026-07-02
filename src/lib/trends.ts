@@ -15,6 +15,10 @@ export type Trend = {
   evidence: string[];
   quotes: { handle: string; text: string }[];
   related: string[]; // slugs
+  /** Real per-article PubMed links, in the same order as `evidence` where
+   *  available. Empty for curated trends (no article was ever fetched for
+   *  them) — falls back to a plain name search in that case. */
+  sourceUrls: string[];
 };
 
 export const CATEGORIES = [
@@ -51,6 +55,7 @@ export const TRENDS: Trend[] = [
     ],
     communityVerdict: "Widely loved as a non-negotiable step — the main complaint is dated formulas leaving a white cast, which modern ones have mostly fixed.",
     safetyNote: "No notable risks for typical use — just watch for fragrance/chemical-filter sensitivity if you have reactive skin.",
+    sourceUrls: [],
     related: ["retinol", "vitamin-c-serum", "niacinamide"],
   },
   {
@@ -74,6 +79,7 @@ export const TRENDS: Trend[] = [
     ],
     communityVerdict: "Users consistently describe an initial adjustment period (dryness, mild peeling) followed by real, lasting payoff once skin adapts.",
     safetyNote: "Avoid during pregnancy or while trying to conceive; increases sun sensitivity, so daily SPF is essential alongside it.",
+    sourceUrls: [],
     related: ["daily-spf", "vitamin-c-serum", "niacinamide"],
   },
   {
@@ -97,6 +103,7 @@ export const TRENDS: Trend[] = [
     ],
     communityVerdict: "People like the brightening effect but frequently complain about serums oxidizing before they finish the bottle.",
     safetyNote: "Can cause mild irritation or tingling at higher concentrations, especially alongside other actives like retinol.",
+    sourceUrls: [],
     related: ["daily-spf", "retinol", "niacinamide"],
   },
   {
@@ -120,6 +127,7 @@ export const TRENDS: Trend[] = [
     ],
     communityVerdict: "Consistently praised as gentle and easy to layer with other actives, with several users reporting it calmed redness within weeks.",
     safetyNote: "Very well tolerated; rare flushing has been reported at high doses, mostly with oral (not topical) niacinamide.",
+    sourceUrls: [],
     related: ["daily-spf", "retinol", "vitamin-c-serum"],
   },
   {
@@ -143,6 +151,7 @@ export const TRENDS: Trend[] = [
     ],
     communityVerdict: "A favorite for winter or post-retinoid nights, though people joke about the messy pillowcase tradeoff.",
     safetyNote: "Can trap oil and worsen breakouts on acne-prone skin — patch test before making it a nightly habit.",
+    sourceUrls: [],
     related: ["retinol", "daily-spf", "snail-mucin"],
   },
   {
@@ -166,6 +175,7 @@ export const TRENDS: Trend[] = [
     ],
     communityVerdict: "One of the rare K-beauty trends people say lived up to the hype for hydration, though anti-aging claims get pushback.",
     safetyNote: "Rare allergic reactions have been documented; discontinue if you notice redness or itching.",
+    sourceUrls: [],
     related: ["niacinamide", "slugging", "hyaluronic-acid"],
   },
   {
@@ -189,6 +199,7 @@ export const TRENDS: Trend[] = [
     ],
     communityVerdict: "Generally well liked, but a recurring complaint is that applying it to dry (not damp) skin can backfire and pull moisture out.",
     safetyNote: "No significant risks for topical use; applying it in very dry air without sealing can occasionally worsen dryness.",
+    sourceUrls: [],
     related: ["niacinamide", "snail-mucin", "daily-spf"],
   },
   {
@@ -212,6 +223,7 @@ export const TRENDS: Trend[] = [
     ],
     communityVerdict: "Most describe it as a pleasant but purely cosmetic ritual — nice in the moment, with no lasting skin change.",
     safetyNote: "Low risk, but unclean stones can harbor bacteria — clean it regularly, especially if used on broken-out skin.",
+    sourceUrls: [],
     related: ["gua-sha", "dry-brushing", "snail-mucin"],
   },
   {
@@ -235,6 +247,7 @@ export const TRENDS: Trend[] = [
     ],
     communityVerdict: "People enjoy the morning de-puffing ritual but are skeptical of any lasting facial-sculpting claims.",
     safetyNote: "Heavy pressure can bruise or irritate skin — use gentle strokes, especially on sensitive or thin skin.",
+    sourceUrls: [],
     related: ["jade-roller", "dry-brushing", "snail-mucin"],
   },
   {
@@ -258,6 +271,7 @@ export const TRENDS: Trend[] = [
     ],
     communityVerdict: "Frequent complaints about peel-off masks physically hurting to remove, with little payoff beyond a brief matte look.",
     safetyNote: "Peel-off formulas can damage the skin barrier and pull out fine hair — avoid on sensitive or broken skin.",
+    sourceUrls: [],
     related: ["jade-roller", "dry-brushing", "gua-sha"],
   },
   {
@@ -280,6 +294,7 @@ export const TRENDS: Trend[] = [
     ],
     communityVerdict: "People enjoy the sensory ritual but are clear-eyed that it doesn't deliver on cellulite or detox claims.",
     safetyNote: "Aggressive brushing can cause micro-tears in the skin barrier — light pressure only, avoid broken or irritated skin.",
+    sourceUrls: [],
     related: ["jade-roller", "gua-sha", "activated-charcoal"],
   },
 
@@ -305,6 +320,7 @@ export const TRENDS: Trend[] = [
     ],
     communityVerdict: "Seen as a low-risk experiment worth trying, with scattered reports of success but wide acknowledgment that results vary person to person.",
     safetyNote: "Dilute in a carrier oil before scalp use — applying it undiluted can cause irritation or a burning sensation.",
+    sourceUrls: [],
     related: ["biotin", "collagen-peptides", "slugging"],
   },
   {
@@ -327,6 +343,7 @@ export const TRENDS: Trend[] = [
     ],
     communityVerdict: "Mixed reception — people without a documented deficiency mostly report no noticeable hair changes, and some flag it can skew bloodwork.",
     safetyNote: "Can interfere with common lab tests, including thyroid and cardiac markers — tell your doctor if you're taking it before bloodwork.",
+    sourceUrls: [],
     related: ["rosemary-oil", "collagen-peptides", "ashwagandha"],
   },
 
@@ -352,6 +369,7 @@ export const TRENDS: Trend[] = [
     ],
     communityVerdict: "People report modest but real improvements, especially for joint comfort, while cautioning against expecting dramatic skin transformation.",
     safetyNote: "Generally well tolerated; check sourcing (bovine/marine) if you have relevant allergies or dietary restrictions.",
+    sourceUrls: [],
     related: ["creatine", "ashwagandha", "magnesium-sleep"],
   },
   {
@@ -375,6 +393,7 @@ export const TRENDS: Trend[] = [
     ],
     communityVerdict: "Strong anecdotal support for stress and sleep, with several users describing a noticeable shift within the first month.",
     safetyNote: "Avoid during pregnancy and if you have a thyroid condition or take thyroid medication — it can affect thyroid hormone levels.",
+    sourceUrls: [],
     related: ["magnesium-sleep", "melatonin", "creatine"],
   },
   {
@@ -398,6 +417,7 @@ export const TRENDS: Trend[] = [
     ],
     communityVerdict: "Near-universal endorsement as the one supplement worth taking — consistently described as cheap, safe, and effective.",
     safetyNote: "Very well studied and safe for healthy adults; stay well hydrated, and check with a doctor first if you have kidney disease.",
+    sourceUrls: [],
     related: ["ashwagandha", "collagen-peptides", "magnesium-sleep"],
   },
   {
@@ -420,6 +440,7 @@ export const TRENDS: Trend[] = [
     ],
     communityVerdict: "Generally positive, with experienced users specifically pushing back on high OTC doses in favor of smaller, better-timed amounts.",
     safetyNote: "Can cause grogginess if the dose is too high; avoid combining with alcohol or other sedatives.",
+    sourceUrls: [],
     related: ["magnesium-sleep", "ashwagandha"],
   },
   {
@@ -442,6 +463,7 @@ export const TRENDS: Trend[] = [
     ],
     communityVerdict: "Well liked for sleep quality, with several users specifically calling out the glycinate form as key to feeling a difference.",
     safetyNote: "High doses can cause digestive upset (loose stools); those with kidney issues should check with a doctor first.",
+    sourceUrls: [],
     related: ["melatonin", "ashwagandha"],
   },
 
@@ -466,6 +488,7 @@ export const TRENDS: Trend[] = [
     ],
     communityVerdict: "Broad skepticism — most people see it as an overhyped ritual rather than anything with real detox benefits.",
     safetyNote: "High in oxalates — worth discussing with a doctor if you have a history of kidney stones.",
+    sourceUrls: [],
     related: ["activated-charcoal", "turmeric"],
   },
   {
@@ -488,6 +511,7 @@ export const TRENDS: Trend[] = [
     ],
     communityVerdict: "Positive but conditional — people who see results emphasize that absorption-boosting formulation makes the difference.",
     safetyNote: "Can interact with blood thinners and may upset the stomach at high doses — check with a doctor if you're on medication.",
+    sourceUrls: [],
     related: ["ashwagandha", "collagen-peptides"],
   },
   {
@@ -510,6 +534,7 @@ export const TRENDS: Trend[] = [
     ],
     communityVerdict: "Reception is practical rather than enthusiastic — people frame it as a scheduling tool that works if it fits your lifestyle, not a metabolic hack.",
     safetyNote: "Not recommended for anyone with a history of disordered eating; those on diabetes medication should consult a doctor first.",
+    sourceUrls: [],
     related: ["creatine", "ashwagandha"],
   },
   {
@@ -532,6 +557,7 @@ export const TRENDS: Trend[] = [
     ],
     communityVerdict: "Mostly dismissed as an unnecessary extra step — people default back to recommending standard brushing and flossing.",
     safetyNote: "Rare but documented risk of lipoid pneumonia if the oil is accidentally inhaled/aspirated — don't substitute it for brushing.",
+    sourceUrls: [],
     related: ["celery-juice", "activated-charcoal"],
   },
 ];

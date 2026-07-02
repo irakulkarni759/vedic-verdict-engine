@@ -123,7 +123,7 @@ function TrendPage() {
                   <p className="text-lg leading-8 text-[var(--ink)]">{e}</p>
 
                   <a
-                    href={pubmedUrl(`${trend.name} ${e}`)}
+                    href={trend.sourceUrls[i] ?? pubmedUrl(trend.name)}
                     target="_blank"
                     rel="noreferrer"
                     className="font-mono mt-5 inline-block text-xs text-[var(--terracotta)]"

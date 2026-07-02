@@ -91,6 +91,7 @@ function rowToTrend(row: GeneratedTrendRow): Trend | null {
     evidence: row.evidence_points ?? [],
     quotes: row.opinions ?? [],
     related: row.related_ids ?? [],
+    sourceUrls: row.source_urls ?? [],
   };
 }
 
