@@ -122,13 +122,21 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function Disclaimer() {
   return (
-    <p
-      className="font-label px-6 py-5 text-center text-[9px] leading-snug opacity-60 sm:pointer-events-none sm:fixed sm:bottom-4 sm:left-4 sm:z-30 sm:max-w-[220px] sm:px-0 sm:py-0 sm:text-left"
-      style={{ color: "var(--muted-ink)" }}
+    <div
+      className="border-t px-8 py-4"
+      style={{
+        backgroundColor: "var(--parchment)",
+        borderColor: "color-mix(in oklab, var(--ink) 12%, transparent)",
+      }}
     >
-      Veda is not a doctor, pharmacist, or medical provider. Nothing here is
-      medical advice — talk to a professional about your health.
-    </p>
+      <p
+        className="font-label mx-auto max-w-[1400px] text-left text-[9px] leading-snug"
+        style={{ color: "var(--muted-ink)", opacity: 0.7 }}
+      >
+        Veda is not a doctor, pharmacist, or medical provider. Nothing here is
+        medical advice — talk to a professional about your health.
+      </p>
+    </div>
   );
 }
 

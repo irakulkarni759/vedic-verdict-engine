@@ -235,7 +235,7 @@ function Hero({
           style={{ animation: "fade-up 1.2s ease-out 1.4s both" }}
         >
           <span className="font-label" style={{ color: "var(--terracotta)", fontSize: 10 }}>
-            TRYING NOW
+            TRENDING
           </span>
           {trending.map((t, i) => (
             <span key={t.slug} className="flex items-center gap-3">
