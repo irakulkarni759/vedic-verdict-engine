@@ -120,6 +120,18 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
+function Disclaimer() {
+  return (
+    <p
+      className="font-label pointer-events-none fixed bottom-4 left-4 z-30 hidden max-w-[220px] text-[9px] leading-snug opacity-60 sm:block"
+      style={{ color: "var(--muted-ink)" }}
+    >
+      Veda is not a doctor, pharmacist, or medical provider. Nothing here is
+      medical advice — talk to a professional about your health.
+    </p>
+  );
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
@@ -127,6 +139,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
+      <Disclaimer />
     </QueryClientProvider>
   );
 }
