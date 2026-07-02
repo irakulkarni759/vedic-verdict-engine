@@ -123,7 +123,7 @@ function RootShell({ children }: { children: ReactNode }) {
 function Disclaimer() {
   return (
     <p
-      className="font-label pointer-events-none fixed bottom-4 left-4 z-30 hidden max-w-[220px] text-[9px] leading-snug opacity-60 sm:block"
+      className="font-label px-6 py-5 text-center text-[9px] leading-snug opacity-60 sm:pointer-events-none sm:fixed sm:bottom-4 sm:left-4 sm:z-30 sm:max-w-[220px] sm:px-0 sm:py-0 sm:text-left"
       style={{ color: "var(--muted-ink)" }}
     >
       Veda is not a doctor, pharmacist, or medical provider. Nothing here is
