@@ -147,10 +147,8 @@ function SearchPage() {
           </h1>
 
           <HeroSummary
-            researchBullet={data.bullets[0]?.text}
-            quoteBullet={data.quotes[0]?.text}
-            sentiment={data.sentiment}
-            fallback={data.oneLiner}
+            researchVerdict={data.oneLiner}
+            communityVerdict={data.communityVerdict}
           />
         </section>
 
@@ -263,58 +261,38 @@ function SearchPage() {
   );
 }
 
-function sentimentTone(sentiment: number): string {
-  if (sentiment >= 70) return "largely positive";
-  if (sentiment >= 45) return "mixed";
-  return "largely negative";
-}
-
 /**
- * Two-line hero summary: one bullet on what the research found, one on
+ * Two-line hero summary: one line on what the research found, one on
  * community sentiment — instead of a single generic sentence. Falls back
- * to the plain oneLiner when there's no research bullet to lead with (e.g.
+ * to a single line when there's no separate community verdict (e.g.
  * UNKNOWN/PHARMA results with nothing to summarize yet).
  */
 function HeroSummary({
-  researchBullet,
-  quoteBullet,
-  sentiment,
-  fallback,
+  researchVerdict,
+  communityVerdict,
 }: {
-  researchBullet: string | undefined;
-  quoteBullet: string | undefined;
-  sentiment: number;
-  fallback: string;
+  researchVerdict: string;
+  communityVerdict: string;
 }) {
-  if (!researchBullet) {
+  if (!communityVerdict) {
     return (
       <p className="mt-4 max-w-3xl text-base leading-7 text-[var(--ink)] sm:text-lg">
-        {fallback}
+        {researchVerdict}
       </p>
     );
   }
 
-  const communityBullet = quoteBullet
-    ? `Sentiment is ${sentimentTone(sentiment)} (${sentiment}% positive) — "${quoteBullet}"`
-    : `Sentiment is ${sentimentTone(sentiment)}, at ${sentiment}% positive.`;
-
   return (
-    <ul className="mt-4 max-w-3xl space-y-2.5 text-base leading-7 text-[var(--ink)] sm:text-lg">
-      <li className="flex gap-2.5">
-        <span className="mt-2.5 shrink-0 rounded-full" style={{ width: 5, height: 5, backgroundColor: "var(--terracotta)" }} />
-        <span>
-          <span className="font-label mr-1.5 text-[10px] align-middle text-[var(--sage)]">RESEARCH</span>
-          {researchBullet}
-        </span>
-      </li>
-      <li className="flex gap-2.5">
-        <span className="mt-2.5 shrink-0 rounded-full" style={{ width: 5, height: 5, backgroundColor: "var(--terracotta)" }} />
-        <span>
-          <span className="font-label mr-1.5 text-[10px] align-middle text-[var(--sage)]">COMMUNITY</span>
-          {communityBullet}
-        </span>
-      </li>
-    </ul>
+    <div className="mt-4 max-w-3xl space-y-3.5">
+      <div>
+        <p className="font-label text-[10px] text-[var(--sage)]">RESEARCH</p>
+        <p className="mt-1 text-base leading-7 text-[var(--ink)] sm:text-lg">{researchVerdict}</p>
+      </div>
+      <div>
+        <p className="font-label text-[10px] text-[var(--sage)]">COMMUNITY</p>
+        <p className="mt-1 text-base leading-7 text-[var(--ink)] sm:text-lg">{communityVerdict}</p>
+      </div>
+    </div>
   );
 }
 

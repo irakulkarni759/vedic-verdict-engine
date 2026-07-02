@@ -6,6 +6,7 @@ export type Trend = {
   category: string; // matches CATEGORIES slugs
   verdict: Verdict;
   oneLiner: string;
+  communityVerdict: string;
   studies: number;
   confidence: "high" | "moderate" | "low";
   sentiment: number; // 0-100
@@ -47,6 +48,7 @@ export const TRENDS: Trend[] = [
       { handle: "@derm_notes", text: "The single highest ROI step in any routine." },
       { handle: "@skinlab", text: "Texture has finally caught up — no more white cast." },
     ],
+    communityVerdict: "Widely loved as a non-negotiable step — the main complaint is dated formulas leaving a white cast, which modern ones have mostly fixed.",
     related: ["retinol", "vitamin-c-serum", "niacinamide"],
   },
   {
@@ -68,6 +70,7 @@ export const TRENDS: Trend[] = [
       { handle: "@derm_notes", text: "Slow start, real results. Patience tax." },
       { handle: "@routinegeek", text: "Started at 0.025% — barely peeled, big payoff." },
     ],
+    communityVerdict: "Users consistently describe an initial adjustment period (dryness, mild peeling) followed by real, lasting payoff once skin adapts.",
     related: ["daily-spf", "vitamin-c-serum", "niacinamide"],
   },
   {
@@ -89,6 +92,7 @@ export const TRENDS: Trend[] = [
       { handle: "@skinlab", text: "Glow is real, but your serum oxidizing is realer." },
       { handle: "@routinegeek", text: "Worth it only if you actually use it before it browns." },
     ],
+    communityVerdict: "People like the brightening effect but frequently complain about serums oxidizing before they finish the bottle.",
     related: ["daily-spf", "retinol", "niacinamide"],
   },
   {
@@ -110,6 +114,7 @@ export const TRENDS: Trend[] = [
       { handle: "@derm_notes", text: "The 'goes with anything' active." },
       { handle: "@skinlab", text: "Calmed my rosacea flare in two weeks." },
     ],
+    communityVerdict: "Consistently praised as gentle and easy to layer with other actives, with several users reporting it calmed redness within weeks.",
     related: ["daily-spf", "retinol", "vitamin-c-serum"],
   },
   {
@@ -131,6 +136,7 @@ export const TRENDS: Trend[] = [
       { handle: "@routinegeek", text: "Winter skin saver. Pillowcase tax accepted." },
       { handle: "@skinlab", text: "Tretinoin nights + slug = no more flaking." },
     ],
+    communityVerdict: "A favorite for winter or post-retinoid nights, though people joke about the messy pillowcase tradeoff.",
     related: ["retinol", "daily-spf", "snail-mucin"],
   },
   {
@@ -152,6 +158,7 @@ export const TRENDS: Trend[] = [
       { handle: "@skinlab", text: "Plumping is legit. Anti-aging claims, oversold." },
       { handle: "@routinegeek", text: "The K-beauty hype that actually held up." },
     ],
+    communityVerdict: "One of the rare K-beauty trends people say lived up to the hype for hydration, though anti-aging claims get pushback.",
     related: ["niacinamide", "slugging", "hyaluronic-acid"],
   },
   {
@@ -173,6 +180,7 @@ export const TRENDS: Trend[] = [
       { handle: "@derm_notes", text: "Hydration, not a miracle. Use it correctly." },
       { handle: "@skinlab", text: "Apply on dry skin and it'll wick moisture out." },
     ],
+    communityVerdict: "Generally well liked, but a recurring complaint is that applying it to dry (not damp) skin can backfire and pull moisture out.",
     related: ["niacinamide", "snail-mucin", "daily-spf"],
   },
   {
@@ -194,6 +202,7 @@ export const TRENDS: Trend[] = [
       { handle: "@derm_notes", text: "Fancy ice cube. Nothing more, nothing less." },
       { handle: "@skinlab", text: "Feels nice. That's the whole product." },
     ],
+    communityVerdict: "Most describe it as a pleasant but purely cosmetic ritual — nice in the moment, with no lasting skin change.",
     related: ["gua-sha", "dry-brushing", "snail-mucin"],
   },
   {
@@ -215,6 +224,7 @@ export const TRENDS: Trend[] = [
       { handle: "@derm_notes", text: "Morning de-puff: yes. Bone restructuring: no." },
       { handle: "@routinegeek", text: "Treat it as massage, not surgery." },
     ],
+    communityVerdict: "People enjoy the morning de-puffing ritual but are skeptical of any lasting facial-sculpting claims.",
     related: ["jade-roller", "dry-brushing", "snail-mucin"],
   },
   {
@@ -236,6 +246,7 @@ export const TRENDS: Trend[] = [
       { handle: "@derm_notes", text: "Marketing fiction with peel-off pain." },
       { handle: "@skinlab", text: "Pulled out my eyebrow hairs once. Never again." },
     ],
+    communityVerdict: "Frequent complaints about peel-off masks physically hurting to remove, with little payoff beyond a brief matte look.",
     related: ["jade-roller", "dry-brushing", "gua-sha"],
   },
   {
@@ -256,6 +267,7 @@ export const TRENDS: Trend[] = [
     quotes: [
       { handle: "@routinegeek", text: "Feels invigorating. Does nothing for cellulite." },
     ],
+    communityVerdict: "People enjoy the sensory ritual but are clear-eyed that it doesn't deliver on cellulite or detox claims.",
     related: ["jade-roller", "gua-sha", "activated-charcoal"],
   },
 
@@ -279,6 +291,7 @@ export const TRENDS: Trend[] = [
       { handle: "@routinegeek", text: "Cheap to try, low downside. Manage expectations." },
       { handle: "@skinlab", text: "Worked for my thinning edges. n=1." },
     ],
+    communityVerdict: "Seen as a low-risk experiment worth trying, with scattered reports of success but wide acknowledgment that results vary person to person.",
     related: ["biotin", "collagen-peptides", "slugging"],
   },
   {
@@ -299,6 +312,7 @@ export const TRENDS: Trend[] = [
     quotes: [
       { handle: "@derm_notes", text: "Tell your doctor before bloodwork." },
     ],
+    communityVerdict: "Mixed reception — people without a documented deficiency mostly report no noticeable hair changes, and some flag it can skew bloodwork.",
     related: ["rosemary-oil", "collagen-peptides", "ashwagandha"],
   },
 
@@ -322,6 +336,7 @@ export const TRENDS: Trend[] = [
       { handle: "@labnotes", text: "Real effect, modest size. Don't expect miracles." },
       { handle: "@routinegeek", text: "Hair and nails? Maybe. Joints? Yes." },
     ],
+    communityVerdict: "People report modest but real improvements, especially for joint comfort, while cautioning against expecting dramatic skin transformation.",
     related: ["creatine", "ashwagandha", "magnesium-sleep"],
   },
   {
@@ -343,6 +358,7 @@ export const TRENDS: Trend[] = [
       { handle: "@labnotes", text: "One of the few adaptogens with real RCTs." },
       { handle: "@sleepdoc", text: "I sleep through the night now. First month was wild." },
     ],
+    communityVerdict: "Strong anecdotal support for stress and sleep, with several users describing a noticeable shift within the first month.",
     related: ["magnesium-sleep", "melatonin", "creatine"],
   },
   {
@@ -364,6 +380,7 @@ export const TRENDS: Trend[] = [
       { handle: "@labnotes", text: "If you take one supplement, take this." },
       { handle: "@gymsci", text: "Cheap, safe, works. Rare combo." },
     ],
+    communityVerdict: "Near-universal endorsement as the one supplement worth taking — consistently described as cheap, safe, and effective.",
     related: ["ashwagandha", "collagen-peptides", "magnesium-sleep"],
   },
   {
@@ -384,6 +401,7 @@ export const TRENDS: Trend[] = [
     quotes: [
       { handle: "@sleepdoc", text: "Take less. Timing matters more than dose." },
     ],
+    communityVerdict: "Generally positive, with experienced users specifically pushing back on high OTC doses in favor of smaller, better-timed amounts.",
     related: ["magnesium-sleep", "ashwagandha"],
   },
   {
@@ -404,6 +422,7 @@ export const TRENDS: Trend[] = [
     quotes: [
       { handle: "@sleepdoc", text: "Glycinate at dinner. Game changer for restless legs." },
     ],
+    communityVerdict: "Well liked for sleep quality, with several users specifically calling out the glycinate form as key to feeling a difference.",
     related: ["melatonin", "ashwagandha"],
   },
 
@@ -426,6 +445,7 @@ export const TRENDS: Trend[] = [
     quotes: [
       { handle: "@labnotes", text: "Celery's fine. The mythology around it isn't." },
     ],
+    communityVerdict: "Broad skepticism — most people see it as an overhyped ritual rather than anything with real detox benefits.",
     related: ["activated-charcoal", "turmeric"],
   },
   {
@@ -446,6 +466,7 @@ export const TRENDS: Trend[] = [
     quotes: [
       { handle: "@labnotes", text: "Real, when formulated for absorption." },
     ],
+    communityVerdict: "Positive but conditional — people who see results emphasize that absorption-boosting formulation makes the difference.",
     related: ["ashwagandha", "collagen-peptides"],
   },
   {
@@ -466,6 +487,7 @@ export const TRENDS: Trend[] = [
     quotes: [
       { handle: "@labnotes", text: "Works if it works for your schedule. That's it." },
     ],
+    communityVerdict: "Reception is practical rather than enthusiastic — people frame it as a scheduling tool that works if it fits your lifestyle, not a metabolic hack.",
     related: ["creatine", "ashwagandha"],
   },
   {
@@ -486,6 +508,7 @@ export const TRENDS: Trend[] = [
     quotes: [
       { handle: "@derm_notes", text: "Brushing exists. Use it." },
     ],
+    communityVerdict: "Mostly dismissed as an unnecessary extra step — people default back to recommending standard brushing and flossing.",
     related: ["celery-juice", "activated-charcoal"],
   },
 ];

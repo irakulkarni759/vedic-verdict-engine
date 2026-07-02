@@ -41,6 +41,7 @@ type GeneratedTrendRow = {
   category: string;
   verdict: "backed" | "mixed" | "debunked" | "unmapped";
   summary: string;
+  community_verdict: string;
   study_count: number;
   confidence: "low" | "moderate" | "high";
   last_updated: string;
@@ -60,6 +61,7 @@ export type SaveGeneratedTrendInput = {
   category: string;
   verdict: "backed" | "mixed" | "debunked" | "unmapped";
   summary: string;
+  communityVerdict: string;
   studyCount: number;
   confidence: "low" | "moderate" | "high";
   updated: string;
@@ -78,6 +80,7 @@ function rowToTrend(row: GeneratedTrendRow): Trend | null {
     category: row.category,
     verdict: row.verdict.toUpperCase() as Verdict,
     oneLiner: row.summary,
+    communityVerdict: row.community_verdict ?? "",
     studies: row.study_count,
     confidence: row.confidence,
     sentiment: row.sentiment_score,
@@ -112,6 +115,7 @@ export const saveGeneratedTrend = createServerFn({ method: "POST" })
           category: data.category,
           verdict: data.verdict,
           summary: data.summary,
+          community_verdict: data.communityVerdict,
           study_count: data.studyCount,
           confidence: data.confidence,
           last_updated: data.updated,
@@ -304,6 +308,138 @@ export const adminStandardizeTrendNames = createServerFn({ method: "POST" })
           const { error: updateError } = await supabase
             .from("generated_trends")
             .update({ name: newName })
+            .eq("id", row.id);
+          if (updateError) {
+            skipped++;
+            continue;
+          }
+          updated++;
+        }
+
+        return { ok: true, updated, skipped, total: rows.length };
+      } catch {
+        return { ok: false, error: "Backfill failed partway through." };
+      }
+    },
+  );
+
+/**
+ * One-off Claude call per row to rewrite the templated summary sentence
+ * ("Across N PubMed studies, the bulk of findings support X.") into an
+ * actual analytical verdict, plus generate a community-sentiment verdict
+ * sentence — using the row's own evidence points and opinions as context so
+ * no new PubMed calls are needed. Used only by the admin backfill below.
+ */
+async function inferVerdictSummaries(row: {
+  name: string;
+  summary: string;
+  evidencePoints: string[];
+  opinions: { handle: string; text: string }[];
+  sentiment: number;
+}): Promise<{ researchVerdict: string | null; communityVerdict: string | null }> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return { researchVerdict: null, communityVerdict: null };
+
+  const evidenceText = row.evidencePoints.length
+    ? row.evidencePoints.map((e) => `- ${e}`).join("\n")
+    : "(no individual findings stored)";
+  const opinionsText = row.opinions.length
+    ? row.opinions.map((o) => `${o.handle}: "${o.text}"`).join("\n")
+    : "(no community quotes stored)";
+
+  const prompt = `A wellness result titled "${row.name}" currently has this generic summary: "${row.summary}"
+
+Its stored findings:
+${evidenceText}
+
+Its stored community quotes (sentiment: ${row.sentiment}% positive):
+${opinionsText}
+
+Return a JSON object with two fields:
+1. "researchVerdict": ONE sentence (max ~160 chars) that reads as an actual analytical verdict on the evidence — a specific claim about what it does or doesn't do, with a caveat if relevant. NOT a generic template like "Across N studies, findings support X" — it should sound like a knowledgeable person's bottom-line take.
+2. "communityVerdict": ONE sentence (max ~160 chars) synthesizing the overall pattern in how real users experience this, based on the quotes and sentiment score — not a literal quote, a synthesis.
+
+Return ONLY this JSON, no other text:
+{"researchVerdict": "...", "communityVerdict": "..."}`;
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 300,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+    const json = (await res.json()) as { content: { text: string }[] };
+    const text = json.content?.[0]?.text ?? "{}";
+    const parsed = JSON.parse(text.replace(/```json|```/g, "").trim()) as {
+      researchVerdict?: string;
+      communityVerdict?: string;
+    };
+    return {
+      researchVerdict: typeof parsed.researchVerdict === "string" ? parsed.researchVerdict.trim() || null : null,
+      communityVerdict: typeof parsed.communityVerdict === "string" ? parsed.communityVerdict.trim() || null : null,
+    };
+  } catch {
+    return { researchVerdict: null, communityVerdict: null };
+  }
+}
+
+/**
+ * Admin-only, one-time backfill: rewrites the templated `summary` into a
+ * real research verdict and fills in `community_verdict` for every stored
+ * trend. Skips rows that already have a non-empty community_verdict, so
+ * re-running this is safe/cheap. Password-gated like comment moderation.
+ */
+export const adminBackfillVerdictSummaries = createServerFn({ method: "POST" })
+  .inputValidator((d: { password: string }) => d)
+  .handler(
+    async ({ data }): Promise<{ ok: boolean; updated?: number; skipped?: number; total?: number; error?: string }> => {
+      if (!checkAdminPassword(data.password)) return { ok: false, error: "Wrong password." };
+
+      try {
+        const supabase = getSupabaseServiceClient();
+        const { data: rows, error } = await supabase
+          .from("generated_trends")
+          .select("id, name, summary, community_verdict, evidence_points, opinions, sentiment_score")
+          .neq("verdict", "unmapped")
+          .limit(500);
+        if (error || !rows) return { ok: false, error: "Couldn't load trends." };
+
+        let updated = 0;
+        let skipped = 0;
+
+        for (const row of rows as {
+          id: string; name: string; summary: string; community_verdict: string;
+          evidence_points: string[]; opinions: { handle: string; text: string }[]; sentiment_score: number;
+        }[]) {
+          if (row.community_verdict && row.community_verdict.trim()) {
+            skipped++;
+            continue;
+          }
+          const result = await inferVerdictSummaries({
+            name: row.name,
+            summary: row.summary,
+            evidencePoints: row.evidence_points ?? [],
+            opinions: row.opinions ?? [],
+            sentiment: row.sentiment_score,
+          });
+          if (!result.communityVerdict) {
+            skipped++;
+            continue;
+          }
+          const { error: updateError } = await supabase
+            .from("generated_trends")
+            .update({
+              summary: result.researchVerdict ?? row.summary,
+              community_verdict: result.communityVerdict,
+            })
             .eq("id", row.id);
           if (updateError) {
             skipped++;

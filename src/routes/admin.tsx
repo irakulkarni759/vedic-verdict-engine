@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import { adminCheckPassword, adminDeleteComment, adminListComments, type AdminComment } from "@/lib/comments.functions";
-import { adminStandardizeTrendNames } from "@/lib/generatedTrends.functions";
+import { adminStandardizeTrendNames, adminBackfillVerdictSummaries } from "@/lib/generatedTrends.functions";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -20,6 +20,8 @@ function AdminPage() {
   const [error, setError] = useState<string | null>(null);
   const [standardizing, setStandardizing] = useState(false);
   const [standardizeResult, setStandardizeResult] = useState<string | null>(null);
+  const [summarizing, setSummarizing] = useState(false);
+  const [summarizeResult, setSummarizeResult] = useState<string | null>(null);
 
   async function loadComments(pw: string) {
     setLoading(true);
@@ -76,6 +78,19 @@ function AdminPage() {
       return;
     }
     setStandardizeResult(`Updated ${res.updated} of ${res.total} trends (${res.skipped} already fine or skipped).`);
+  }
+
+  async function backfillSummaries() {
+    const pw = window.sessionStorage.getItem(SESSION_KEY) ?? password;
+    setSummarizing(true);
+    setSummarizeResult(null);
+    const res = await adminBackfillVerdictSummaries({ data: { password: pw } });
+    setSummarizing(false);
+    if (!res.ok) {
+      setSummarizeResult(res.error ?? "Couldn't backfill summaries.");
+      return;
+    }
+    setSummarizeResult(`Updated ${res.updated} of ${res.total} trends (${res.skipped} already fine or skipped).`);
   }
 
   // Try to resume a session on first render.
@@ -151,6 +166,25 @@ function AdminPage() {
           </button>
           {standardizeResult && (
             <p className="font-mono mt-3 text-xs text-[var(--muted-ink)]">{standardizeResult}</p>
+          )}
+        </div>
+
+        <div className="mb-6 rounded-[16px] border border-white/75 bg-white/90 p-5 shadow-[0_8px_24px_rgba(27,52,72,0.04)]">
+          <p className="font-label mb-2 text-xs text-[var(--sage)]">SUMMARY BACKFILL</p>
+          <p className="mb-3 text-sm leading-6 text-[var(--ink)]">
+            Rewrites the old templated summary into a real research verdict and fills in a community
+            verdict for every stored trend, using each trend's existing evidence and quotes (no new
+            PubMed calls). Safe to re-run — trends that already have a community verdict are skipped.
+          </p>
+          <button
+            onClick={backfillSummaries}
+            disabled={summarizing}
+            className="font-label rounded-full bg-[var(--ink)] px-5 py-2.5 text-xs text-white transition hover:translate-y-[-1px] disabled:opacity-40"
+          >
+            {summarizing ? "BACKFILLING…" : "BACKFILL SUMMARIES"}
+          </button>
+          {summarizeResult && (
+            <p className="font-mono mt-3 text-xs text-[var(--muted-ink)]">{summarizeResult}</p>
           )}
         </div>
 

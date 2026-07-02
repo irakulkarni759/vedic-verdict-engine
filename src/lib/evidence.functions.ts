@@ -28,6 +28,7 @@ export type EvidenceVerdict = {
   verdict: "BACKED" | "MIXED" | "DEBUNKED" | "UNKNOWN" | "PHARMA";
   confidence: "high" | "moderate" | "low";
   oneLiner: string;
+  communityVerdict: string;
   studies: number;
   sentiment: number;
   updated: string;
@@ -91,6 +92,8 @@ async function generateBulletsAndQuotes(
   abstracts: { abstract: string; url: string }[]
 ): Promise<{
   displayName: string | null;
+  researchVerdict: string | null;
+  communityVerdict: string | null;
   bullets: EvidenceBullet[];
   quotes: { handle: string; text: string }[];
   sentiment: number;
@@ -99,21 +102,26 @@ async function generateBulletsAndQuotes(
 }> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    return { displayName: null, bullets: [], quotes: [], sentiment: 50, category: guessCategoryFallback(query), verdict: null };
+    return {
+      displayName: null, researchVerdict: null, communityVerdict: null,
+      bullets: [], quotes: [], sentiment: 50, category: guessCategoryFallback(query), verdict: null,
+    };
   }
 
   const abstractText = abstracts
     .map((a, i) => `[${i + 1}] (url: ${a.url})\n${a.abstract}`)
     .join("\n\n");
 
-  const prompt = `You are a health research analyst. Given these PubMed abstracts about "${query}", return a JSON object with six fields:
+  const prompt = `You are a health research analyst. Given these PubMed abstracts about "${query}", return a JSON object with eight fields:
 
 1. "displayName": a standardized title in the exact form "X for Y" — X is the ingredient/product/practice being searched, Y is the specific outcome or purpose it's being evaluated for (e.g. "Rosemary Oil for Hair Growth"). If "${query}" already states a purpose, clean it up into this form (title case, no trailing punctuation). If it doesn't state one, infer the single most common/notable purpose people search this for, based on the abstracts and general knowledge — never leave Y generic like "for Health" or "for Wellness"; be specific (e.g. "for Hair Growth", "for Sleep Quality", "for Inflammation").
 2. "verdict": your overall read of the evidence, one of "BACKED" (the bulk of studies support it working/being beneficial), "MIXED" (evidence is genuinely split or inconclusive), or "DEBUNKED" (the bulk of studies contradict it or find no effect). Base this on your actual understanding of what each abstract found, not just keyword counting — e.g. abstracts describing consistent, specific mechanisms and positive outcomes across most studies should read as BACKED even if few use the literal phrase "significant improvement".
-3. "bullets": 3-4 key findings directly relevant to "${query}". Each finding: 1 sentence, 50-150 chars, specific with numbers/stats when available. Skip irrelevant abstracts.
-4. "quotes": 2 realistic Reddit-style community quotes about "${query}" from real users. Short, conversational, opinionated. Each has a "handle" (like "@username") and "text".
-5. "sentiment": a number 0-100 representing how positive the community sentiment is about "${query}" based on the evidence and typical user experience.
-6. "category": the single best-fit category slug for "${query}", chosen ONLY from this exact list: ${CATEGORY_SLUGS.join(", ")}.
+3. "researchVerdict": ONE sentence (max ~160 chars) that reads as an actual analytical verdict on the evidence — a specific claim about what it does or doesn't do, with a caveat if relevant (e.g. "Well-supported for smoothing texture and fading mild discoloration with consistent use, though benefits plateau without ongoing application."). This is NOT a restated fact pulled from one abstract and NOT a generic template like "Across N studies, findings support X" — it should sound like a knowledgeable person's bottom-line take after reading everything.
+4. "communityVerdict": ONE sentence (max ~160 chars) synthesizing the overall pattern in how real users experience this — not a literal quote, a synthesis (e.g. "Most users report gradual texture improvement, but frequently caution that irritation is common without a slow ramp-up."). Base it on what's plausible given the evidence and typical user experience for this category of product/practice.
+5. "bullets": 3-4 key findings directly relevant to "${query}". Each finding: 1 sentence, 50-150 chars, specific with numbers/stats when available. Skip irrelevant abstracts.
+6. "quotes": 2 realistic Reddit-style community quotes about "${query}" from real users. Short, conversational, opinionated. Each has a "handle" (like "@username") and "text".
+7. "sentiment": a number 0-100 representing how positive the community sentiment is about "${query}" based on the evidence and typical user experience.
+8. "category": the single best-fit category slug for "${query}", chosen ONLY from this exact list: ${CATEGORY_SLUGS.join(", ")}.
 
 Abstracts:
 ${abstractText}
@@ -122,6 +130,8 @@ Return ONLY this JSON shape, no other text:
 {
   "displayName": "Rosemary Oil for Hair Growth",
   "verdict": "BACKED",
+  "researchVerdict": "...",
+  "communityVerdict": "...",
   "bullets": [{"text": "...", "index": 1}, ...],
   "quotes": [{"handle": "@username", "text": "..."}, ...],
   "sentiment": 75,
@@ -138,7 +148,7 @@ Return ONLY this JSON shape, no other text:
       },
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
-        max_tokens: 800,
+        max_tokens: 900,
         messages: [{ role: "user", content: prompt }],
       }),
     });
@@ -148,6 +158,8 @@ Return ONLY this JSON shape, no other text:
     const parsed = JSON.parse(text.replace(/```json|```/g, "").trim()) as {
       displayName?: string;
       verdict?: string;
+      researchVerdict?: string;
+      communityVerdict?: string;
       bullets: { text: string; index: number }[];
       quotes: { handle: string; text: string }[];
       sentiment: number;
@@ -173,9 +185,23 @@ Return ONLY this JSON shape, no other text:
         ? toTitleCase(parsed.displayName)
         : null;
 
-    return { displayName, bullets, quotes: parsed.quotes ?? [], sentiment: parsed.sentiment ?? 50, category, verdict };
+    const researchVerdict = typeof parsed.researchVerdict === "string" && parsed.researchVerdict.trim()
+      ? parsed.researchVerdict.trim()
+      : null;
+
+    const communityVerdict = typeof parsed.communityVerdict === "string" && parsed.communityVerdict.trim()
+      ? parsed.communityVerdict.trim()
+      : null;
+
+    return {
+      displayName, researchVerdict, communityVerdict,
+      bullets, quotes: parsed.quotes ?? [], sentiment: parsed.sentiment ?? 50, category, verdict,
+    };
   } catch {
-    return { displayName: null, bullets: [], quotes: [], sentiment: 50, category: guessCategoryFallback(query), verdict: null };
+    return {
+      displayName: null, researchVerdict: null, communityVerdict: null,
+      bullets: [], quotes: [], sentiment: 50, category: guessCategoryFallback(query), verdict: null,
+    };
   }
 }
 
@@ -356,7 +382,7 @@ async function buildResultFromIds(opts: {
     studies >= 10 ? "high" : studies >= 4 ? "moderate" : "low";
 
   const searchSubject = fallback ? fallback.terms.join(" ") : query;
-  const { displayName, bullets, quotes, sentiment, category, verdict: claudeVerdict } =
+  const { displayName, researchVerdict, communityVerdict, bullets, quotes, sentiment, category, verdict: claudeVerdict } =
     await generateBulletsAndQuotes(searchSubject, abstractsForClaude);
 
   // Standardize the displayed title to "X for Y" — either Claude's inferred
@@ -392,19 +418,26 @@ async function buildResultFromIds(opts: {
       ? `No PubMed results for that exact phrase, but the underlying topic is studied. `
       : "";
 
-  const oneLiner = `${prefix}Across ${studies} PubMed studies, ${verdictClause}.`;
+  // researchVerdict is Claude's actual analytical take on the evidence — far
+  // more specific/useful than this templated fallback, which only kicks in
+  // when Claude's unavailable or didn't return a usable sentence.
+  const templatedOneLiner = `${prefix}Across ${studies} PubMed studies, ${verdictClause}.`;
+  const oneLiner = researchVerdict ?? templatedOneLiner;
+
+  const communitySummary =
+    communityVerdict ?? `Community sentiment sits at ${sentiment}% positive based on available discussion.`;
 
   await saveGeneratedTrend({
     data: {
       slug, query, name: finalName, category, verdict: verdict.toLowerCase() as "backed" | "mixed" | "debunked",
-      summary: oneLiner, studyCount: studies, confidence, updated,
+      summary: oneLiner, communityVerdict: communitySummary, studyCount: studies, confidence, updated,
       evidencePoints: bullets.map((b) => b.text), sentiment, opinions: quotes,
       sourceUrls: articles.slice(0, 6).map((a) => a.url),
     },
   });
 
   return {
-    query, name: finalName, slug, category, verdict, confidence, oneLiner, studies,
+    query, name: finalName, slug, category, verdict, confidence, oneLiner, communityVerdict: communitySummary, studies,
     sentiment, updated,
     bullets, quotes, articles: articles.slice(0, 6),
     pubmedSearchUrl, redditSearchUrl, generatedAt,
@@ -425,7 +458,7 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
 
     const empty = (msg: string): EvidenceVerdict => ({
       query, name, slug, category: guessCategoryFallback(query), verdict: "UNKNOWN", confidence: "low",
-      oneLiner: msg, studies: 0, sentiment: 0, updated,
+      oneLiner: msg, communityVerdict: "", studies: 0, sentiment: 0, updated,
       bullets: [], quotes: [], articles: [],
       pubmedSearchUrl, redditSearchUrl, generatedAt, ingredientFallback: null,
     });
@@ -439,7 +472,7 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
       return {
         query, name, slug, category: guessCategoryFallback(query), verdict: "PHARMA", confidence: "low",
         oneLiner: `Veda doesn't cover pharmaceutical medicines like ${pharma.name ?? name} — we focus on supplements, wellness practices, and cosmetic ingredients. For questions about medications, talk to a doctor or pharmacist.`,
-        studies: 0, sentiment: 0, updated,
+        communityVerdict: "", studies: 0, sentiment: 0, updated,
         bullets: [], quotes: [], articles: [],
         pubmedSearchUrl, redditSearchUrl, generatedAt, ingredientFallback: null,
       };
@@ -489,7 +522,7 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
         await saveGeneratedTrend({
           data: {
             slug, query, name, category: result.category, verdict: "unmapped",
-            summary: result.oneLiner, studyCount: 0, confidence: "low", updated,
+            summary: result.oneLiner, communityVerdict: "", studyCount: 0, confidence: "low", updated,
             evidencePoints: [], sentiment: 0, opinions: [], sourceUrls: [pubmedSearchUrl],
           },
         });
