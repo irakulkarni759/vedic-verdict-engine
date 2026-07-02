@@ -81,7 +81,7 @@ function Nav() {
             veda
           </span>
           <span style={{ color: "var(--muted-ink)", fontFamily: "var(--font-display)", fontSize: 26, lineHeight: 1, display: "inline-flex", alignItems: "center", height: "34px", position: "relative", top: "4px" }}>
-            वेद
+            वेदा
           </span>
         </Link>
         <div className="hidden md:flex items-center gap-3 font-label" style={{ fontSize: 10, color: "var(--ink)" }}>
@@ -468,7 +468,7 @@ function Footer() {
         <div className="flex items-baseline gap-2">
           <span style={{ color: "var(--terracotta)" }}>◆</span>
           <span className="font-display text-xl" style={{ color: "var(--ink)" }}>veda</span>
-          <span style={{ color: "var(--muted-ink)", fontFamily: "var(--font-display)" }} className="text-base">वेद</span>
+          <span style={{ color: "var(--muted-ink)", fontFamily: "var(--font-display)" }} className="text-base">वेदा</span>
         </div>
         <p className="font-label" style={{ color: "var(--muted-ink)", fontSize: 10 }}>
           EVIDENCE OVER ALGORITHM · EST 2026
