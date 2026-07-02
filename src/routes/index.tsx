@@ -75,7 +75,7 @@ function Veda() {
   }
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: "var(--parchment)" }}>
+    <div className="flex min-h-screen flex-col" style={{ backgroundColor: "var(--parchment)" }}>
       <Nav />
       <Hero query={query} setQuery={setQuery} onSubmit={submit} count={count} trending={trendingRow} />
       <WavyDivider from="var(--parchment)" to="var(--ink)" />
@@ -289,8 +289,8 @@ function Stats() {
   ];
 
   return (
-    <section style={{ backgroundColor: "var(--ink)" }} className="py-8 sm:py-14">
-      <div className="mx-auto grid max-w-[1200px] grid-cols-3 gap-2 px-3 sm:gap-0 md:px-8">
+    <section style={{ backgroundColor: "var(--ink)" }} className="flex flex-1 items-center py-8 sm:py-14">
+      <div className="mx-auto grid w-full max-w-[1200px] grid-cols-3 gap-2 px-3 sm:gap-0 md:px-8">
         {stats.map((s, i) => (
           <div
             key={i}
