@@ -136,14 +136,11 @@ function Hero({
   count: number;
   trending: { slug: string; name: string }[];
 }) {
-  const archPath =
-    "M 60 360 L 60 200 C 60 120, 130 60, 220 30 L 220 18 L 240 30 L 240 18 L 260 30 C 350 60, 420 120, 420 200 L 420 360";
-
   return (
-    <section className="relative sm:min-h-screen">
+    <section className="relative">
       <div
-        className="relative z-10 flex flex-col items-center justify-center px-4 pb-6 sm:min-h-screen sm:pb-12"
-        style={{ paddingTop: "clamp(1.5rem, 6vh, 10rem)" }}
+        className="relative z-10 flex flex-col items-center justify-center px-4 pb-6 sm:pb-10"
+        style={{ paddingTop: "clamp(1.25rem, 3.5vh, 4rem)" }}
       >
         <p
           className="font-label text-center"
@@ -159,7 +156,7 @@ function Hero({
         <h1
           className="font-display text-center leading-[0.95] mt-2 sm:mt-3"
           style={{
-            fontSize: "clamp(34px, 9vw, 112px)",
+            fontSize: "clamp(34px, 9vw, 96px)",
             color: "var(--ink)",
             letterSpacing: "-0.02em",
             animation: "fade-up 1.2s ease-out 0.2s both",
@@ -169,7 +166,7 @@ function Hero({
         </h1>
 
         <p
-          className="mt-3 sm:mt-6 max-w-xl text-center leading-snug"
+          className="mt-3 sm:mt-5 max-w-xl text-center leading-snug"
           style={{
             color: "var(--ink)",
             fontSize: "clamp(13px, 3.4vw, 16px)",
@@ -182,59 +179,49 @@ function Hero({
           We read the research papers and the Reddit threads so you don't have to.{"\n"}
         </p>
 
-
-
-
         <div
-          className="relative mt-3 sm:mt-6"
+          className="relative mt-5 sm:mt-7"
           style={{
-            width: "min(480px, 64vw)",
+            width: "min(480px, 90vw)",
             animation: "fade-up 1.2s ease-out 1.0s both",
           }}
         >
-          <ArchSVG archPath={archPath} />
-
-          <div
-            className="absolute left-1/2 -translate-x-1/2"
-            style={{ bottom: "12%", width: "82%" }}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              onSubmit();
+            }}
+            className="group flex items-center gap-2 rounded-full px-4 py-3 shadow-[0_10px_30px_rgba(27,52,72,0.08)] transition-shadow"
+            style={{ backgroundColor: "var(--parchment-deep)" }}
           >
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                onSubmit();
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: "var(--muted-ink)" }}>
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" strokeLinecap="round" />
+            </svg>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="try 'creatine for muscle growth'..."
+              className="flex-1 bg-transparent outline-none placeholder:opacity-70"
+              style={{ color: "var(--ink)", fontSize: 15, fontWeight: 300 }}
+            />
+            <button
+              type="submit"
+              className="rounded-full px-3 py-1.5 font-label transition-opacity hover:opacity-90"
+              style={{
+                backgroundColor: "var(--ink)",
+                color: "var(--parchment)",
+                fontSize: 11,
+                letterSpacing: "0.14em",
               }}
-              className="group flex items-center gap-2 rounded-full px-4 py-3 transition-shadow"
-              style={{ backgroundColor: "var(--parchment-deep)" }}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: "var(--muted-ink)" }}>
-                <circle cx="11" cy="11" r="7" />
-                <path d="m20 20-3.5-3.5" strokeLinecap="round" />
-              </svg>
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="try 'creatine for muscle growth'..."
-                className="flex-1 bg-transparent outline-none placeholder:opacity-70"
-                style={{ color: "var(--ink)", fontSize: 15, fontWeight: 300 }}
-              />
-              <button
-                type="submit"
-                className="rounded-full px-3 py-1.5 font-label transition-opacity hover:opacity-90"
-                style={{
-                  backgroundColor: "var(--ink)",
-                  color: "var(--parchment)",
-                  fontSize: 11,
-                  letterSpacing: "0.14em",
-                }}
-              >
-                LOOK IT UP →
-              </button>
-            </form>
-          </div>
+              LOOK IT UP →
+            </button>
+          </form>
         </div>
 
         <div
-          className="mt-3 sm:mt-5 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-4 text-center"
+          className="mt-4 sm:mt-6 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-4 text-center"
           style={{ animation: "fade-up 1.2s ease-out 1.4s both" }}
         >
           <span className="font-label" style={{ color: "var(--terracotta)", fontSize: 10 }}>
@@ -258,10 +245,10 @@ function Hero({
         </div>
 
         <div
-          className="mt-2 sm:mt-5 text-center font-display"
+          className="mt-3 sm:mt-4 text-center font-display"
           style={{
             color: "var(--ink)",
-            fontSize: "clamp(18px, 5vw, 28px)",
+            fontSize: "clamp(18px, 5vw, 26px)",
             animation: "fade-up 1.2s ease-out 1.6s both",
           }}
         >
@@ -271,81 +258,6 @@ function Hero({
     </section>
   );
 }
-
-function ArchSVG({ archPath }: { archPath: string }) {
-  const pathRef = useRef<SVGPathElement | null>(null);
-  const [len, setLen] = useState(1800);
-
-  useEffect(() => {
-    if (pathRef.current) setLen(pathRef.current.getTotalLength());
-  }, []);
-
-  return (
-    <svg viewBox="0 0 480 380" className="w-full h-auto" style={{ overflow: "visible" }}>
-      <path
-        d={archPath}
-        fill="none"
-        stroke="var(--ink)"
-        strokeOpacity="0.18"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        style={{
-          strokeDasharray: len,
-          strokeDashoffset: len,
-          animation: `draw 2.8s ease-out 0.4s forwards`,
-        }}
-      />
-      <path
-        ref={pathRef}
-        d={archPath}
-        fill="none"
-        stroke="var(--ink)"
-        strokeOpacity="0.85"
-        strokeWidth="1"
-        strokeLinecap="round"
-        style={{
-          strokeDasharray: len,
-          strokeDashoffset: len,
-          animation: `draw 2.8s ease-out 0.4s forwards`,
-        }}
-      />
-      <path
-        d="M 60 360 C 180 380, 300 380, 420 360"
-        fill="none"
-        stroke="var(--ink)"
-        strokeOpacity="0.5"
-        strokeWidth="1"
-        strokeLinecap="round"
-        style={{
-          strokeDasharray: 500,
-          strokeDashoffset: 500,
-          animation: `draw 1.6s ease-out 2.6s forwards`,
-        }}
-      />
-      {[
-        [105, 250],
-        [85, 180],
-        [140, 105],
-        [340, 105],
-        [395, 180],
-        [375, 250],
-      ].map(([cx, cy], i) => (
-        <circle
-          key={i}
-          cx={cx}
-          cy={cy}
-          r="2"
-          fill="var(--terracotta)"
-          style={{ opacity: 0, animation: `bloom 0.8s ease-out ${2.8 + i * 0.1}s forwards` }}
-        />
-      ))}
-    </svg>
-  );
-}
-
-
-
-
 
 function CountUp({ value, duration = 2400 }: { value: number; duration?: number }) {
   const [display, setDisplay] = useState(value);
@@ -397,7 +309,7 @@ function Stats() {
   ];
 
   return (
-    <section style={{ backgroundColor: "var(--ink)" }} className="py-8 sm:py-20">
+    <section style={{ backgroundColor: "var(--ink)" }} className="py-8 sm:py-14">
       <div className="mx-auto grid max-w-[1200px] grid-cols-3 gap-2 px-3 sm:gap-0 md:px-8">
         {stats.map((s, i) => (
           <div
