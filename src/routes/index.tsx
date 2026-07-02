@@ -1,10 +1,16 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { CATEGORIES, TRENDS, trendBySlug } from "@/lib/trends";
-import { getGeneratedTrendsMeta } from "@/lib/generatedTrends.functions";
+import { getGeneratedTrendsMeta, getTrendingSearches } from "@/lib/generatedTrends.functions";
 
 export const Route = createFileRoute("/")({
-  loader: async () => getGeneratedTrendsMeta(),
+  loader: async () => {
+    const [meta, trending] = await Promise.all([
+      getGeneratedTrendsMeta(),
+      getTrendingSearches(),
+    ]);
+    return { ...meta, trending };
+  },
   head: () => ({
     meta: [
       { title: "Veda — Is it actually worth it?" },
@@ -23,12 +29,24 @@ export const Route = createFileRoute("/")({
   component: Veda,
 });
 
-const TRENDING_SLUGS = ["rosemary-oil", "collagen-peptides", "ashwagandha", "slugging"];
+// Used to fill out the "trying now" row before enough real search volume
+// has accumulated (or if Supabase is briefly unreachable).
+const FALLBACK_TRENDING_SLUGS = ["rosemary-oil", "collagen-peptides", "ashwagandha", "slugging"];
 
 function Veda() {
-  const { count: generatedCount } = Route.useLoaderData() as {
+  const { count: generatedCount, trending } = Route.useLoaderData() as {
     count: number;
+    trending: { slug: string; name: string }[];
   };
+
+  const trendingRow = [
+    ...trending,
+    ...FALLBACK_TRENDING_SLUGS
+      .filter((slug) => !trending.some((t) => t.slug === slug))
+      .map((slug) => trendBySlug(slug))
+      .filter((t): t is NonNullable<typeof t> => !!t)
+      .map((t) => ({ slug: t.slug, name: t.name })),
+  ].slice(0, 4);
 
   const [count, setCount] = useState<number>(TRENDS.length + generatedCount);
   const [query, setQuery] = useState("");
@@ -59,7 +77,7 @@ function Veda() {
   return (
     <div className="min-h-screen" style={{ backgroundColor: "var(--parchment)" }}>
       <Nav />
-      <Hero query={query} setQuery={setQuery} onSubmit={submit} count={count} />
+      <Hero query={query} setQuery={setQuery} onSubmit={submit} count={count} trending={trendingRow} />
       <WavyDivider from="var(--parchment)" to="var(--ink)" />
       <Stats />
       <WavyDivider from="var(--ink)" to="var(--parchment)" />
@@ -110,11 +128,13 @@ function Hero({
   setQuery,
   onSubmit,
   count,
+  trending,
 }: {
   query: string;
   setQuery: (s: string) => void;
   onSubmit: (n?: string) => void;
   count: number;
+  trending: { slug: string; name: string }[];
 }) {
   const archPath =
     "M 60 360 L 60 200 C 60 120, 130 60, 220 30 L 220 18 L 240 30 L 240 18 L 260 30 C 350 60, 420 120, 420 200 L 420 360";
@@ -217,25 +237,21 @@ function Hero({
           <span className="font-label" style={{ color: "var(--terracotta)", fontSize: 10 }}>
             TRYING NOW
           </span>
-          {TRENDING_SLUGS.map((slug, i) => {
-            const t = trendBySlug(slug);
-            if (!t) return null;
-            return (
-              <span key={slug} className="flex items-center gap-3">
-                <Link
-                  to="/trend/$slug"
-                  params={{ slug }}
-                  className="hover:opacity-60 transition-opacity"
-                  style={{ color: "var(--ink)", fontSize: 15, fontWeight: 300 }}
-                >
-                  {t.name.toLowerCase()}
-                </Link>
-                {i < TRENDING_SLUGS.length - 1 && (
-                  <span style={{ color: "var(--muted-ink)", opacity: 0.5 }}>·</span>
-                )}
-              </span>
-            );
-          })}
+          {trending.map((t, i) => (
+            <span key={t.slug} className="flex items-center gap-3">
+              <Link
+                to="/trend/$slug"
+                params={{ slug: t.slug }}
+                className="hover:opacity-60 transition-opacity"
+                style={{ color: "var(--ink)", fontSize: 15, fontWeight: 300 }}
+              >
+                {t.name.toLowerCase()}
+              </Link>
+              {i < trending.length - 1 && (
+                <span style={{ color: "var(--muted-ink)", opacity: 0.5 }}>·</span>
+              )}
+            </span>
+          ))}
         </div>
 
         <div

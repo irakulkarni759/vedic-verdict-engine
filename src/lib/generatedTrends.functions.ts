@@ -48,6 +48,7 @@ type GeneratedTrendRow = {
   related_ids: string[];
   source_urls: string[];
   created_at: string;
+  search_count: number;
 };
 
 export type SaveGeneratedTrendInput = {
@@ -91,6 +92,16 @@ export const saveGeneratedTrend = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     try {
       const supabase = getSupabaseServiceClient();
+
+      // Read the current count first so a re-search of the same query adds
+      // to it instead of resetting it — this is what "trending" is based on.
+      const { data: existing } = await supabase
+        .from("generated_trends")
+        .select("search_count")
+        .eq("id", data.slug)
+        .maybeSingle();
+      const searchCount = (existing?.search_count ?? 0) + 1;
+
       await supabase.from("generated_trends").upsert(
         {
           id: data.slug,
@@ -107,6 +118,7 @@ export const saveGeneratedTrend = createServerFn({ method: "POST" })
           opinions: data.opinions,
           related_ids: [],
           source_urls: data.sourceUrls,
+          search_count: searchCount,
         },
         { onConflict: "id" },
       );
@@ -154,6 +166,33 @@ export const getGeneratedTrendBySlug = createServerFn({ method: "GET" })
       return null;
     }
   });
+
+/**
+ * Top searched-more-than-once queries, for the homepage "trying now" row.
+ * Requires search_count >= 2 so it reflects genuine repeat interest rather
+ * than just whatever was searched most recently.
+ */
+export const getTrendingSearches = createServerFn({ method: "GET" }).handler(
+  async (): Promise<{ slug: string; name: string }[]> => {
+    try {
+      const supabase = getSupabaseServiceClient();
+      const { data: rows } = await supabase
+        .from("generated_trends")
+        .select("id, name, search_count")
+        .neq("verdict", "unmapped")
+        .gte("search_count", 2)
+        .order("search_count", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(6);
+      return ((rows as { id: string; name: string; search_count: number }[]) ?? []).map((r) => ({
+        slug: r.id,
+        name: r.name,
+      }));
+    } catch {
+      return [];
+    }
+  },
+);
 
 /** Total searched count + a handful of recent ones, for the homepage. */
 export const getGeneratedTrendsMeta = createServerFn({ method: "GET" }).handler(
