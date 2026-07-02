@@ -50,7 +50,13 @@ function Veda() {
 
   const [count, setCount] = useState<number>(TRENDS.length + generatedCount);
   const [query, setQuery] = useState("");
+  const [searchError, setSearchError] = useState<string | null>(null);
   const navigate = useNavigate();
+
+  function updateQuery(v: string) {
+    setQuery(v);
+    if (searchError) setSearchError(null);
+  }
 
   function submit(name?: string) {
     const q = (name ?? query).trim();
@@ -68,7 +74,16 @@ function Veda() {
       return;
     }
 
+    // Curated trends already have a purpose baked into their slug, but for
+    // anything hitting the live pipeline we need the person to state one —
+    // otherwise the verdict is guessing what they actually want to know.
+    if (!/\bfor\b/i.test(q)) {
+      setSearchError(`What's it for? Try "${q} for ___" so we know what to evaluate.`);
+      return;
+    }
+
     // Route to a freshly-generated card
+    setSearchError(null);
     setCount((c) => c + 1);
     setQuery("");
     navigate({ to: "/search/$query", params: { query: q } });
@@ -77,7 +92,7 @@ function Veda() {
   return (
     <div className="flex min-h-dvh flex-col pt-6 sm:pt-12" style={{ backgroundColor: "var(--parchment)" }}>
       <Nav />
-      <Hero query={query} setQuery={setQuery} onSubmit={submit} count={count} trending={trendingRow} />
+      <Hero query={query} setQuery={updateQuery} onSubmit={submit} count={count} trending={trendingRow} searchError={searchError} />
       <WavyDivider from="var(--parchment)" to="var(--ink)" />
       <Stats />
     </div>
@@ -151,12 +166,14 @@ function Hero({
   onSubmit,
   count,
   trending,
+  searchError,
 }: {
   query: string;
   setQuery: (s: string) => void;
   onSubmit: (n?: string) => void;
   count: number;
   trending: { slug: string; name: string }[];
+  searchError: string | null;
 }) {
   return (
     <section className="relative">
@@ -203,7 +220,10 @@ function Hero({
               onSubmit();
             }}
             className="group flex items-center gap-2 rounded-full px-4 py-3 shadow-[0_10px_30px_rgba(27,52,72,0.08)] transition-shadow"
-            style={{ backgroundColor: "var(--parchment-deep)" }}
+            style={{
+              backgroundColor: "var(--parchment-deep)",
+              outline: searchError ? "1.5px solid var(--verdict-debunked)" : undefined,
+            }}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: "var(--muted-ink)" }}>
               <circle cx="11" cy="11" r="7" />
@@ -230,19 +250,32 @@ function Hero({
             </button>
           </form>
 
-          <p
-            className="mt-3 text-center"
-            style={{
-              color: "var(--muted-ink)",
-              fontSize: "clamp(10.5px, 2.6vw, 12px)",
-              fontWeight: 300,
-              animation: "fade-up 1.2s ease-out 1.2s both",
-            }}
-          >
-            Search "ingredient/practice for purpose" — like{" "}
-            <span style={{ fontStyle: "italic" }}>rosemary oil for hair growth</span> — so we know
-            what evidence to look for.
-          </p>
+          {searchError ? (
+            <p
+              className="mt-3 text-center"
+              style={{
+                color: "var(--verdict-debunked)",
+                fontSize: "clamp(10.5px, 2.6vw, 12px)",
+                fontWeight: 400,
+              }}
+            >
+              {searchError}
+            </p>
+          ) : (
+            <p
+              className="mt-3 text-center"
+              style={{
+                color: "var(--muted-ink)",
+                fontSize: "clamp(10.5px, 2.6vw, 12px)",
+                fontWeight: 300,
+                animation: "fade-up 1.2s ease-out 1.2s both",
+              }}
+            >
+              Search "ingredient/practice for purpose" — like{" "}
+              <span style={{ fontStyle: "italic" }}>rosemary oil for hair growth</span> — so we know
+              what evidence to look for.
+            </p>
+          )}
         </div>
 
         <div
