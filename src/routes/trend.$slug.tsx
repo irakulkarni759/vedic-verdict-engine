@@ -98,12 +98,6 @@ function TrendPage() {
           <p className="mt-4 max-w-3xl text-base leading-7 text-[var(--ink)] sm:text-lg">
             {trend.oneLiner}
           </p>
-
-          <div className="mt-6 grid grid-cols-3 gap-7">
-            <Stat label="STUDIES" value={String(trend.studies)} />
-            <Stat label="SENTIMENT" value={`${trend.sentiment}%`} />
-            <Stat label="UPDATED" value={trend.updated} />
-          </div>
         </section>
 
         <section className="mt-8">
@@ -227,15 +221,6 @@ function SectionHeader({
       >
         {right}
       </a>
-    </div>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="font-label mb-3 text-xs text-[var(--muted-ink)]">{label}</p>
-      <p className="font-mono text-lg text-[var(--ink)]">{value}</p>
     </div>
   );
 }
