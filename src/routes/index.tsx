@@ -75,7 +75,7 @@ function Veda() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col" style={{ backgroundColor: "var(--parchment)" }}>
+    <div className="flex min-h-screen flex-col pt-3 sm:pt-6" style={{ backgroundColor: "var(--parchment)" }}>
       <Nav />
       <Hero query={query} setQuery={setQuery} onSubmit={submit} count={count} trending={trendingRow} />
       <WavyDivider from="var(--parchment)" to="var(--ink)" />
@@ -162,7 +162,7 @@ function Hero({
     <section className="relative">
       <div
         className="relative z-10 flex flex-col items-center justify-center px-4 pb-6 sm:pb-10"
-        style={{ paddingTop: "clamp(1.25rem, 3.5vh, 4rem)" }}
+        style={{ paddingTop: "clamp(1.5rem, 4.5vh, 4.5rem)" }}
       >
         <h1
           className="font-display text-center leading-[0.95]"
