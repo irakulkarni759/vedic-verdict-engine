@@ -480,7 +480,7 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
 
     try {
       const esearch = await fetch(
-        `${EUTILS}/esearch.fcgi?db=pubmed&retmode=json&retmax=8&sort=relevance&term=${encodeURIComponent(query)}`,
+        `${EUTILS}/esearch.fcgi?db=pubmed&retmode=json&retmax=15&sort=relevance&term=${encodeURIComponent(query)}`,
       );
       if (!esearch.ok) return empty("Couldn't reach PubMed right now. Try again in a moment.");
 
@@ -497,7 +497,7 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
         if (fallback) {
           const fallbackTerm = fallback.terms.join(" OR ");
           const fallbackSearch = await fetch(
-            `${EUTILS}/esearch.fcgi?db=pubmed&retmode=json&retmax=8&sort=relevance&term=${encodeURIComponent(fallbackTerm)}`,
+            `${EUTILS}/esearch.fcgi?db=pubmed&retmode=json&retmax=15&sort=relevance&term=${encodeURIComponent(fallbackTerm)}`,
           );
 
           if (fallbackSearch.ok) {
