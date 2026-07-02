@@ -80,11 +80,11 @@ function AdminPage() {
     setStandardizeResult(`Updated ${res.updated} of ${res.total} trends (${res.skipped} already fine or skipped).`);
   }
 
-  async function backfillSummaries() {
+  async function backfillSummaries(force: boolean) {
     const pw = window.sessionStorage.getItem(SESSION_KEY) ?? password;
     setSummarizing(true);
     setSummarizeResult(null);
-    const res = await adminBackfillVerdictSummaries({ data: { password: pw } });
+    const res = await adminBackfillVerdictSummaries({ data: { password: pw, force } });
     setSummarizing(false);
     if (!res.ok) {
       setSummarizeResult(res.error ?? "Couldn't backfill summaries.");
@@ -174,15 +174,25 @@ function AdminPage() {
           <p className="mb-3 text-sm leading-6 text-[var(--ink)]">
             Rewrites the old templated summary into a real research verdict and fills in a community
             verdict for every stored trend, using each trend's existing evidence and quotes (no new
-            PubMed calls). Safe to re-run — trends that already have a community verdict are skipped.
+            PubMed calls). "Backfill" only fills in trends missing a community verdict. "Re-run all"
+            regenerates every trend regardless — use that after a prompt-wording change like this one.
           </p>
-          <button
-            onClick={backfillSummaries}
-            disabled={summarizing}
-            className="font-label rounded-full bg-[var(--ink)] px-5 py-2.5 text-xs text-white transition hover:translate-y-[-1px] disabled:opacity-40"
-          >
-            {summarizing ? "BACKFILLING…" : "BACKFILL SUMMARIES"}
-          </button>
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={() => backfillSummaries(false)}
+              disabled={summarizing}
+              className="font-label rounded-full bg-[var(--ink)] px-5 py-2.5 text-xs text-white transition hover:translate-y-[-1px] disabled:opacity-40"
+            >
+              {summarizing ? "WORKING…" : "BACKFILL MISSING"}
+            </button>
+            <button
+              onClick={() => backfillSummaries(true)}
+              disabled={summarizing}
+              className="font-label rounded-full border border-[var(--terracotta)] px-5 py-2.5 text-xs text-[var(--terracotta)] transition hover:bg-[var(--terracotta)]/10 disabled:opacity-40"
+            >
+              {summarizing ? "WORKING…" : "RE-RUN ALL"}
+            </button>
+          </div>
           {summarizeResult && (
             <p className="font-mono mt-3 text-xs text-[var(--muted-ink)]">{summarizeResult}</p>
           )}

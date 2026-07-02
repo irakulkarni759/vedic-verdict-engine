@@ -392,13 +392,15 @@ Return ONLY this JSON, no other text:
 }
 
 /**
- * Admin-only, one-time backfill: rewrites the templated `summary` into a
- * real research verdict and fills in `community_verdict` for every stored
- * trend. Skips rows that already have a non-empty community_verdict, so
- * re-running this is safe/cheap. Password-gated like comment moderation.
+ * Admin-only backfill: rewrites the templated `summary` into a real
+ * research verdict and fills in `community_verdict` for every stored
+ * trend. Skips rows that already have a non-empty community_verdict unless
+ * `force` is set, in which case every row is regenerated (e.g. after a
+ * prompt-wording change, to re-run with the new phrasing). Password-gated
+ * like comment moderation.
  */
 export const adminBackfillVerdictSummaries = createServerFn({ method: "POST" })
-  .inputValidator((d: { password: string }) => d)
+  .inputValidator((d: { password: string; force?: boolean }) => d)
   .handler(
     async ({ data }): Promise<{ ok: boolean; updated?: number; skipped?: number; total?: number; error?: string }> => {
       if (!checkAdminPassword(data.password)) return { ok: false, error: "Wrong password." };
@@ -419,7 +421,7 @@ export const adminBackfillVerdictSummaries = createServerFn({ method: "POST" })
           id: string; name: string; summary: string; community_verdict: string;
           evidence_points: string[]; opinions: { handle: string; text: string }[]; sentiment_score: number;
         }[]) {
-          if (row.community_verdict && row.community_verdict.trim()) {
+          if (!data.force && row.community_verdict && row.community_verdict.trim()) {
             skipped++;
             continue;
           }
