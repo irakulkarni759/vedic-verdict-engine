@@ -75,7 +75,7 @@ function Veda() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col pt-3 sm:pt-6" style={{ backgroundColor: "var(--parchment)" }}>
+    <div className="flex min-h-dvh flex-col pt-6 sm:pt-12" style={{ backgroundColor: "var(--parchment)" }}>
       <Nav />
       <Hero query={query} setQuery={setQuery} onSubmit={submit} count={count} trending={trendingRow} />
       <WavyDivider from="var(--parchment)" to="var(--ink)" />
@@ -91,7 +91,7 @@ function Nav() {
       style={{ backgroundColor: "color-mix(in oklab, var(--parchment) 92%, transparent)" }}
     >
       <div className="mx-auto max-w-[1400px]">
-        <div className="flex items-center justify-between gap-8 pl-4 pr-8 py-3 sm:py-5">
+        <div className="flex items-center justify-between gap-8 pl-4 pr-8 py-4 sm:py-6">
           <Link to="/" className="flex items-center gap-2">
             <span style={{ color: "var(--terracotta)", fontSize: 20, lineHeight: 1, display: "inline-flex", alignItems: "center", height: "34px" }}>◆</span>
             <span className="font-display text-[34px] leading-none" style={{ color: "var(--ink)" }}>
@@ -162,7 +162,7 @@ function Hero({
     <section className="relative">
       <div
         className="relative z-10 flex flex-col items-center justify-center px-4 pb-6 sm:pb-10"
-        style={{ paddingTop: "clamp(1.5rem, 4.5vh, 4.5rem)" }}
+        style={{ paddingTop: "clamp(2rem, 6vh, 6rem)" }}
       >
         <h1
           className="font-display text-center leading-[0.95]"
