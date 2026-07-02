@@ -124,9 +124,8 @@ function SearchPage() {
         </Link>
 
         {/* ── HERO CARD ── */}
-        <section className="rounded-[30px] border border-white/70 bg-[linear-gradient(135deg,#fff_0%,#fbf4e8_100%)] p-8 shadow-[0_22px_70px_rgba(27,52,72,0.08)] sm:p-12">
-          <div className="mb-7 flex items-start justify-between gap-4">
-            {/* FIX 1: no longer says "FRESH SEARCH · GENERATED FROM PUBMED" */}
+        <section className="rounded-[26px] border border-white/70 bg-[linear-gradient(135deg,#fff_0%,#fbf4e8_100%)] p-6 shadow-[0_22px_70px_rgba(27,52,72,0.08)] sm:p-8">
+          <div className="mb-5 flex items-start justify-between gap-4">
             <p className="font-label text-xs text-[var(--muted-ink)]">
               {isPharma ? "OUTSIDE OUR SCOPE" : isUnknown ? "NOT YET INDEXED" : "LIVE ANALYSIS · PUBMED"}
             </p>
@@ -143,40 +142,16 @@ function SearchPage() {
             </div>
           </div>
 
-          <h1 className="font-display max-w-4xl text-5xl leading-[0.95] tracking-[-0.04em] text-[var(--ink)] sm:text-7xl md:text-8xl">
+          <h1 className="font-display max-w-4xl text-4xl leading-[0.95] tracking-[-0.04em] text-[var(--ink)] sm:text-5xl md:text-6xl">
             {data.name}
           </h1>
 
-          <p className="mt-7 max-w-3xl text-lg leading-8 text-[var(--ink)] sm:text-xl">
+          <p className="mt-4 max-w-3xl text-base leading-7 text-[var(--ink)] sm:text-lg">
             {data.oneLiner}
           </p>
 
-          {/* FIX 2 + 3: buttons BEFORE stats, label renamed to "PUBMED RESEARCH" */}
-          {!isPharma && (
-            <div className="mt-8 flex flex-wrap gap-3">
-              <a
-                href={data.pubmedSearchUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-label rounded-full bg-[var(--ink)] px-5 py-3 text-xs text-white transition hover:translate-y-[-1px]"
-              >
-                PUBMED RESEARCH ↗
-              </a>
-
-              <a
-                href={data.redditSearchUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-label rounded-full bg-[var(--terracotta)] px-5 py-3 text-xs text-white transition hover:translate-y-[-1px]"
-              >
-                REDDIT THREADS ↗
-              </a>
-            </div>
-          )}
-
-          {/* Stats row after buttons */}
           {!isUnknown && !isPharma && (
-            <div className="mt-10 grid grid-cols-3 gap-7">
+            <div className="mt-6 grid grid-cols-3 gap-7">
               <Stat label="STUDIES" value={String(data.studies)} />
               <Stat label="SENTIMENT" value={`${data.sentiment}%`} />
               <Stat label="UPDATED" value={data.updated} />
@@ -186,7 +161,7 @@ function SearchPage() {
 
         {/* ── EVIDENCE BULLETS ── */}
         {data.bullets.length > 0 && (
-          <section className="mt-14">
+          <section className="mt-8">
             <SectionHeader
               left="WHAT THE RESEARCH SAYS"
               right="ALL ON PUBMED ↗"
@@ -225,7 +200,7 @@ function SearchPage() {
 
         {/* ── COMMUNITY SENTIMENT + QUOTES ── */}
         {data.quotes && data.quotes.length > 0 && (
-          <section className="mt-14">
+          <section className="mt-8">
             <SectionHeader
               left="WHAT PEOPLE SAY"
               right="READ THREADS ON REDDIT ↗"
