@@ -172,6 +172,12 @@ export function checkAdminPassword(password: string): boolean {
   return !!expected && password === expected;
 }
 
+export const adminCheckPassword = createServerFn({ method: "POST" })
+  .inputValidator((d: { password: string }) => d)
+  .handler(async ({ data }): Promise<{ ok: boolean }> => {
+    return { ok: checkAdminPassword(data.password) };
+  });
+
 export const adminListComments = createServerFn({ method: "POST" })
   .inputValidator((d: { password: string }) => d)
   .handler(async ({ data }): Promise<{ ok: boolean; comments?: AdminComment[]; error?: string }> => {

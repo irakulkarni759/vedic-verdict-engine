@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
-import { adminDeleteComment, adminListComments, type AdminComment } from "@/lib/comments.functions";
+import { adminCheckPassword, adminDeleteComment, adminListComments, type AdminComment } from "@/lib/comments.functions";
 import { adminStandardizeTrendNames } from "@/lib/generatedTrends.functions";
 
 export const Route = createFileRoute("/admin")({
@@ -21,27 +21,38 @@ function AdminPage() {
   const [standardizing, setStandardizing] = useState(false);
   const [standardizeResult, setStandardizeResult] = useState<string | null>(null);
 
-  async function load(pw: string) {
+  async function loadComments(pw: string) {
     setLoading(true);
-    setError(null);
     const res = await adminListComments({ data: { password: pw } });
     setLoading(false);
-
     if (!res.ok || !res.comments) {
-      setError(res.error ?? "Wrong password.");
+      setError(res.error ?? "Couldn't load comments.");
+      return;
+    }
+    setComments(res.comments);
+  }
+
+  async function login(pw: string) {
+    setError(null);
+    setLoading(true);
+    const check = await adminCheckPassword({ data: { password: pw } });
+    setLoading(false);
+    if (!check.ok) {
+      setError("Wrong password.");
       setAuthed(false);
       window.sessionStorage.removeItem(SESSION_KEY);
       return;
     }
-
-    setComments(res.comments);
     setAuthed(true);
     window.sessionStorage.setItem(SESSION_KEY, pw);
+    // Best-effort: comment loading failing (e.g. table not migrated yet)
+    // shouldn't lock the rest of the admin page.
+    void loadComments(pw);
   }
 
-  async function login(e: FormEvent) {
+  async function submitLogin(e: FormEvent) {
     e.preventDefault();
-    await load(password);
+    await login(password);
   }
 
   async function remove(id: string) {
@@ -72,7 +83,7 @@ function AdminPage() {
     const saved = window.sessionStorage.getItem(SESSION_KEY);
     if (saved) {
       setPassword(saved);
-      load(saved);
+      login(saved);
     }
   });
 
@@ -80,7 +91,7 @@ function AdminPage() {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[var(--parchment)] px-6">
         <form
-          onSubmit={login}
+          onSubmit={submitLogin}
           className="w-full max-w-sm rounded-[22px] border border-white/75 bg-white/90 p-8 shadow-[0_12px_35px_rgba(27,52,72,0.06)]"
         >
           <p className="font-label mb-4 text-xs text-[var(--sage)]">ADMIN</p>
@@ -115,7 +126,7 @@ function AdminPage() {
             {comments.length} COMMENT{comments.length === 1 ? "" : "S"}
           </p>
           <button
-            onClick={() => load(password)}
+            onClick={() => loadComments(window.sessionStorage.getItem(SESSION_KEY) ?? password)}
             className="font-label text-xs text-[var(--terracotta)] hover:opacity-70"
           >
             REFRESH
