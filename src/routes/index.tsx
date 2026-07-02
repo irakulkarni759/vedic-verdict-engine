@@ -80,8 +80,6 @@ function Veda() {
       <Hero query={query} setQuery={setQuery} onSubmit={submit} count={count} trending={trendingRow} />
       <WavyDivider from="var(--parchment)" to="var(--ink)" />
       <Stats />
-      <WavyDivider from="var(--ink)" to="var(--parchment)" />
-      <Footer />
     </div>
   );
 }
@@ -272,7 +270,7 @@ function CountUp({ value, duration = 2400 }: { value: number; duration?: number 
 
 function WavyDivider({ from, to }: { from: string; to: string }) {
   return (
-    <div style={{ backgroundColor: from, lineHeight: 0 }}>
+    <div style={{ backgroundColor: from, lineHeight: 0, marginBottom: -1 }}>
       <svg viewBox="0 0 1440 60" preserveAspectRatio="none" className="w-full" style={{ height: "clamp(36px, 6vw, 60px)", display: "block" }}>
         <path
           d="M0,30 C180,55 360,5 540,30 C720,55 900,5 1080,30 C1260,55 1440,5 1440,30 L1440,60 L0,60 Z"
@@ -374,24 +372,3 @@ function StatCountUp({ text }: { text: string }) {
   return <span ref={ref}>{started ? display : text.replace(/[\d]/g, "0")}</span>;
 }
 
-function Footer() {
-  return (
-    <footer
-      className="px-8 py-10"
-      style={{
-        backgroundColor: "var(--parchment)",
-      }}
-    >
-      <div className="mx-auto flex max-w-[1400px] flex-col items-center justify-between gap-4 text-center md:flex-row md:text-left">
-        <div className="flex items-baseline gap-2">
-          <span style={{ color: "var(--terracotta)" }}>◆</span>
-          <span className="font-display text-xl" style={{ color: "var(--ink)" }}>veda</span>
-          <span style={{ color: "var(--muted-ink)", fontFamily: "var(--font-display)" }} className="text-base">वेदा</span>
-        </div>
-        <p className="font-label" style={{ color: "var(--muted-ink)", fontSize: 10 }}>
-          EVIDENCE OVER ALGORITHM · EST 2026
-        </p>
-      </div>
-    </footer>
-  );
-}
