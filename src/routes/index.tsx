@@ -92,7 +92,7 @@ function Nav() {
       className="sticky top-0 z-40 backdrop-blur-[2px]"
       style={{ backgroundColor: "color-mix(in oklab, var(--parchment) 92%, transparent)" }}
     >
-      <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-8 pl-4 pr-8 py-5">
+      <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-8 pl-4 pr-8 py-3 sm:py-5">
         <Link to="/" className="flex items-center gap-2">
           <span style={{ color: "var(--terracotta)", fontSize: 20, lineHeight: 1, display: "inline-flex", alignItems: "center", height: "34px" }}>◆</span>
           <span className="font-display text-[34px] leading-none" style={{ color: "var(--ink)" }}>
@@ -140,8 +140,11 @@ function Hero({
     "M 60 360 L 60 200 C 60 120, 130 60, 220 30 L 220 18 L 240 30 L 240 18 L 260 30 C 350 60, 420 120, 420 200 L 420 360";
 
   return (
-    <section className="relative" style={{ minHeight: "100vh" }}>
-      <div className="relative z-10 flex min-h-screen flex-col items-center justify-center px-4 pb-12" style={{ paddingTop: "clamp(2rem, 12vh, 10rem)" }}>
+    <section className="relative sm:min-h-screen">
+      <div
+        className="relative z-10 flex flex-col items-center justify-center px-4 pb-6 sm:min-h-screen sm:pb-12"
+        style={{ paddingTop: "clamp(1.5rem, 6vh, 10rem)" }}
+      >
         <p
           className="font-label text-center"
           style={{
@@ -154,9 +157,9 @@ function Hero({
         </p>
 
         <h1
-          className="font-display text-center leading-[0.95] mt-3"
+          className="font-display text-center leading-[0.95] mt-2 sm:mt-3"
           style={{
-            fontSize: "clamp(44px, 8vw, 112px)",
+            fontSize: "clamp(34px, 9vw, 112px)",
             color: "var(--ink)",
             letterSpacing: "-0.02em",
             animation: "fade-up 1.2s ease-out 0.2s both",
@@ -166,10 +169,10 @@ function Hero({
         </h1>
 
         <p
-          className="mt-6 max-w-xl text-center leading-snug"
+          className="mt-3 sm:mt-6 max-w-xl text-center leading-snug"
           style={{
             color: "var(--ink)",
-            fontSize: 16,
+            fontSize: "clamp(13px, 3.4vw, 16px)",
             fontWeight: 300,
             animation: "fade-up 1.2s ease-out 0.6s both",
             whiteSpace: "pre-line",
@@ -183,9 +186,9 @@ function Hero({
 
 
         <div
-          className="relative mt-6"
+          className="relative mt-3 sm:mt-6"
           style={{
-            width: "min(480px, 92vw)",
+            width: "min(480px, 64vw)",
             animation: "fade-up 1.2s ease-out 1.0s both",
           }}
         >
@@ -231,7 +234,7 @@ function Hero({
         </div>
 
         <div
-          className="mt-5 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-4 text-center"
+          className="mt-3 sm:mt-5 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-4 text-center"
           style={{ animation: "fade-up 1.2s ease-out 1.4s both" }}
         >
           <span className="font-label" style={{ color: "var(--terracotta)", fontSize: 10 }}>
@@ -243,7 +246,7 @@ function Hero({
                 to="/trend/$slug"
                 params={{ slug: t.slug }}
                 className="hover:opacity-60 transition-opacity"
-                style={{ color: "var(--ink)", fontSize: 15, fontWeight: 300 }}
+                style={{ color: "var(--ink)", fontSize: "clamp(12px, 3.2vw, 15px)", fontWeight: 300 }}
               >
                 {t.name.toLowerCase()}
               </Link>
@@ -255,10 +258,10 @@ function Hero({
         </div>
 
         <div
-          className="mt-5 text-center font-display"
+          className="mt-2 sm:mt-5 text-center font-display"
           style={{
             color: "var(--ink)",
-            fontSize: 28,
+            fontSize: "clamp(18px, 5vw, 28px)",
             animation: "fade-up 1.2s ease-out 1.6s both",
           }}
         >
@@ -369,7 +372,7 @@ function CountUp({ value, duration = 2400 }: { value: number; duration?: number 
 function WavyDivider({ from, to }: { from: string; to: string }) {
   return (
     <div style={{ backgroundColor: from, lineHeight: 0 }}>
-      <svg viewBox="0 0 1440 60" preserveAspectRatio="none" className="w-full" style={{ height: 60, display: "block" }}>
+      <svg viewBox="0 0 1440 60" preserveAspectRatio="none" className="w-full" style={{ height: "clamp(28px, 6vw, 60px)", display: "block" }}>
         <path
           d="M0,30 C180,55 360,5 540,30 C720,55 900,5 1080,30 C1260,55 1440,5 1440,30 L1440,60 L0,60 Z"
           fill={to}
@@ -394,25 +397,31 @@ function Stats() {
   ];
 
   return (
-    <section style={{ backgroundColor: "var(--ink)" }} className="py-20">
-      <div className="mx-auto grid max-w-[1200px] grid-cols-1 gap-12 px-8 md:grid-cols-3 md:gap-0">
+    <section style={{ backgroundColor: "var(--ink)" }} className="py-8 sm:py-20">
+      <div className="mx-auto grid max-w-[1200px] grid-cols-3 gap-2 px-3 sm:gap-0 md:px-8">
         {stats.map((s, i) => (
           <div
             key={i}
-            className="px-8 text-center"
+            className="px-1.5 text-center sm:px-8"
             style={{
               borderLeft: i > 0 ? "0.5px solid color-mix(in oklab, var(--parchment) 25%, transparent)" : undefined,
             }}
           >
             <div
               className="font-display leading-none"
-              style={{ color: "var(--parchment)", fontSize: s.size }}
+              style={{ color: "var(--parchment)", fontSize: `clamp(20px, 7vw, ${s.size}px)` }}
             >
               <StatCountUp text={s.num} />
             </div>
             <p
-              className="mx-auto mt-5 max-w-[260px]"
-              style={{ color: "var(--parchment)", fontSize: 13, fontWeight: 300, lineHeight: 1.5, opacity: 0.85 }}
+              className="mx-auto mt-2 sm:mt-5 max-w-[260px]"
+              style={{
+                color: "var(--parchment)",
+                fontSize: "clamp(8.5px, 2.4vw, 13px)",
+                fontWeight: 300,
+                lineHeight: 1.35,
+                opacity: 0.85,
+              }}
             >
               {s.label}
             </p>
