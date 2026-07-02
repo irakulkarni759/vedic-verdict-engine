@@ -42,6 +42,7 @@ type GeneratedTrendRow = {
   verdict: "backed" | "mixed" | "debunked" | "unmapped";
   summary: string;
   community_verdict: string;
+  safety_note: string;
   study_count: number;
   confidence: "low" | "moderate" | "high";
   last_updated: string;
@@ -62,6 +63,7 @@ export type SaveGeneratedTrendInput = {
   verdict: "backed" | "mixed" | "debunked" | "unmapped";
   summary: string;
   communityVerdict: string;
+  safetyNote: string;
   studyCount: number;
   confidence: "low" | "moderate" | "high";
   updated: string;
@@ -81,6 +83,7 @@ function rowToTrend(row: GeneratedTrendRow): Trend | null {
     verdict: row.verdict.toUpperCase() as Verdict,
     oneLiner: row.summary,
     communityVerdict: row.community_verdict ?? "",
+    safetyNote: row.safety_note ?? "",
     studies: row.study_count,
     confidence: row.confidence,
     sentiment: row.sentiment_score,
@@ -116,6 +119,7 @@ export const saveGeneratedTrend = createServerFn({ method: "POST" })
           verdict: data.verdict,
           summary: data.summary,
           community_verdict: data.communityVerdict,
+          safety_note: data.safetyNote,
           study_count: data.studyCount,
           confidence: data.confidence,
           last_updated: data.updated,
@@ -336,9 +340,9 @@ async function inferVerdictSummaries(row: {
   evidencePoints: string[];
   opinions: { handle: string; text: string }[];
   sentiment: number;
-}): Promise<{ researchVerdict: string | null; communityVerdict: string | null }> {
+}): Promise<{ researchVerdict: string | null; communityVerdict: string | null; safetyNote: string | null }> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return { researchVerdict: null, communityVerdict: null };
+  if (!apiKey) return { researchVerdict: null, communityVerdict: null, safetyNote: null };
 
   const evidenceText = row.evidencePoints.length
     ? row.evidencePoints.map((e) => `- ${e}`).join("\n")
@@ -355,12 +359,13 @@ ${evidenceText}
 Its stored community quotes (sentiment: ${row.sentiment}% positive):
 ${opinionsText}
 
-Return a JSON object with two fields:
+Return a JSON object with three fields:
 1. "researchVerdict": ONE sentence (max ~140 chars) giving the plain-language bottom line — write it the way you'd explain it to a friend, not a lab report. Avoid clinical/technical jargon and exact study durations/doses unless genuinely essential. State the real-world takeaway and one honest caveat if relevant. NOT a generic template like "Across N studies, findings support X" and NOT a dense academic sentence stuffed with numbers/mechanisms.
 2. "communityVerdict": ONE sentence (max ~140 chars) in the same plain, conversational style — what people actually notice and talk about, not clinical terms. Base it on the quotes and sentiment score, not a literal quote.
+3. "safetyNote": ONE short sentence (max ~140 chars) on the most common real safety consideration — drug interactions, pregnancy/breastfeeding warnings, allergy risk, or who should check with a doctor first. Base it on general medical knowledge for this ingredient/practice, in plain language. If there's genuinely nothing notable for typical healthy-adult use, return an empty string "" — don't invent a caution that doesn't apply.
 
 Return ONLY this JSON, no other text:
-{"researchVerdict": "...", "communityVerdict": "..."}`;
+{"researchVerdict": "...", "communityVerdict": "...", "safetyNote": "..."}`;
 
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -372,7 +377,7 @@ Return ONLY this JSON, no other text:
       },
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
-        max_tokens: 300,
+        max_tokens: 350,
         messages: [{ role: "user", content: prompt }],
       }),
     });
@@ -381,13 +386,15 @@ Return ONLY this JSON, no other text:
     const parsed = JSON.parse(text.replace(/```json|```/g, "").trim()) as {
       researchVerdict?: string;
       communityVerdict?: string;
+      safetyNote?: string;
     };
     return {
       researchVerdict: typeof parsed.researchVerdict === "string" ? parsed.researchVerdict.trim() || null : null,
       communityVerdict: typeof parsed.communityVerdict === "string" ? parsed.communityVerdict.trim() || null : null,
+      safetyNote: typeof parsed.safetyNote === "string" ? parsed.safetyNote.trim() : null,
     };
   } catch {
-    return { researchVerdict: null, communityVerdict: null };
+    return { researchVerdict: null, communityVerdict: null, safetyNote: null };
   }
 }
 
@@ -441,6 +448,7 @@ export const adminBackfillVerdictSummaries = createServerFn({ method: "POST" })
             .update({
               summary: result.researchVerdict ?? row.summary,
               community_verdict: result.communityVerdict,
+              safety_note: result.safetyNote ?? "",
             })
             .eq("id", row.id);
           if (updateError) {

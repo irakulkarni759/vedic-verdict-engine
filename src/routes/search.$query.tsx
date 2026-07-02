@@ -149,6 +149,7 @@ function SearchPage() {
           <HeroSummary
             researchVerdict={data.oneLiner}
             communityVerdict={data.communityVerdict}
+            safetyNote={data.safetyNote}
           />
         </section>
 
@@ -270,9 +271,11 @@ function SearchPage() {
 function HeroSummary({
   researchVerdict,
   communityVerdict,
+  safetyNote,
 }: {
   researchVerdict: string;
   communityVerdict: string;
+  safetyNote: string;
 }) {
   if (!communityVerdict) {
     return (
@@ -292,6 +295,15 @@ function HeroSummary({
         <p className="font-label text-[10px] text-[var(--sage)]">COMMUNITY</p>
         <p className="mt-1 text-base leading-7 text-[var(--ink)] sm:text-lg">{communityVerdict}</p>
       </div>
+      {safetyNote && (
+        <div className="flex gap-2 rounded-[14px] px-4 py-3" style={{ backgroundColor: "color-mix(in oklab, var(--verdict-mixed) 10%, transparent)" }}>
+          <span className="shrink-0" style={{ color: "var(--verdict-mixed)", fontSize: 15, lineHeight: "24px" }}>⚠</span>
+          <p className="text-sm leading-6" style={{ color: "var(--ink)" }}>
+            <span className="font-label mr-1.5 text-[10px]" style={{ color: "var(--verdict-mixed)" }}>SAFETY</span>
+            {safetyNote}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
