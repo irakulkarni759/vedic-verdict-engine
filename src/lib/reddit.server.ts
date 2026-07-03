@@ -57,9 +57,17 @@ function truncateAtWordBoundary(text: string, maxLength: number): string {
 
 export async function fetchRedditQuotes(query: string, limit = 3): Promise<RedditQuote[]> {
   try {
-    const res = await fetch(
-      `${SENTIMENT_API_URL}/api/claim?query=${encodeURIComponent(query)}`
-    );
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    let res: Response;
+    try {
+      res = await fetch(
+        `${SENTIMENT_API_URL}/api/claim?query=${encodeURIComponent(query)}`,
+        { signal: controller.signal }
+      );
+    } finally {
+      clearTimeout(timeoutId);
+    }
     if (!res.ok) return [];
 
     const data: SentimentApiResponse = await res.json();
