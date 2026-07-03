@@ -242,7 +242,7 @@ async function identifyFallbackTerms(query: string): Promise<FallbackTerms | nul
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return null;
 
-  const prompt = `"${query}" returned zero results on a direct PubMed search. PubMed only indexes academic literature, so this happens for two common reasons — figure out which one applies, if either:
+  const prompt = `"${query}" returned few or no results on a direct PubMed search. PubMed only indexes academic literature, so this happens for two common reasons — figure out which one applies, if either:
 
 1. PRODUCT: "${query}" is a specific branded/commercial product. PubMed won't index it by name, but its active ingredients likely are studied.
 2. TERMINOLOGY: "${query}" describes a real practice, ingredient, or activity using colloquial/wellness-culture phrasing that doesn't match academic vocabulary (e.g. "cold plunging" → "cold water immersion", "gut health" → "gut microbiota", "de-stressing" → "stress reduction cortisol"). The underlying topic likely does have real research under different search terms.
@@ -516,11 +516,15 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
       const sj = (await esearch.json()) as { esearchresult?: { idlist?: string[] } };
       const ids = sj.esearchresult?.idlist ?? [];
 
-      if (ids.length === 0) {
-        // Zero direct hits usually means either (a) a branded product PubMed
-        // won't index by name, or (b) colloquial phrasing that doesn't match
-        // academic vocabulary for a topic that IS studied. Try alternate
-        // search terms before giving up.
+      // Trigger on WEAK results too, not just zero — a query can return a
+      // handful of loosely-related hits (matching on incidental keywords)
+      // while missing the actually-relevant research, which sits under
+      // different academic terminology. e.g. "vibration plate for weight
+      // loss" returned a few bone-density/neuromuscular studies via literal
+      // keyword match, while the real weight-loss-specific research lives
+      // under "whole body vibration" + body composition terminology.
+      const WEAK_RESULT_THRESHOLD = 5;
+      if (ids.length < WEAK_RESULT_THRESHOLD) {
         const fallback = await identifyFallbackTerms(query);
 
         if (fallback) {
@@ -534,8 +538,12 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
             const fallbackIds = fsj.esearchresult?.idlist ?? [];
 
             if (fallbackIds.length > 0) {
+              // Merge rather than replace — keep any genuinely relevant
+              // original hits alongside the better-targeted fallback ones,
+              // so Claude's summary draws from the fuller, more accurate pool.
+              const mergedIds = Array.from(new Set([...ids, ...fallbackIds])).slice(0, 15);
               return await buildResultFromIds({
-                ids: fallbackIds,
+                ids: mergedIds,
                 query, name, slug, updated, generatedAt,
                 pubmedSearchUrl: `https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(fallbackTerm)}`,
                 redditSearchUrl,
@@ -543,6 +551,15 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
               });
             }
           }
+        }
+
+        if (ids.length > 0) {
+          // Fallback search found nothing better — the original (weak but
+          // non-empty) results are still the best we have, use them.
+          return await buildResultFromIds({
+            ids, query, name, slug, updated, generatedAt,
+            pubmedSearchUrl, redditSearchUrl, fallback: null,
+          });
         }
 
         const result = { ...empty("No PubMed results — this one isn't well-studied yet."), verdict: "UNKNOWN" as const };
