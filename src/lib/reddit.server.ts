@@ -71,22 +71,32 @@ async function fetchOnce(query: string, timeoutMs: number): Promise<Response | n
   }
 }
 
-/**
- * Railway free-tier containers take 10-20s+ to serve their first request
- * right after a deploy or a cold start — a single 5s attempt was timing out
- * and silently returning [] during exactly those windows. Now: a fast first
- * try (5s, covers the common warm case), then one longer retry (20s) before
- * giving up, since the whole verdict-generation request already takes
- * several seconds for PubMed/Claude anyway.
- */
+/** Fast path: single 5s attempt, no retry. Used inside the main verdict
+ *  generation request — that request already has PubMed + Claude latency,
+ *  so it can't afford a 25s worst case on top just for Reddit quotes. */
+export async function fetchRedditQuotesFast(query: string, limit = 3): Promise<RedditQuote[]> {
+  const res = await fetchOnce(query, 5000);
+  return parseQuotesResponse(res, limit);
+}
+
+/** Slow path: 5s try, then a 20s retry. Used only for the client-triggered
+ *  async re-fetch (see getRedditQuotes below), which runs after the page has
+ *  already rendered, so a cold Railway container doesn't block anything. */
 export async function fetchRedditQuotes(query: string, limit = 3): Promise<RedditQuote[]> {
   try {
     let res = await fetchOnce(query, 5000);
     if (!res || !res.ok) {
       res = await fetchOnce(query, 20000);
     }
-    if (!res || !res.ok) return [];
+    return await parseQuotesResponse(res, limit);
+  } catch {
+    return [];
+  }
+}
 
+async function parseQuotesResponse(res: Response | null, limit: number): Promise<RedditQuote[]> {
+  try {
+    if (!res || !res.ok) return [];
     const data: SentimentApiResponse = await res.json();
     if (!data.top_quotes || data.top_quotes.length === 0) return [];
 

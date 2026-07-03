@@ -1,8 +1,10 @@
+import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { TRENDS } from "@/lib/trends";
 import { TrendCard } from "@/components/TrendCard";
 import { Comments } from "@/components/Comments";
 import { toTitleCase } from "@/lib/utils";
+import { getRedditQuotes, type RedditQuote } from "@/lib/reddit.server";
 import {
   generateEvidenceVerdict,
   type EvidenceVerdict,
@@ -97,6 +99,38 @@ function SearchPage() {
   const { query } = Route.useParams();
   const q = decodeURIComponent(query);
   const color = verdictColor(data.verdict);
+
+  // The loader's Reddit fetch is a fast, single 5s attempt so the whole page
+  // never blocks on a cold Railway container. If that fast attempt came back
+  // empty, quietly retry in the background (longer timeout) and swap in the
+  // real quotes if/when they show up — no need to hold up the summary render
+  // for them.
+  const [liveQuotes, setLiveQuotes] = useState<RedditQuote[] | null>(null);
+  const [checkingQuotes, setCheckingQuotes] = useState(data.quotes.length === 0 && !!data.name);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (data.quotes.length > 0 || !data.name) {
+      setCheckingQuotes(false);
+      return;
+    }
+    setCheckingQuotes(true);
+    getRedditQuotes({ data: { query: data.name } })
+      .then((rows) => {
+        if (!cancelled) {
+          if (rows.length > 0) setLiveQuotes(rows);
+          setCheckingQuotes(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setCheckingQuotes(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [data.name, data.quotes.length]);
+
+  const displayQuotes = data.quotes.length > 0 ? data.quotes : liveQuotes ?? [];
 
   const tokens = q
     .toLowerCase()
@@ -193,7 +227,7 @@ function SearchPage() {
         )}
 
         {/* ── COMMUNITY SENTIMENT + QUOTES ── */}
-        {data.quotes && data.quotes.length > 0 && (
+        {(displayQuotes.length > 0 || checkingQuotes) && (
           <section className="mt-8">
             <SectionHeader
               left="WHAT PEOPLE SAY"
@@ -202,41 +236,48 @@ function SearchPage() {
             />
 
             <article className="mt-4 rounded-[22px] border border-white/75 bg-white/90 p-8 shadow-[0_12px_35px_rgba(27,52,72,0.04)]">
-              {/* FIX 4: sentiment bar now matches trend.$slug.tsx */}
-              <div className="mb-5 flex items-center justify-between gap-4">
-                <p className="font-label text-xs text-[var(--muted-ink)]">
-                  COMMUNITY SENTIMENT
+              {checkingQuotes && displayQuotes.length === 0 ? (
+                <p className="font-mono text-xs text-[var(--muted-ink)]">
+                  Checking for community discussion…
                 </p>
-                <p className="font-mono text-sm" style={{ color }}>
-                  {data.sentiment}% positive
-                </p>
-              </div>
-
-              <div className="h-2 overflow-hidden rounded-full bg-[var(--parchment-deep)]">
-                <div
-                  className="h-full rounded-full"
-                  style={{ width: `${data.sentiment}%`, backgroundColor: color }}
-                />
-              </div>
-
-              <div className="mt-8 space-y-8">
-                {data.quotes.map((quote) => (
-                  <div key={`${quote.handle}-${quote.text}`}>
-                    <p className="text-lg italic leading-8 text-[var(--ink)]">
-                      "{quote.text}"
+              ) : (
+                <>
+                  <div className="mb-5 flex items-center justify-between gap-4">
+                    <p className="font-label text-xs text-[var(--muted-ink)]">
+                      COMMUNITY SENTIMENT
                     </p>
-
-                    <a
-                      href={quote.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="font-mono mt-3 inline-block text-xs text-[var(--terracotta)]"
-                    >
-                      {quote.handle.toUpperCase()} ↗
-                    </a>
+                    <p className="font-mono text-sm" style={{ color }}>
+                      {data.sentiment}% positive
+                    </p>
                   </div>
-                ))}
-              </div>
+
+                  <div className="h-2 overflow-hidden rounded-full bg-[var(--parchment-deep)]">
+                    <div
+                      className="h-full rounded-full"
+                      style={{ width: `${data.sentiment}%`, backgroundColor: color }}
+                    />
+                  </div>
+
+                  <div className="mt-8 space-y-8">
+                    {displayQuotes.map((quote) => (
+                      <div key={`${quote.handle}-${quote.text}`}>
+                        <p className="text-lg italic leading-8 text-[var(--ink)]">
+                          "{quote.text}"
+                        </p>
+
+                        <a
+                          href={quote.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-mono mt-3 inline-block text-xs text-[var(--terracotta)]"
+                        >
+                          {quote.handle.toUpperCase()} ↗
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </article>
           </section>
         )}

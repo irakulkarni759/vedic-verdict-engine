@@ -6,7 +6,7 @@ import {
   slugify,
 } from "./generatedTrends.functions";
 import { toTitleCase } from "./utils";
-import { fetchRedditQuotes, type RedditQuote } from "./reddit.server";
+import { fetchRedditQuotesFast, type RedditQuote } from "./reddit.server";
 
 export type EvidenceArticle = {
   pmid: string;
@@ -411,7 +411,7 @@ async function buildResultFromIds(opts: {
   // just means no fresh community quotes for this one search.
   let redditQuotes: RedditQuote[] = [];
   try {
-    redditQuotes = await fetchRedditQuotes(query);
+    redditQuotes = await fetchRedditQuotesFast(query);
   } catch {
     // fetchRedditQuotes already catches its own errors and returns [];
     // this guard is just a safety net in case that contract ever changes.
