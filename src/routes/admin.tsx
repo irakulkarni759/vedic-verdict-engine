@@ -216,13 +216,12 @@ function AdminPage() {
         </div>
 
         <div className="mb-6 rounded-[16px] border-2 border-[var(--terracotta)] bg-white/90 p-5 shadow-[0_8px_24px_rgba(27,52,72,0.04)]">
-          <p className="font-label mb-2 text-xs text-[var(--terracotta)]">REAL REDDIT QUOTES (IMPORTANT)</p>
+          <p className="font-label mb-2 text-xs text-[var(--terracotta)]">REAL COMMUNITY QUOTES (IMPORTANT)</p>
           <p className="mb-3 text-sm leading-6 text-[var(--ink)]">
             Replaces every stored trend's community quotes — which were previously fabricated by Claude
-            with made-up handles — with real Reddit comments, re-searched using each trend's original
-            query, using Reddit's public search (no API credentials needed, but no guarantees either —
-            Reddit can rate-limit this without notice). Trends where no real
-            comments turn up get an empty list, never a fabricated fallback.
+            with made-up handles — with real ones, re-searched using each trend's original query, and
+            recalculates the sentiment %/community line at the top of the card to match the new quotes.
+            Trends where no real comments turn up get an empty list, never a fabricated fallback.
           </p>
           <button
             onClick={refreshQuotes}

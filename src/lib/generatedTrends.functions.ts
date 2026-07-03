@@ -476,6 +476,69 @@ export const adminBackfillVerdictSummaries = createServerFn({ method: "POST" })
  * replacing content that's currently fake. Password-gated like the
  * other admin actions.
  */
+/**
+ * Recomputes community_verdict and sentiment directly FROM a specific set
+ * of real quotes — used after replacing a trend's quotes, so the sentiment
+ * %/summary at the top of the card actually reflects what's now shown
+ * instead of a stale value computed before the quotes changed. If there
+ * are no real quotes, keeps the existing sentiment rather than guessing,
+ * and returns a general (non-quote-based) community line.
+ */
+async function inferSentimentFromQuotes(row: {
+  name: string;
+  summary: string;
+  quotes: { handle: string; text: string }[];
+  existingSentiment: number;
+}): Promise<{ communityVerdict: string | null; sentiment: number | null }> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return { communityVerdict: null, sentiment: null };
+
+  const quotesText = row.quotes.length
+    ? row.quotes.map((q) => `${q.handle}: "${q.text}"`).join("\n")
+    : "(no real quotes found for this trend)";
+
+  const prompt = `A wellness result titled "${row.name}" has this research summary: "${row.summary}"
+
+Real community quotes just fetched for it:
+${quotesText}
+
+Return a JSON object with two fields:
+1. "sentiment": a number 0-100 for how positive community sentiment is, based ONLY on the real quotes above (if any) — not invented. If there are no real quotes, use your general knowledge of typical reception for this kind of product/practice instead.
+2. "communityVerdict": ONE sentence (max ~140 chars), plain conversational language, synthesizing the real quotes above. Do not invent a specific claim the real quotes don't support. If there are no real quotes, write a general, honest line like "Limited public discussion found — the research above gives a reasonable starting expectation" rather than fabricating specifics.
+
+Return ONLY this JSON, no other text:
+{"sentiment": 70, "communityVerdict": "..."}`;
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 250,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+    if (!res.ok) return { communityVerdict: null, sentiment: null };
+    const json = (await res.json()) as { content: { text: string }[] };
+    const text = json.content?.[0]?.text ?? "{}";
+    const parsed = JSON.parse(text.replace(/```json|```/g, "").trim()) as {
+      sentiment?: number;
+      communityVerdict?: string;
+    };
+    return {
+      communityVerdict: typeof parsed.communityVerdict === "string" ? parsed.communityVerdict.trim() || null : null,
+      sentiment: typeof parsed.sentiment === "number" ? parsed.sentiment : null,
+    };
+  } catch {
+    return { communityVerdict: null, sentiment: null };
+  }
+}
+
 export const adminRefreshRedditQuotes = createServerFn({ method: "POST" })
   .inputValidator((d: { password: string }) => d)
   .handler(
@@ -486,7 +549,7 @@ export const adminRefreshRedditQuotes = createServerFn({ method: "POST" })
         const supabase = getSupabaseServiceClient();
         const { data: rows, error } = await supabase
           .from("generated_trends")
-          .select("id, query")
+          .select("id, query, name, summary, sentiment_score")
           .neq("verdict", "unmapped")
           .limit(500);
         if (error || !rows) return { ok: false, error: "Couldn't load trends." };
@@ -494,11 +557,23 @@ export const adminRefreshRedditQuotes = createServerFn({ method: "POST" })
         let updated = 0;
         let emptied = 0;
 
-        for (const row of rows as { id: string; query: string }[]) {
+        for (const row of rows as { id: string; query: string; name: string; summary: string; sentiment_score: number }[]) {
           const realQuotes = await fetchRedditQuotes(row.query);
+
+          const { communityVerdict, sentiment } = await inferSentimentFromQuotes({
+            name: row.name,
+            summary: row.summary,
+            quotes: realQuotes,
+            existingSentiment: row.sentiment_score,
+          });
+
           const { error: updateError } = await supabase
             .from("generated_trends")
-            .update({ opinions: realQuotes })
+            .update({
+              opinions: realQuotes,
+              community_verdict: communityVerdict ?? "",
+              sentiment_score: sentiment ?? row.sentiment_score,
+            })
             .eq("id", row.id);
           if (updateError) continue;
           if (realQuotes.length > 0) updated++;
