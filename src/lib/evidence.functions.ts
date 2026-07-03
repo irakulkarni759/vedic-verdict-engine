@@ -533,12 +533,20 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
         const fallback = await identifyFallbackTerms(query);
 
         if (fallback) {
-          // Quote each term as an exact phrase (otherwise "polydeoxyribonucleotide
-          // (PDRN)" OR'd unquoted sends individual words to PubMed, badly diluting
-          // the match), and strip stray parens since Entrez query syntax uses
-          // them for grouping — an unbalanced paren in a raw term breaks the query.
+          // Strip parens/quotes — Entrez query syntax uses parens for
+          // grouping, so a raw term like "polydeoxyribonucleotide (PDRN)"
+          // sends an unbalanced paren that breaks/dilutes the query.
+          //
+          // Deliberately NOT wrapping terms in quotes for exact-phrase
+          // matching — that's too strict for multi-word academic phrases
+          // (a real paper's exact wording rarely matches a generated phrase
+          // word-for-word) and caused genuinely relevant terms like "Carum
+          // copticum digestive effects" to return zero results even though
+          // real papers on Carum copticum/ajwain exist. Unquoted terms let
+          // PubMed's own automatic term mapping do its job.
           const fallbackTerm = fallback.terms
-            .map((t) => `"${t.replace(/[()]/g, "").trim()}"`)
+            .map((t) => t.replace(/[()"]/g, "").trim())
+            .filter(Boolean)
             .join(" OR ");
           const fallbackSearch = await fetch(
             `${EUTILS}/esearch.fcgi?db=pubmed&retmode=json&retmax=15&sort=relevance&term=${encodeURIComponent(fallbackTerm)}`,
