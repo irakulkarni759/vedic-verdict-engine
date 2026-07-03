@@ -93,16 +93,21 @@ function isRelevant(text: string, keywords: string[]): boolean {
 }
 
 /**
- * Selects which candidates read as someone sharing their own experience or
- * opinion, versus someone asking a question or requesting advice/comparison
- * without sharing a result. This only picks a subset of REAL, already-
- * fetched text — it never generates or rewrites anything. Keyword/regex
- * heuristics can't reliably tell "sir which is better X or Y???" apart from
- * "I switched from X to Y and my skin cleared up" — that takes judgment.
- * Fails open (keeps everything) on any error so a Claude hiccup never
- * empties out an otherwise-good candidate pool.
+ * Selects which candidates should actually be shown, on two combined
+ * conditions: (1) reads as someone sharing their OWN experience/opinion,
+ * not just asking a question, and (2) is actually relevant to `topic` as
+ * a *specific* claim — e.g. for "Jojoba Oil for Hair Growth", a real,
+ * on-topic, genuine comment about using jojoba oil for acne or ingrown
+ * hairs still isn't relevant to the hair-growth claim being evaluated,
+ * even though it mentions the same ingredient. This only picks a subset
+ * of REAL, already-fetched text — it never generates or rewrites anything.
+ * Keyword/regex heuristics can't make either judgment reliably (a comment
+ * about "ingrown hair" contains the word "hair" without being about hair
+ * growth at all) — that takes actual reading comprehension. Fails open
+ * (keeps everything) on any error so a Claude hiccup never empties out an
+ * otherwise-good candidate pool.
  */
-async function selectGenuineReactions<T extends { text: string }>(candidates: T[]): Promise<T[]> {
+async function selectGenuineReactions<T extends { text: string }>(candidates: T[], topic: string): Promise<T[]> {
   if (candidates.length === 0) return candidates;
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return candidates;
@@ -110,7 +115,10 @@ async function selectGenuineReactions<T extends { text: string }>(candidates: T[
   const pool = candidates.slice(0, 15);
   const listText = pool.map((c, i) => `[${i}] "${c.text}"`).join("\n\n");
 
-  const prompt = `Here are real YouTube comments. For each, decide whether it reads as someone sharing their OWN experience, result, or opinion about the product/topic (keep) — versus someone asking a question, requesting advice, or asking for a comparison without sharing their own result (exclude). A comment that mentions trying/using something AND asks a follow-up question can still count as "keep" if it shares real experience; a comment that's purely "which is better, X or Y?" or "does this work?" should be excluded.
+  const prompt = `Here are real YouTube comments found while researching "${topic}". Decide which ones should be KEPT, on two conditions that both must hold:
+
+1. It reads as someone sharing their OWN experience, result, or opinion — not just asking a question, requesting advice, or asking for a comparison without sharing their own result. ("I switched from X to Y and it cleared up" = keep. "Sir which is better X or Y???" = exclude.)
+2. It's actually relevant to "${topic}" as a SPECIFIC claim, not just mentioning the same general ingredient/practice for a different, unrelated purpose. (If the topic is "Jojoba Oil for Hair Growth", a real comment about using jojoba oil for acne or ingrown hairs is NOT relevant, even though it's genuine and mentions jojoba oil.)
 
 ${listText}
 
@@ -139,7 +147,7 @@ Return ONLY a JSON array of the indices to keep, e.g. [0,2,4]. No other text.`;
     const kept = indices
       .filter((i): i is number => typeof i === "number" && i >= 0 && i < pool.length)
       .map((i) => pool[i]);
-    return kept.length > 0 ? kept : candidates;
+    return kept.length > 0 ? kept : [];
   } catch {
     return candidates;
   }
@@ -221,7 +229,7 @@ export async function fetchYouTubeQuotes(query: string, limit = 3): Promise<Comm
 
   if (allComments.length === 0) return [];
 
-  const genuine = await selectGenuineReactions(allComments);
+  const genuine = await selectGenuineReactions(allComments, query);
 
   return genuine.slice(0, limit).map(({ handle, text, url }) => ({ handle, text, url }));
 }
