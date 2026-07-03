@@ -180,6 +180,29 @@ export const getGeneratedTrendBySlug = createServerFn({ method: "GET" })
   });
 
 /**
+ * Persist community quotes fetched live on the trend page back onto the
+ * stored trend, so the slow Reddit fetch only ever happens once per trend
+ * instead of on every visit. Only affects generated trends (rows keyed by
+ * `id`); curated/hardcoded trends have no row, so this simply no-ops for
+ * them. Fails silently, never blocks rendering.
+ */
+export const persistTrendQuotes = createServerFn({ method: "POST" })
+  .inputValidator((d: { slug: string; quotes: { handle: string; text: string; url: string }[] }) => d)
+  .handler(async ({ data }): Promise<{ ok: boolean }> => {
+    try {
+      if (!data.quotes || data.quotes.length === 0) return { ok: false };
+      const supabase = getSupabaseServiceClient();
+      const { error } = await supabase
+        .from("generated_trends")
+        .update({ opinions: data.quotes })
+        .eq("id", data.slug);
+      return { ok: !error };
+    } catch {
+      return { ok: false };
+    }
+  });
+
+/**
  * Top searched-more-than-once queries, for the homepage "trying now" row.
  * Requires search_count >= 2 so it reflects genuine repeat interest rather
  * than just whatever was searched most recently.

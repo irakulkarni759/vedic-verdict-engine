@@ -1,23 +1,23 @@
+import { useEffect, useState } from "react";
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { trendBySlug, type Trend, type Verdict } from "@/lib/trends";
-import { getGeneratedTrendBySlug } from "@/lib/generatedTrends.functions";
+import { getGeneratedTrendBySlug, persistTrendQuotes } from "@/lib/generatedTrends.functions";
 import { getRedditQuotes } from "@/lib/reddit.server";
 import { TrendCard } from "@/components/TrendCard";
 import { Comments } from "@/components/Comments";
+
+type Quote = { handle: string; text: string; url: string };
 
 export const Route = createFileRoute("/trend/$slug")({
   loader: async ({ params }) => {
     const trend = trendBySlug(params.slug) ?? (await getGeneratedTrendBySlug({ data: { slug: params.slug } }));
     if (!trend) throw notFound();
 
-    // Curated trends never have quotes on file (no real search was ever run
-    // for them), and some older generated trends predate real Reddit
-    // sourcing — for either case, fetch real ones live rather than show
-    // nothing indefinitely or, worse, anything fabricated.
-    if (trend.quotes.length === 0) {
-      const liveQuotes = await getRedditQuotes({ data: { query: trend.name } });
-      if (liveQuotes.length > 0) trend.quotes = liveQuotes;
-    }
+    // Quotes are NOT fetched here anymore. The Reddit backend is slow to wake
+    // and slow to scrape, so blocking the loader on it meant the whole page
+    // sat blank until (often) a refresh caught the now-warm backend. Quotes
+    // now stream in client-side after first paint (see CommunityQuotes), and
+    // get persisted so it only happens once per trend.
 
     const related = trend.related
       .map((s) => trendBySlug(s))
@@ -166,24 +166,7 @@ function TrendPage() {
               />
             </div>
 
-            <div className="mt-8 space-y-8">
-              {trend.quotes.map((q: { handle: string; text: string; url: string }) => (
-                <div key={`${q.handle}-${q.text}`}>
-                  <p className="text-lg italic leading-8 text-[var(--ink)]">
-                    “{q.text}”
-                  </p>
-
-                  <a
-                    href={q.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="font-mono mt-3 inline-block text-xs text-[var(--terracotta)]"
-                  >
-                    {q.handle.toUpperCase()} ↗
-                  </a>
-                </div>
-              ))}
-            </div>
+            <CommunityQuotes key={trend.slug} slug={trend.slug} name={trend.name} initialQuotes={trend.quotes} />
           </article>
         </section>
 
@@ -204,6 +187,73 @@ function TrendPage() {
         )}
       </div>
     </main>
+  );
+}
+
+/**
+ * Community quotes, fetched client-side after first paint instead of in the
+ * blocking loader. If the trend already has quotes on file, they render
+ * instantly. If not, we fetch them live (the Reddit backend can be slow to
+ * wake), show a loading state meanwhile, and persist whatever comes back so
+ * the next visit is instant. Nothing here ever blocks the rest of the page.
+ */
+function CommunityQuotes({
+  slug,
+  name,
+  initialQuotes,
+}: {
+  slug: string;
+  name: string;
+  initialQuotes: Quote[];
+}) {
+  const [quotes, setQuotes] = useState<Quote[]>(initialQuotes);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (initialQuotes.length > 0) return;
+    let cancelled = false;
+    setLoading(true);
+    getRedditQuotes({ data: { query: name } })
+      .then((live) => {
+        if (cancelled || live.length === 0) return;
+        setQuotes(live);
+        // Fire-and-forget: save so future visits skip the slow fetch.
+        void persistTrendQuotes({ data: { slug, quotes: live } }).catch(() => {});
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [slug, name, initialQuotes.length]);
+
+  if (quotes.length === 0) {
+    return (
+      <p className="font-mono mt-8 text-xs text-[var(--muted-ink)]">
+        {loading ? "Gathering community reactions…" : "No community reactions found for this one yet."}
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-8 space-y-8">
+      {quotes.map((q) => (
+        <div key={`${q.handle}-${q.text}`}>
+          <p className="text-lg italic leading-8 text-[var(--ink)]">“{q.text}”</p>
+
+          <a
+            href={q.url}
+            target="_blank"
+            rel="noreferrer"
+            className="font-mono mt-3 inline-block text-xs text-[var(--terracotta)]"
+          >
+            {q.handle.toUpperCase()} ↗
+          </a>
+        </div>
+      ))}
+    </div>
   );
 }
 
