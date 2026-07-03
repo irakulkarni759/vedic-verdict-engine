@@ -3,6 +3,7 @@ import { getSupabaseServiceClient } from "./supabase.server";
 import { CATEGORIES, type Trend, type Verdict } from "./trends";
 import { checkAdminPassword } from "./comments.functions";
 import { toTitleCase } from "./utils";
+import { fetchRedditQuotes } from "./reddit.server";
 
 export const CATEGORY_SLUGS = CATEGORIES.map((c) => c.slug);
 
@@ -48,7 +49,7 @@ type GeneratedTrendRow = {
   last_updated: string;
   evidence_points: string[];
   sentiment_score: number;
-  opinions: { handle: string; text: string }[];
+  opinions: { handle: string; text: string; url: string }[];
   related_ids: string[];
   source_urls: string[];
   created_at: string;
@@ -69,7 +70,7 @@ export type SaveGeneratedTrendInput = {
   updated: string;
   evidencePoints: string[];
   sentiment: number;
-  opinions: { handle: string; text: string }[];
+  opinions: { handle: string; text: string; url: string }[];
   sourceUrls: string[];
 };
 
@@ -339,7 +340,7 @@ async function inferVerdictSummaries(row: {
   name: string;
   summary: string;
   evidencePoints: string[];
-  opinions: { handle: string; text: string }[];
+  opinions: { handle: string; text: string; url: string }[];
   sentiment: number;
 }): Promise<{ researchVerdict: string | null; communityVerdict: string | null; safetyNote: string | null }> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -427,7 +428,7 @@ export const adminBackfillVerdictSummaries = createServerFn({ method: "POST" })
 
         for (const row of rows as {
           id: string; name: string; summary: string; community_verdict: string;
-          evidence_points: string[]; opinions: { handle: string; text: string }[]; sentiment_score: number;
+          evidence_points: string[]; opinions: { handle: string; text: string; url: string }[]; sentiment_score: number;
         }[]) {
           if (!data.force && row.community_verdict && row.community_verdict.trim()) {
             skipped++;
@@ -462,6 +463,51 @@ export const adminBackfillVerdictSummaries = createServerFn({ method: "POST" })
         return { ok: true, updated, skipped, total: rows.length };
       } catch {
         return { ok: false, error: "Backfill failed partway through." };
+      }
+    },
+  );
+
+/**
+ * Admin-only: replaces every stored trend's `opinions` (the fabricated
+ * quotes from before real Reddit sourcing) with real Reddit comments,
+ * re-searched using the trend's original `query`. Rows where no real
+ * comments turn up get an empty array — never a fabricated fallback.
+ * Always re-fetches (no skip condition), since the whole point is
+ * replacing content that's currently fake. Password-gated like the
+ * other admin actions.
+ */
+export const adminRefreshRedditQuotes = createServerFn({ method: "POST" })
+  .inputValidator((d: { password: string }) => d)
+  .handler(
+    async ({ data }): Promise<{ ok: boolean; updated?: number; emptied?: number; total?: number; error?: string }> => {
+      if (!checkAdminPassword(data.password)) return { ok: false, error: "Wrong password." };
+
+      try {
+        const supabase = getSupabaseServiceClient();
+        const { data: rows, error } = await supabase
+          .from("generated_trends")
+          .select("id, query")
+          .neq("verdict", "unmapped")
+          .limit(500);
+        if (error || !rows) return { ok: false, error: "Couldn't load trends." };
+
+        let updated = 0;
+        let emptied = 0;
+
+        for (const row of rows as { id: string; query: string }[]) {
+          const realQuotes = await fetchRedditQuotes(row.query);
+          const { error: updateError } = await supabase
+            .from("generated_trends")
+            .update({ opinions: realQuotes })
+            .eq("id", row.id);
+          if (updateError) continue;
+          if (realQuotes.length > 0) updated++;
+          else emptied++;
+        }
+
+        return { ok: true, updated, emptied, total: rows.length };
+      } catch {
+        return { ok: false, error: "Refresh failed partway through." };
       }
     },
   );

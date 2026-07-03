@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import { adminCheckPassword, adminDeleteComment, adminListComments, type AdminComment } from "@/lib/comments.functions";
-import { adminStandardizeTrendNames, adminBackfillVerdictSummaries } from "@/lib/generatedTrends.functions";
+import { adminStandardizeTrendNames, adminBackfillVerdictSummaries, adminRefreshRedditQuotes } from "@/lib/generatedTrends.functions";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -22,6 +22,8 @@ function AdminPage() {
   const [standardizeResult, setStandardizeResult] = useState<string | null>(null);
   const [summarizing, setSummarizing] = useState(false);
   const [summarizeResult, setSummarizeResult] = useState<string | null>(null);
+  const [refreshingQuotes, setRefreshingQuotes] = useState(false);
+  const [refreshQuotesResult, setRefreshQuotesResult] = useState<string | null>(null);
 
   async function loadComments(pw: string) {
     setLoading(true);
@@ -91,6 +93,21 @@ function AdminPage() {
       return;
     }
     setSummarizeResult(`Updated ${res.updated} of ${res.total} trends (${res.skipped} already fine or skipped).`);
+  }
+
+  async function refreshQuotes() {
+    const pw = window.sessionStorage.getItem(SESSION_KEY) ?? password;
+    setRefreshingQuotes(true);
+    setRefreshQuotesResult(null);
+    const res = await adminRefreshRedditQuotes({ data: { password: pw } });
+    setRefreshingQuotes(false);
+    if (!res.ok) {
+      setRefreshQuotesResult(res.error ?? "Couldn't refresh quotes.");
+      return;
+    }
+    setRefreshQuotesResult(
+      `${res.updated} of ${res.total} trends got real quotes; ${res.emptied} had none found and are now empty (not fabricated).`,
+    );
   }
 
   // Try to resume a session on first render.
@@ -195,6 +212,26 @@ function AdminPage() {
           </div>
           {summarizeResult && (
             <p className="font-mono mt-3 text-xs text-[var(--muted-ink)]">{summarizeResult}</p>
+          )}
+        </div>
+
+        <div className="mb-6 rounded-[16px] border-2 border-[var(--terracotta)] bg-white/90 p-5 shadow-[0_8px_24px_rgba(27,52,72,0.04)]">
+          <p className="font-label mb-2 text-xs text-[var(--terracotta)]">REAL REDDIT QUOTES (IMPORTANT)</p>
+          <p className="mb-3 text-sm leading-6 text-[var(--ink)]">
+            Replaces every stored trend's community quotes — which were previously fabricated by Claude
+            with made-up handles — with real Reddit comments, re-searched using each trend's original
+            query. Requires REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET to be set. Trends where no real
+            comments turn up get an empty list, never a fabricated fallback.
+          </p>
+          <button
+            onClick={refreshQuotes}
+            disabled={refreshingQuotes}
+            className="font-label rounded-full bg-[var(--terracotta)] px-5 py-2.5 text-xs text-white transition hover:translate-y-[-1px] disabled:opacity-40"
+          >
+            {refreshingQuotes ? "FETCHING FROM REDDIT…" : "REPLACE WITH REAL QUOTES"}
+          </button>
+          {refreshQuotesResult && (
+            <p className="font-mono mt-3 text-xs text-[var(--muted-ink)]">{refreshQuotesResult}</p>
           )}
         </div>
 

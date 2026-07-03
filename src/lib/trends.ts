@@ -13,7 +13,7 @@ export type Trend = {
   sentiment: number; // 0-100
   updated: string; // YYYY-MM-DD
   evidence: string[];
-  quotes: { handle: string; text: string }[];
+  quotes: { handle: string; text: string; url: string }[];
   related: string[]; // slugs
   /** Real per-article PubMed links, in the same order as `evidence` where
    *  available. Empty for curated trends (no article was ever fetched for
@@ -49,10 +49,7 @@ export const TRENDS: Trend[] = [
       "Broad-spectrum formulas outperform UVB-only on pigmentation outcomes.",
       "Reapplication every ~2 hours sun exposure is required to retain stated SPF.",
     ],
-    quotes: [
-      { handle: "@derm_notes", text: "The single highest ROI step in any routine." },
-      { handle: "@skinlab", text: "Texture has finally caught up — no more white cast." },
-    ],
+    quotes: [],
     communityVerdict: "Widely loved as a non-negotiable step — the main complaint is dated formulas leaving a white cast, which modern ones have mostly fixed.",
     safetyNote: "No notable risks for typical use — just watch for fragrance/chemical-filter sensitivity if you have reactive skin.",
     sourceUrls: [],
@@ -73,10 +70,7 @@ export const TRENDS: Trend[] = [
       "OTC retinol takes 12+ weeks to show measurable change in most users.",
       "Pairing with SPF is required — retinoids increase photosensitivity.",
     ],
-    quotes: [
-      { handle: "@derm_notes", text: "Slow start, real results. Patience tax." },
-      { handle: "@routinegeek", text: "Started at 0.025% — barely peeled, big payoff." },
-    ],
+    quotes: [],
     communityVerdict: "Users consistently describe an initial adjustment period (dryness, mild peeling) followed by real, lasting payoff once skin adapts.",
     safetyNote: "Avoid during pregnancy or while trying to conceive; increases sun sensitivity, so daily SPF is essential alongside it.",
     sourceUrls: [],
@@ -97,10 +91,7 @@ export const TRENDS: Trend[] = [
       "Formulation stability matters — opaque packaging and pH < 3.5 preserve potency.",
       "Pairs synergistically with sunscreen in photoprotection studies.",
     ],
-    quotes: [
-      { handle: "@skinlab", text: "Glow is real, but your serum oxidizing is realer." },
-      { handle: "@routinegeek", text: "Worth it only if you actually use it before it browns." },
-    ],
+    quotes: [],
     communityVerdict: "People like the brightening effect but frequently complain about serums oxidizing before they finish the bottle.",
     safetyNote: "Can cause mild irritation or tingling at higher concentrations, especially alongside other actives like retinol.",
     sourceUrls: [],
@@ -121,10 +112,7 @@ export const TRENDS: Trend[] = [
       "Modest reduction in sebum production and pore appearance shown in trials.",
       "Plays well with almost everything — low irritation profile.",
     ],
-    quotes: [
-      { handle: "@derm_notes", text: "The 'goes with anything' active." },
-      { handle: "@skinlab", text: "Calmed my rosacea flare in two weeks." },
-    ],
+    quotes: [],
     communityVerdict: "Consistently praised as gentle and easy to layer with other actives, with several users reporting it calmed redness within weeks.",
     safetyNote: "Very well tolerated; rare flushing has been reported at high doses, mostly with oral (not topical) niacinamide.",
     sourceUrls: [],
@@ -145,10 +133,7 @@ export const TRENDS: Trend[] = [
       "Most useful in winter, post-procedure, or with eczema-prone skin.",
       "Not recommended for acne-prone skin without testing first.",
     ],
-    quotes: [
-      { handle: "@routinegeek", text: "Winter skin saver. Pillowcase tax accepted." },
-      { handle: "@skinlab", text: "Tretinoin nights + slug = no more flaking." },
-    ],
+    quotes: [],
     communityVerdict: "A favorite for winter or post-retinoid nights, though people joke about the messy pillowcase tradeoff.",
     safetyNote: "Can trap oil and worsen breakouts on acne-prone skin — patch test before making it a nightly habit.",
     sourceUrls: [],
@@ -169,10 +154,7 @@ export const TRENDS: Trend[] = [
       "Effects are real but modest vs. heavily marketed claims.",
       "Generally well tolerated; allergic reactions are rare but documented.",
     ],
-    quotes: [
-      { handle: "@skinlab", text: "Plumping is legit. Anti-aging claims, oversold." },
-      { handle: "@routinegeek", text: "The K-beauty hype that actually held up." },
-    ],
+    quotes: [],
     communityVerdict: "One of the rare K-beauty trends people say lived up to the hype for hydration, though anti-aging claims get pushback.",
     safetyNote: "Rare allergic reactions have been documented; discontinue if you notice redness or itching.",
     sourceUrls: [],
@@ -193,10 +175,7 @@ export const TRENDS: Trend[] = [
       "Apply to damp skin and seal with moisturizer — dry-air application can backfire.",
       "Multiple molecular weights penetrate differently; impact on wrinkles is modest.",
     ],
-    quotes: [
-      { handle: "@derm_notes", text: "Hydration, not a miracle. Use it correctly." },
-      { handle: "@skinlab", text: "Apply on dry skin and it'll wick moisture out." },
-    ],
+    quotes: [],
     communityVerdict: "Generally well liked, but a recurring complaint is that applying it to dry (not damp) skin can backfire and pull moisture out.",
     safetyNote: "No significant risks for topical use; applying it in very dry air without sealing can occasionally worsen dryness.",
     sourceUrls: [],
@@ -217,10 +196,7 @@ export const TRENDS: Trend[] = [
       "No evidence for collagen stimulation or 'lymphatic drainage' claims.",
       "Cleanliness matters more than the stone — bacteria buildup is common.",
     ],
-    quotes: [
-      { handle: "@derm_notes", text: "Fancy ice cube. Nothing more, nothing less." },
-      { handle: "@skinlab", text: "Feels nice. That's the whole product." },
-    ],
+    quotes: [],
     communityVerdict: "Most describe it as a pleasant but purely cosmetic ritual — nice in the moment, with no lasting skin change.",
     safetyNote: "Low risk, but unclean stones can harbor bacteria — clean it regularly, especially if used on broken-out skin.",
     sourceUrls: [],
@@ -241,10 +217,7 @@ export const TRENDS: Trend[] = [
       "No evidence for lasting jawline reshaping from facial gua sha.",
       "Technique matters — heavy pressure can bruise without benefit.",
     ],
-    quotes: [
-      { handle: "@derm_notes", text: "Morning de-puff: yes. Bone restructuring: no." },
-      { handle: "@routinegeek", text: "Treat it as massage, not surgery." },
-    ],
+    quotes: [],
     communityVerdict: "People enjoy the morning de-puffing ritual but are skeptical of any lasting facial-sculpting claims.",
     safetyNote: "Heavy pressure can bruise or irritate skin — use gentle strokes, especially on sensitive or thin skin.",
     sourceUrls: [],
@@ -265,10 +238,7 @@ export const TRENDS: Trend[] = [
       "Peel-off formulations can rip out vellus hair and damage stratum corneum.",
       "May reduce surface oil briefly but no lasting acne or pore benefit.",
     ],
-    quotes: [
-      { handle: "@derm_notes", text: "Marketing fiction with peel-off pain." },
-      { handle: "@skinlab", text: "Pulled out my eyebrow hairs once. Never again." },
-    ],
+    quotes: [],
     communityVerdict: "Frequent complaints about peel-off masks physically hurting to remove, with little payoff beyond a brief matte look.",
     safetyNote: "Peel-off formulas can damage the skin barrier and pull out fine hair — avoid on sensitive or broken skin.",
     sourceUrls: [],
@@ -289,9 +259,7 @@ export const TRENDS: Trend[] = [
       "No reliable evidence for cellulite reduction or 'detox' effects.",
       "Aggressive use can damage skin barrier — light pressure only.",
     ],
-    quotes: [
-      { handle: "@routinegeek", text: "Feels invigorating. Does nothing for cellulite." },
-    ],
+    quotes: [],
     communityVerdict: "People enjoy the sensory ritual but are clear-eyed that it doesn't deliver on cellulite or detox claims.",
     safetyNote: "Aggressive brushing can cause micro-tears in the skin barrier — light pressure only, avoid broken or irritated skin.",
     sourceUrls: [],
@@ -314,10 +282,7 @@ export const TRENDS: Trend[] = [
       "Replication is limited; mechanism is not fully understood.",
       "Generally safe; dilute in carrier oil to avoid scalp irritation.",
     ],
-    quotes: [
-      { handle: "@routinegeek", text: "Cheap to try, low downside. Manage expectations." },
-      { handle: "@skinlab", text: "Worked for my thinning edges. n=1." },
-    ],
+    quotes: [],
     communityVerdict: "Seen as a low-risk experiment worth trying, with scattered reports of success but wide acknowledgment that results vary person to person.",
     safetyNote: "Dilute in a carrier oil before scalp use — applying it undiluted can cause irritation or a burning sensation.",
     sourceUrls: [],
@@ -338,9 +303,7 @@ export const TRENDS: Trend[] = [
       "Can interfere with lab tests including thyroid and cardiac markers.",
       "No evidence supplementation grows hair in non-deficient adults.",
     ],
-    quotes: [
-      { handle: "@derm_notes", text: "Tell your doctor before bloodwork." },
-    ],
+    quotes: [],
     communityVerdict: "Mixed reception — people without a documented deficiency mostly report no noticeable hair changes, and some flag it can skew bloodwork.",
     safetyNote: "Can interfere with common lab tests, including thyroid and cardiac markers — tell your doctor if you're taking it before bloodwork.",
     sourceUrls: [],
@@ -363,10 +326,7 @@ export const TRENDS: Trend[] = [
       "Some evidence for joint discomfort reduction in active populations.",
       "Type and dose matter — hydrolyzed peptides at 10–15g/day are most studied.",
     ],
-    quotes: [
-      { handle: "@labnotes", text: "Real effect, modest size. Don't expect miracles." },
-      { handle: "@routinegeek", text: "Hair and nails? Maybe. Joints? Yes." },
-    ],
+    quotes: [],
     communityVerdict: "People report modest but real improvements, especially for joint comfort, while cautioning against expecting dramatic skin transformation.",
     safetyNote: "Generally well tolerated; check sourcing (bovine/marine) if you have relevant allergies or dietary restrictions.",
     sourceUrls: [],
@@ -387,10 +347,7 @@ export const TRENDS: Trend[] = [
       "Effects on sleep quality and anxiety are consistent across studies.",
       "Avoid with thyroid medication and during pregnancy.",
     ],
-    quotes: [
-      { handle: "@labnotes", text: "One of the few adaptogens with real RCTs." },
-      { handle: "@sleepdoc", text: "I sleep through the night now. First month was wild." },
-    ],
+    quotes: [],
     communityVerdict: "Strong anecdotal support for stress and sleep, with several users describing a noticeable shift within the first month.",
     safetyNote: "Avoid during pregnancy and if you have a thyroid condition or take thyroid medication — it can affect thyroid hormone levels.",
     sourceUrls: [],
@@ -411,10 +368,7 @@ export const TRENDS: Trend[] = [
       "Emerging evidence for cognitive benefits under sleep deprivation.",
       "Loading phase is optional — 3–5g daily reaches saturation in ~4 weeks.",
     ],
-    quotes: [
-      { handle: "@labnotes", text: "If you take one supplement, take this." },
-      { handle: "@gymsci", text: "Cheap, safe, works. Rare combo." },
-    ],
+    quotes: [],
     communityVerdict: "Near-universal endorsement as the one supplement worth taking — consistently described as cheap, safe, and effective.",
     safetyNote: "Very well studied and safe for healthy adults; stay well hydrated, and check with a doctor first if you have kidney disease.",
     sourceUrls: [],
@@ -435,9 +389,7 @@ export const TRENDS: Trend[] = [
       "Low doses (0.3–0.5mg) outperform 5–10mg doses in most trials.",
       "US OTC dosing is typically 10–20× the effective dose.",
     ],
-    quotes: [
-      { handle: "@sleepdoc", text: "Take less. Timing matters more than dose." },
-    ],
+    quotes: [],
     communityVerdict: "Generally positive, with experienced users specifically pushing back on high OTC doses in favor of smaller, better-timed amounts.",
     safetyNote: "Can cause grogginess if the dose is too high; avoid combining with alcohol or other sedatives.",
     sourceUrls: [],
@@ -458,9 +410,7 @@ export const TRENDS: Trend[] = [
       "Most useful in adults with low dietary intake or elevated stress.",
       "Oxide form is poorly absorbed — use glycinate or threonate.",
     ],
-    quotes: [
-      { handle: "@sleepdoc", text: "Glycinate at dinner. Game changer for restless legs." },
-    ],
+    quotes: [],
     communityVerdict: "Well liked for sleep quality, with several users specifically calling out the glycinate form as key to feeling a difference.",
     safetyNote: "High doses can cause digestive upset (loose stools); those with kidney issues should check with a doctor first.",
     sourceUrls: [],
@@ -483,9 +433,7 @@ export const TRENDS: Trend[] = [
       "Healthy livers and kidneys already detoxify — no juice required.",
       "Some benefit comes from added hydration and produce intake generally.",
     ],
-    quotes: [
-      { handle: "@labnotes", text: "Celery's fine. The mythology around it isn't." },
-    ],
+    quotes: [],
     communityVerdict: "Broad skepticism — most people see it as an overhyped ritual rather than anything with real detox benefits.",
     safetyNote: "High in oxalates — worth discussing with a doctor if you have a history of kidney stones.",
     sourceUrls: [],
@@ -506,9 +454,7 @@ export const TRENDS: Trend[] = [
       "Bioavailability is poor without piperine or lipid carriers.",
       "Effects are modest — not a substitute for NSAIDs in acute inflammation.",
     ],
-    quotes: [
-      { handle: "@labnotes", text: "Real, when formulated for absorption." },
-    ],
+    quotes: [],
     communityVerdict: "Positive but conditional — people who see results emphasize that absorption-boosting formulation makes the difference.",
     safetyNote: "Can interact with blood thinners and may upset the stomach at high doses — check with a doctor if you're on medication.",
     sourceUrls: [],
@@ -529,9 +475,7 @@ export const TRENDS: Trend[] = [
       "Some metabolic markers improve, but matched-calorie comparisons show small effects.",
       "May worsen disordered eating patterns — not for everyone.",
     ],
-    quotes: [
-      { handle: "@labnotes", text: "Works if it works for your schedule. That's it." },
-    ],
+    quotes: [],
     communityVerdict: "Reception is practical rather than enthusiastic — people frame it as a scheduling tool that works if it fits your lifestyle, not a metabolic hack.",
     safetyNote: "Not recommended for anyone with a history of disordered eating; those on diabetes medication should consult a doctor first.",
     sourceUrls: [],
@@ -552,9 +496,7 @@ export const TRENDS: Trend[] = [
       "May slightly reduce plaque vs. nothing, but inferior to brushing and flossing.",
       "Linked to occasional lipoid pneumonia from accidental aspiration.",
     ],
-    quotes: [
-      { handle: "@derm_notes", text: "Brushing exists. Use it." },
-    ],
+    quotes: [],
     communityVerdict: "Mostly dismissed as an unnecessary extra step — people default back to recommending standard brushing and flossing.",
     safetyNote: "Rare but documented risk of lipoid pneumonia if the oil is accidentally inhaled/aspirated — don't substitute it for brushing.",
     sourceUrls: [],

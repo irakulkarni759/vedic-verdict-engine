@@ -227,7 +227,7 @@ function SearchPage() {
                     </p>
 
                     <a
-                      href={data.redditSearchUrl}
+                      href={quote.url}
                       target="_blank"
                       rel="noreferrer"
                       className="font-mono mt-3 inline-block text-xs text-[var(--terracotta)]"

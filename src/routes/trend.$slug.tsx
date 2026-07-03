@@ -1,6 +1,7 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { trendBySlug, type Trend, type Verdict } from "@/lib/trends";
 import { getGeneratedTrendBySlug } from "@/lib/generatedTrends.functions";
+import { getRedditQuotes } from "@/lib/reddit.server";
 import { TrendCard } from "@/components/TrendCard";
 import { Comments } from "@/components/Comments";
 
@@ -8,6 +9,15 @@ export const Route = createFileRoute("/trend/$slug")({
   loader: async ({ params }) => {
     const trend = trendBySlug(params.slug) ?? (await getGeneratedTrendBySlug({ data: { slug: params.slug } }));
     if (!trend) throw notFound();
+
+    // Curated trends never have quotes on file (no real search was ever run
+    // for them), and some older generated trends predate real Reddit
+    // sourcing — for either case, fetch real ones live rather than show
+    // nothing indefinitely or, worse, anything fabricated.
+    if (trend.quotes.length === 0) {
+      const liveQuotes = await getRedditQuotes({ data: { query: trend.name } });
+      if (liveQuotes.length > 0) trend.quotes = liveQuotes;
+    }
 
     const related = trend.related
       .map((s) => trendBySlug(s))
@@ -53,11 +63,6 @@ function pubmedUrl(q: string) {
 
 function redditUrl(q: string) {
   return `https://www.reddit.com/search/?q=${encodeURIComponent(q)}`;
-}
-
-function redditHandleUrl(handle: string) {
-  const clean = handle.replace(/^@/, "");
-  return `https://www.reddit.com/search/?q=${encodeURIComponent(clean)}`;
 }
 
 function TrendPage() {
@@ -162,14 +167,14 @@ function TrendPage() {
             </div>
 
             <div className="mt-8 space-y-8">
-              {trend.quotes.map((q: { handle: string; text: string }) => (
+              {trend.quotes.map((q: { handle: string; text: string; url: string }) => (
                 <div key={`${q.handle}-${q.text}`}>
                   <p className="text-lg italic leading-8 text-[var(--ink)]">
                     “{q.text}”
                   </p>
 
                   <a
-                    href={redditHandleUrl(q.handle)}
+                    href={q.url}
                     target="_blank"
                     rel="noreferrer"
                     className="font-mono mt-3 inline-block text-xs text-[var(--terracotta)]"

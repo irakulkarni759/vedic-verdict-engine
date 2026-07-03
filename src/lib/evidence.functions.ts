@@ -6,6 +6,7 @@ import {
   slugify,
 } from "./generatedTrends.functions";
 import { toTitleCase } from "./utils";
+import { fetchRedditQuotes, type RedditQuote } from "./reddit.server";
 
 export type EvidenceArticle = {
   pmid: string;
@@ -34,7 +35,7 @@ export type EvidenceVerdict = {
   sentiment: number;
   updated: string;
   bullets: EvidenceBullet[];
-  quotes: { handle: string; text: string }[];
+  quotes: RedditQuote[];
   articles: EvidenceArticle[];
   pubmedSearchUrl: string;
   redditSearchUrl: string;
@@ -90,14 +91,14 @@ function decodeEntities(s: string): string {
 
 async function generateBulletsAndQuotes(
   query: string,
-  abstracts: { abstract: string; url: string }[]
+  abstracts: { abstract: string; url: string }[],
+  redditQuotes: RedditQuote[],
 ): Promise<{
   displayName: string | null;
   researchVerdict: string | null;
   communityVerdict: string | null;
   safetyNote: string | null;
   bullets: EvidenceBullet[];
-  quotes: { handle: string; text: string }[];
   sentiment: number;
   category: string;
   verdict: "BACKED" | "MIXED" | "DEBUNKED" | null;
@@ -106,7 +107,7 @@ async function generateBulletsAndQuotes(
   if (!apiKey) {
     return {
       displayName: null, researchVerdict: null, communityVerdict: null, safetyNote: null,
-      bullets: [], quotes: [], sentiment: 50, category: guessCategoryFallback(query), verdict: null,
+      bullets: [], sentiment: 50, category: guessCategoryFallback(query), verdict: null,
     };
   }
 
@@ -114,20 +115,26 @@ async function generateBulletsAndQuotes(
     .map((a, i) => `[${i + 1}] (url: ${a.url})\n${a.abstract}`)
     .join("\n\n");
 
-  const prompt = `You are a health research analyst. Given these PubMed abstracts about "${query}", return a JSON object with nine fields:
+  const redditContext = redditQuotes.length
+    ? redditQuotes.map((q) => `${q.handle}: "${q.text}"`).join("\n")
+    : "(no real Reddit comments were found for this search — base the community read on typical experience for this category of product/practice instead, and keep it general rather than implying specific quotes exist)";
+
+  const prompt = `You are a health research analyst. Given these PubMed abstracts and real Reddit comments about "${query}", return a JSON object with eight fields:
 
 1. "displayName": a standardized title in the exact form "X for Y" — X is the ingredient/product/practice being searched, Y is the specific outcome or purpose it's being evaluated for (e.g. "Rosemary Oil for Hair Growth"). If "${query}" already states a purpose, clean it up into this form (title case, no trailing punctuation). If it doesn't state one, infer the single most common/notable purpose people search this for, based on the abstracts and general knowledge — never leave Y generic like "for Health" or "for Wellness"; be specific (e.g. "for Hair Growth", "for Sleep Quality", "for Inflammation").
 2. "verdict": your overall read of the evidence, one of "BACKED" (the bulk of studies support it working/being beneficial), "MIXED" (evidence is genuinely split or inconclusive), or "DEBUNKED" (the bulk of studies contradict it or find no effect). Base this on your actual understanding of what each abstract found, not just keyword counting — e.g. abstracts describing consistent, specific mechanisms and positive outcomes across most studies should read as BACKED even if few use the literal phrase "significant improvement".
 3. "researchVerdict": ONE sentence (max ~140 chars) giving the plain-language bottom line — write it the way you'd explain it to a friend, not a lab report. Avoid clinical/technical jargon (say "muscle strength" not "phosphocreatine stores"; say "no proven cancer risk" not "without established cancer risk"; skip exact study durations/doses unless genuinely essential). State the real-world takeaway and one honest caveat if relevant. Example: "Reliably builds muscle and strength with regular use, and decades of research haven't found any real safety concerns." NOT a restated fact pulled from one abstract, NOT a generic template like "Across N studies, findings support X," and NOT a dense academic sentence stuffed with numbers/mechanisms.
-4. "communityVerdict": ONE sentence (max ~140 chars) in the same plain, conversational style — what people actually notice and talk about, not clinical terms like "loading protocols" or "responders." Example: "People consistently notice more strength and muscle within weeks, and most who were nervous about kidney or health risks say those worries turned out to be overblown." Base it on what's plausible given the evidence and typical user experience, not a literal quote.
+4. "communityVerdict": ONE sentence (max ~140 chars), in the same plain, conversational style, synthesizing the REAL Reddit comments provided below — what people actually notice and talk about. Do not invent a quote or a specific claim that isn't supported by the real comments; if the real comments are sparse or absent, keep this general (e.g. "Limited public discussion online, but the research above gives a reasonable starting expectation") rather than fabricating specifics.
 5. "safetyNote": ONE short sentence (max ~140 chars) on the most common real safety consideration for "${query}" — drug interactions, pregnancy/breastfeeding warnings, allergy risk, or who should check with a doctor first. Plain language, based on general medical knowledge, not just this abstract set. If there's genuinely nothing notable for typical healthy-adult use, return an empty string "" — don't invent a caution that doesn't apply.
 6. "bullets": 3-4 key findings directly relevant to "${query}". Each finding: 1 sentence, 50-150 chars, specific with numbers/stats when available. Skip irrelevant abstracts.
-7. "quotes": 2 realistic Reddit-style community quotes about "${query}" from real users. Short, conversational, opinionated. Each has a "handle" (like "@username") and "text".
-8. "sentiment": a number 0-100 representing how positive the community sentiment is about "${query}" based on the evidence and typical user experience.
-9. "category": the single best-fit category slug for "${query}", chosen ONLY from this exact list: ${CATEGORY_SLUGS.join(", ")}.
+7. "sentiment": a number 0-100 representing how positive the community sentiment is about "${query}", based on the real Reddit comments below (if any) and the evidence — not invented.
+8. "category": the single best-fit category slug for "${query}", chosen ONLY from this exact list: ${CATEGORY_SLUGS.join(", ")}.
 
 Abstracts:
 ${abstractText}
+
+Real Reddit comments mentioning "${query}":
+${redditContext}
 
 Return ONLY this JSON shape, no other text:
 {
@@ -137,7 +144,6 @@ Return ONLY this JSON shape, no other text:
   "communityVerdict": "...",
   "safetyNote": "...",
   "bullets": [{"text": "...", "index": 1}, ...],
-  "quotes": [{"handle": "@username", "text": "..."}, ...],
   "sentiment": 75,
   "category": "supplements"
 }`;
@@ -166,7 +172,6 @@ Return ONLY this JSON shape, no other text:
       communityVerdict?: string;
       safetyNote?: string;
       bullets: { text: string; index: number }[];
-      quotes: { handle: string; text: string }[];
       sentiment: number;
       category?: string;
     };
@@ -202,12 +207,12 @@ Return ONLY this JSON shape, no other text:
 
     return {
       displayName, researchVerdict, communityVerdict, safetyNote,
-      bullets, quotes: parsed.quotes ?? [], sentiment: parsed.sentiment ?? 50, category, verdict,
+      bullets, sentiment: parsed.sentiment ?? 50, category, verdict,
     };
   } catch {
     return {
       displayName: null, researchVerdict: null, communityVerdict: null, safetyNote: null,
-      bullets: [], quotes: [], sentiment: 50, category: guessCategoryFallback(query), verdict: null,
+      bullets: [], sentiment: 50, category: guessCategoryFallback(query), verdict: null,
     };
   }
 }
@@ -389,8 +394,14 @@ async function buildResultFromIds(opts: {
     studies >= 10 ? "high" : studies >= 4 ? "moderate" : "low";
 
   const searchSubject = fallback ? fallback.terms.join(" ") : query;
-  const { displayName, researchVerdict, communityVerdict, safetyNote, bullets, quotes, sentiment, category, verdict: claudeVerdict } =
-    await generateBulletsAndQuotes(searchSubject, abstractsForClaude);
+
+  // Real Reddit comments, fetched in parallel with the Claude call setup.
+  // These are the ONLY source of "quotes" — Claude is never asked to invent
+  // them, it only synthesizes communityVerdict/sentiment from real ones.
+  const redditQuotes = await fetchRedditQuotes(searchSubject);
+
+  const { displayName, researchVerdict, communityVerdict, safetyNote, bullets, sentiment, category, verdict: claudeVerdict } =
+    await generateBulletsAndQuotes(searchSubject, abstractsForClaude, redditQuotes);
 
   // Standardize the displayed title to "X for Y" — either Claude's inferred
   // purpose, or the raw title-cased query/name as a fallback when Claude
@@ -440,7 +451,7 @@ async function buildResultFromIds(opts: {
     data: {
       slug, query, name: finalName, category, verdict: verdict.toLowerCase() as "backed" | "mixed" | "debunked",
       summary: oneLiner, communityVerdict: communitySummary, safetyNote: finalSafetyNote, studyCount: studies, confidence, updated,
-      evidencePoints: bullets.map((b) => b.text), sentiment, opinions: quotes,
+      evidencePoints: bullets.map((b) => b.text), sentiment, opinions: redditQuotes,
       sourceUrls: articles.slice(0, 6).map((a) => a.url),
     },
   });
@@ -449,7 +460,7 @@ async function buildResultFromIds(opts: {
     query, name: finalName, slug, category, verdict, confidence, oneLiner, communityVerdict: communitySummary,
     safetyNote: finalSafetyNote, studies,
     sentiment, updated,
-    bullets, quotes, articles: articles.slice(0, 6),
+    bullets, quotes: redditQuotes, articles: articles.slice(0, 6),
     pubmedSearchUrl, redditSearchUrl, generatedAt,
     ingredientFallback: fallback ? fallback.terms : null,
   };
