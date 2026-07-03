@@ -55,20 +55,37 @@ function truncateAtWordBoundary(text: string, maxLength: number): string {
   return (lastSpace > 0 ? slice.slice(0, lastSpace) : slice) + "...";
 }
 
+async function fetchOnce(query: string, timeoutMs: number): Promise<Response | null> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(
+      `${SENTIMENT_API_URL}/api/claim?query=${encodeURIComponent(query)}`,
+      { signal: controller.signal }
+    );
+    return res;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/**
+ * Railway free-tier containers take 10-20s+ to serve their first request
+ * right after a deploy or a cold start — a single 5s attempt was timing out
+ * and silently returning [] during exactly those windows. Now: a fast first
+ * try (5s, covers the common warm case), then one longer retry (20s) before
+ * giving up, since the whole verdict-generation request already takes
+ * several seconds for PubMed/Claude anyway.
+ */
 export async function fetchRedditQuotes(query: string, limit = 3): Promise<RedditQuote[]> {
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-    let res: Response;
-    try {
-      res = await fetch(
-        `${SENTIMENT_API_URL}/api/claim?query=${encodeURIComponent(query)}`,
-        { signal: controller.signal }
-      );
-    } finally {
-      clearTimeout(timeoutId);
+    let res = await fetchOnce(query, 5000);
+    if (!res || !res.ok) {
+      res = await fetchOnce(query, 20000);
     }
-    if (!res.ok) return [];
+    if (!res || !res.ok) return [];
 
     const data: SentimentApiResponse = await res.json();
     if (!data.top_quotes || data.top_quotes.length === 0) return [];
