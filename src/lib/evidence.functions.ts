@@ -393,6 +393,11 @@ async function buildResultFromIds(opts: {
   const confidence: EvidenceVerdict["confidence"] =
     studies >= 10 ? "high" : studies >= 4 ? "moderate" : "low";
 
+  // NOTE: searchSubject (fallback academic terms when present) is right for
+  // PubMed, but wrong for Reddit — people write "PDRN" or "vibration plate,"
+  // not "polydeoxyribonucleotide" or "whole body vibration training." Reddit
+  // search uses the original colloquial query; PubMed/Claude context below
+  // still uses searchSubject.
   const searchSubject = fallback ? fallback.terms.join(" ") : query;
 
   // Real Reddit comments, fetched in parallel with the Claude call setup.
@@ -402,7 +407,7 @@ async function buildResultFromIds(opts: {
   // just means no fresh community quotes for this one search.
   let redditQuotes: RedditQuote[] = [];
   try {
-    redditQuotes = await fetchRedditQuotes(searchSubject);
+    redditQuotes = await fetchRedditQuotes(query);
   } catch {
     // fetchRedditQuotes already catches its own errors and returns [];
     // this guard is just a safety net in case that contract ever changes.
