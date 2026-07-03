@@ -142,6 +142,15 @@ function extractQueryKeywords(query: string): string[] {
     .filter((w) => w.length > 2 && !PUBMED_STOPWORDS.has(w));
 }
 
+/** Loose singular/plural match: "vacuums" should count a title containing
+ *  "vacuum" as a hit, and vice versa, without a full stemmer. */
+function keywordInTitle(keyword: string, title: string): boolean {
+  if (title.includes(keyword)) return true;
+  if (keyword.endsWith("s") && title.includes(keyword.slice(0, -1))) return true;
+  if (!keyword.endsWith("s") && title.includes(`${keyword}s`)) return true;
+  return false;
+}
+
 /**
  * Checks whether the returned PMIDs are actually ABOUT the query's subject,
  * not just a count of hits. PubMed's automatic term mapping can return a
@@ -153,12 +162,19 @@ function extractQueryKeywords(query: string): string[] {
  * count-only WEAK_RESULT_THRESHOLD check and feed bullets straight from
  * off-topic abstracts. Fetches titles via esummary (cheap, one call for
  * all ids) and requires a meaningful share of them to share a keyword with
- * the query. Fails open (true) on any error or when there are no usable
- * keywords, so this never blocks a legitimate result set.
+ * the query's CORE SUBJECT (the purpose clause is stripped first — see the
+ * comment inline below for why that part matters). Fails open (true) on any
+ * error or when there are no usable keywords, so this never blocks a
+ * legitimate result set.
  */
 async function checkPubmedRelevance(ids: string[], query: string): Promise<boolean> {
   if (ids.length === 0) return false;
-  const keywords = extractQueryKeywords(query);
+  // Keywords come from the CORE SUBJECT only (purpose clause stripped) —
+  // using the full query let generic "waist"/"shrinking" keywords count a
+  // hit for any obesity-adjacent study, which is exactly the false-positive
+  // that let a page of irrelevant aerobic-exercise/GLP-1 studies through
+  // for "stomach vacuums for shrinking waist" even with this check in place.
+  const keywords = extractQueryKeywords(coreSubjectForReddit(query));
   if (keywords.length === 0) return true;
 
   try {
@@ -169,7 +185,7 @@ async function checkPubmedRelevance(ids: string[], query: string): Promise<boole
     if (!result) return true;
 
     const titles = ids.map((id) => (result[id]?.title ?? "").toLowerCase());
-    const relevantCount = titles.filter((t) => keywords.some((k) => t.includes(k))).length;
+    const relevantCount = titles.filter((t) => keywords.some((k) => keywordInTitle(k, t))).length;
     return relevantCount / ids.length >= 1 / 3;
   } catch {
     return true;
