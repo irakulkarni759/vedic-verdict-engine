@@ -49,9 +49,13 @@ export function Comments({ slug }: Props) {
   useEffect(() => {
     let cancelled = false;
     setComments(null);
-    getComments({ data: { slug } }).then((rows) => {
-      if (!cancelled) setComments(rows);
-    });
+    getComments({ data: { slug } })
+      .then((rows) => {
+        if (!cancelled) setComments(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setComments([]);
+      });
     const savedAuthor = window.localStorage.getItem(AUTHOR_STORAGE_KEY);
     if (savedAuthor) setAuthor(savedAuthor);
     setTokens(loadTokens());
