@@ -119,12 +119,16 @@ async function generateBulletsAndQuotes(
     ? redditQuotes.map((q) => `${q.handle}: "${q.text}"`).join("\n")
     : "(no real Reddit comments were found for this search — base the community read on typical experience for this category of product/practice instead, and keep it general rather than implying specific quotes exist)";
 
+  const quoteCountNote = redditQuotes.length
+    ? `There are exactly ${redditQuotes.length} real Reddit comment(s) provided below. Treat this as enough to synthesize a real, specific communityVerdict from — do NOT use a generic filler like "Limited public discussion online so far" when comments are present, that phrasing is ONLY for when the list below is empty.`
+    : `There are zero real Reddit comments provided below — this is the only case where a generic communityVerdict like "Limited public discussion online so far" is appropriate.`;
+
   const prompt = `You are a health research analyst. Given these PubMed abstracts and real Reddit comments about "${query}", return a JSON object with eight fields:
 
 1. "displayName": a standardized title in the exact form "X for Y" — X is the ingredient/product/practice being searched, Y is the specific outcome or purpose it's being evaluated for (e.g. "Rosemary Oil for Hair Growth"). If "${query}" already states a purpose, clean it up into this form (title case, no trailing punctuation). If it doesn't state one, infer the single most common/notable purpose people search this for, based on the abstracts and general knowledge — never leave Y generic like "for Health" or "for Wellness"; be specific (e.g. "for Hair Growth", "for Sleep Quality", "for Inflammation").
 2. "verdict": your overall read of the evidence, one of "BACKED" (the bulk of studies support it working/being beneficial), "MIXED" (evidence is genuinely split or inconclusive), or "DEBUNKED" (the bulk of studies contradict it or find no effect). Base this on your actual understanding of what each abstract found, not just keyword counting — e.g. abstracts describing consistent, specific mechanisms and positive outcomes across most studies should read as BACKED even if few use the literal phrase "significant improvement".
 3. "researchVerdict": ONE short sentence, max ~90 chars, ONE idea only — write it the way you'd text a friend, not explain a study. Avoid clinical/technical jargon (say "muscle strength" not "phosphocreatine stores"). State only the single most important real-world takeaway. Do NOT stack multiple clauses with commas/dashes/semicolons (e.g. NOT "X shows promise, but effectiveness depends on Y, and data remain limited" — pick the ONE most important point and cut the rest). If a caveat truly matters more than the headline finding, lead with the caveat instead of appending it. Example good: "Works well when injected, but doesn't absorb through skin." Example bad (too dense, don't do this): "Injected PDRN shows promise for scar healing by stimulating tissue regeneration, but effectiveness depends heavily on delivery method—topical application is unlikely to work, and clinical data remain limited."
-4. "communityVerdict": ONE short sentence, max ~90 chars, ONE idea only, same plain/texting-a-friend style, synthesizing the REAL Reddit comments provided below — what people actually notice and talk about most. Do not stack multiple clauses together (no "X happens, and Y is unclear, and Z varies" — pick the single most important thing people say). Do not invent a quote or a specific claim that isn't supported by the real comments; if the real comments are sparse or absent, keep this general (e.g. "Limited public discussion online so far.") rather than fabricating specifics.
+4. "communityVerdict": ONE short sentence, max ~90 chars, ONE idea only, same plain/texting-a-friend style, synthesizing the REAL Reddit comments provided below — what people actually notice and talk about most. Do not stack multiple clauses together (no "X happens, and Y is unclear, and Z varies" — pick the single most important thing people say). Do not invent a quote or a specific claim that isn't supported by the real comments. ${quoteCountNote}
 5. "safetyNote": ONE short sentence, max ~90 chars, ONE idea, on the most common real safety consideration for "${query}" — drug interactions, pregnancy/breastfeeding warnings, allergy risk, or who should check with a doctor first. Plain language, based on general medical knowledge, not just this abstract set. If there's genuinely nothing notable for typical healthy-adult use, return an empty string "" — don't invent a caution that doesn't apply.
 6. "bullets": 3-4 key findings from the PUBMED ABSTRACTS ONLY — never from the Reddit comments. Each bullet must specifically evaluate/test/discuss "${query}" ITSELF (the exact ingredient/product/practice), not just the same broader condition or category. E.g. if the query is about a specific compound for treating acne scars, a study about microneedling or lasers for acne scars is NOT a valid bullet even though it's on-topic for "acne scars" generally — it doesn't study the actual compound. Each bullet must have an accurate "index" pointing at which abstract (1-based) it came from. Never summarize, paraphrase, or reference Reddit/community opinion here — that belongs only in "communityVerdict". If FEWER than 3 (or zero) abstracts specifically evaluate "${query}" itself, return that fewer number of bullets — do not pad with abstracts about the broader condition/category just to reach 3-4, and do not borrow from Reddit content. Each bullet: 1 sentence, 50-150 chars, specific with numbers/stats when available.
 7. "sentiment": a number 0-100 representing how positive the community sentiment is about "${query}", based on the real Reddit comments below (if any) and the evidence — not invented.
@@ -455,8 +459,13 @@ async function buildResultFromIds(opts: {
   const templatedOneLiner = `${prefix}Across ${studies} PubMed studies, ${verdictClause}.`;
   const oneLiner = researchVerdict ?? templatedOneLiner;
 
+  const isGenericNoDiscussionPhrase = (s: string) =>
+    /limited (public )?discussion|not much (public )?discussion|no (real )?discussion/i.test(s);
+
   const communitySummary =
-    communityVerdict ?? `Community sentiment sits at ${sentiment}% positive based on available discussion.`;
+    communityVerdict && !(redditQuotes.length > 0 && isGenericNoDiscussionPhrase(communityVerdict))
+      ? communityVerdict
+      : `Community sentiment sits at ${sentiment}% positive based on available discussion.`;
 
   const finalSafetyNote = safetyNote ?? "";
 
