@@ -6,7 +6,7 @@ import {
   slugify,
 } from "./generatedTrends.functions";
 import { toTitleCase } from "./utils";
-import { fetchRedditQuotes, YouTubeQuotaExceededError, type RedditQuote } from "./reddit.server";
+import { fetchRedditQuotes, type RedditQuote } from "./reddit.server";
 
 export type EvidenceArticle = {
   pmid: string;
@@ -403,8 +403,9 @@ async function buildResultFromIds(opts: {
   let redditQuotes: RedditQuote[] = [];
   try {
     redditQuotes = await fetchRedditQuotes(searchSubject);
-  } catch (err) {
-    if (!(err instanceof YouTubeQuotaExceededError)) throw err;
+  } catch {
+    // fetchRedditQuotes already catches its own errors and returns [];
+    // this guard is just a safety net in case that contract ever changes.
   }
 
   const { displayName, researchVerdict, communityVerdict, safetyNote, bullets, sentiment, category, verdict: claudeVerdict } =

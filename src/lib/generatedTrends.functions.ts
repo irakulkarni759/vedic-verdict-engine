@@ -3,7 +3,7 @@ import { getSupabaseServiceClient } from "./supabase.server";
 import { CATEGORIES, type Trend, type Verdict } from "./trends";
 import { checkAdminPassword } from "./comments.functions";
 import { toTitleCase } from "./utils";
-import { fetchRedditQuotes, YouTubeQuotaExceededError } from "./reddit.server";
+import { fetchRedditQuotes } from "./reddit.server";
 
 export const CATEGORY_SLUGS = CATEGORIES.map((c) => c.slug);
 
@@ -563,16 +563,10 @@ export const adminRefreshRedditQuotes = createServerFn({ method: "POST" })
           let realQuotes: { handle: string; text: string; url: string }[];
           try {
             realQuotes = await fetchRedditQuotes(row.query);
-          } catch (err) {
-            if (err instanceof YouTubeQuotaExceededError) {
-              // Daily search quota (100/day, separate from the general
-              // 10,000-unit budget) is exhausted — stop immediately rather
-              // than grinding through the rest of the trends getting []
-              // for each one and reporting misleading "no quotes found."
-              quotaHit = true;
-              break;
-            }
-            throw err;
+          } catch {
+            // fetchRedditQuotes already catches its own errors internally
+            // and returns []; this is just a safety net.
+            realQuotes = [];
           }
           processed++;
 

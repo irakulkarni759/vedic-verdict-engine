@@ -1,19 +1,13 @@
 import { createServerFn } from "@tanstack/react-start";
-import { fetchYouTubeQuotes, YouTubeQuotaExceededError } from "./youtube.server";
-
-export { YouTubeQuotaExceededError };
 
 /**
- * TEMPORARY: the actual data source here is YouTube comments, not Reddit
- * (see youtube.server.ts) — Reddit's official API required approval we hit
- * friction on, and their public unauthenticated endpoint turned out to be
- * fully blocked from this app's server IPs (confirmed: 0/42 trends got
- * real quotes when tested). Names/exports and the site's "Reddit" copy are
- * kept as-is for now so the underlying real-quotes mechanism can be tested
- * before deciding whether to rebrand this section.
+ * Real Reddit comments, fetched from a standalone Python service deployed on
+ * Railway (repo: veda-sentiment-backend). That service handles the TLS
+ * fingerprinting Reddit's WAF requires — something Cloudflare Workers can't
+ * do natively, which is why this couldn't live in this app directly.
  *
- * The contract hasn't changed: real quotes only, [] on any failure or when
- * nothing usable is found — never a fabricated fallback.
+ * Contract unchanged from before: real quotes only, [] on any failure or
+ * when nothing usable is found — never a fabricated fallback.
  */
 export type RedditQuote = {
   handle: string;
@@ -21,8 +15,50 @@ export type RedditQuote = {
   url: string; // real permalink
 };
 
+const SENTIMENT_API_URL =
+  process.env.VEDA_SENTIMENT_API_URL ??
+  "https://veda-sentiment-backend-production.up.railway.app";
+
+type SentimentApiComment = {
+  body: string;
+  score: number;
+  subreddit: string | null;
+  author?: string | null;
+  url?: string | null;
+};
+
+type SentimentApiResponse = {
+  comments: SentimentApiComment[];
+};
+
 export async function fetchRedditQuotes(query: string, limit = 3): Promise<RedditQuote[]> {
-  return fetchYouTubeQuotes(query, limit);
+  try {
+    const res = await fetch(
+      `${SENTIMENT_API_URL}/api/claim?query=${encodeURIComponent(query)}`
+    );
+    if (!res.ok) return [];
+
+    const data: SentimentApiResponse = await res.json();
+    if (!data.comments || data.comments.length === 0) return [];
+
+    // Highest-score comments first — these are the ones the community
+    // actually upvoted, so they're the most representative to surface.
+    const ranked = [...data.comments].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+
+    const quotes: RedditQuote[] = [];
+    for (const c of ranked) {
+      if (!c.body || !c.url) continue;
+      quotes.push({
+        handle: c.author ? `u/${c.author}` : `r/${c.subreddit ?? "reddit"}`,
+        text: c.body.length > 300 ? c.body.slice(0, 297) + "..." : c.body,
+        url: c.url,
+      });
+      if (quotes.length >= limit) break;
+    }
+    return quotes;
+  } catch {
+    return [];
+  }
 }
 
 /** Client-callable wrapper, used to live-fetch quotes for curated trends
