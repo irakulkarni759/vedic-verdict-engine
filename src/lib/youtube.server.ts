@@ -38,9 +38,32 @@ function isUsable(text: string | undefined): text is string {
   return !!text && text.trim().length >= 40;
 }
 
-function truncate(text: string, max = 280): string {
+// Only trims genuinely excessive outliers, and at a word boundary rather
+// than an abrupt mid-sentence cut — most real comments are well under this.
+function trimExcess(text: string, max = 600): string {
   const clean = text.trim();
-  return clean.length > max ? `${clean.slice(0, max - 3)}...` : clean;
+  if (clean.length <= max) return clean;
+  const cut = clean.slice(0, max);
+  const lastSpace = cut.lastIndexOf(" ");
+  return `${cut.slice(0, lastSpace > 0 ? lastSpace : max)}...`;
+}
+
+/** Self-promo/spam comments — a channel reposting their own video title
+ *  with a link isn't a genuine community reaction, real account or not. */
+function looksLikeSpam(text: string): boolean {
+  return /https?:\/\/|www\.|youtu\.be/i.test(text);
+}
+
+/** Crude but effective English check: requires a couple common English
+ *  function words and a low ratio of non-ASCII characters (catches
+ *  Spanish/French/etc. accented text and non-Latin scripts alike). */
+function looksEnglish(text: string): boolean {
+  const lower = ` ${text.toLowerCase()} `;
+  const commonWords = [" the ", " and ", " is ", " was ", " this ", " with ", " for ", " i ", " my ", " have ", " it ", " you ", " to "];
+  const hits = commonWords.filter((w) => lower.includes(w)).length;
+  const nonAsciiCount = (text.match(/[^\x00-\x7F]/g) ?? []).length;
+  const nonAsciiRatio = nonAsciiCount / text.length;
+  return hits >= 2 && nonAsciiRatio < 0.03;
 }
 
 const STOPWORDS = new Set([
@@ -104,9 +127,10 @@ async function fetchCommentsForVideo(
         const text = snippet?.textOriginal ?? snippet?.textDisplay;
         const author = snippet?.authorDisplayName;
         if (!isUsable(text) || !author || !commentId) return null;
+        if (looksLikeSpam(text) || !looksEnglish(text)) return null;
         return {
           handle: author.startsWith("@") ? author : `@${author}`,
-          text: truncate(text),
+          text: trimExcess(text),
           url: `https://www.youtube.com/watch?v=${videoId}&lc=${commentId}`,
           likeCount: snippet?.likeCount ?? 0,
         };
