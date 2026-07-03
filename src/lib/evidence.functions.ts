@@ -47,6 +47,45 @@ export type EvidenceVerdict = {
 
 const EUTILS = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils";
 
+// An NCBI API key raises the eutils rate limit from 3 to 10 requests/sec and
+// makes the limit per-key instead of per-IP. That matters here because
+// requests go out from Cloudflare's shared egress IPs, so without a key a
+// burst of searches easily trips NCBI's per-IP throttle and users see
+// "Couldn't reach PubMed". The key is free from NCBI; set NCBI_API_KEY (or
+// PUBMED_API_KEY) in the environment to use it. Falls back to keyless.
+const NCBI_API_KEY = process.env.NCBI_API_KEY ?? process.env.PUBMED_API_KEY ?? "";
+
+/** Build a eutils URL, appending the API key when one is configured. */
+function eutils(path: string): string {
+  const sep = path.includes("?") ? "&" : "?";
+  return NCBI_API_KEY ? `${EUTILS}/${path}${sep}api_key=${NCBI_API_KEY}` : `${EUTILS}/${path}`;
+}
+
+/**
+ * Fetch a PubMed eutils endpoint, retrying transient failures (network
+ * errors, 429 rate limits, and 5xx) with a short backoff. A single blip or
+ * a momentary rate-limit used to dead-end the whole page with "Couldn't
+ * reach PubMed"; most of those would have succeeded on a second try.
+ * Returns null only after exhausting retries. Genuine 4xx (other than 429)
+ * are returned as-is rather than retried.
+ */
+async function fetchPubmed(path: string, retries = 2): Promise<Response | null> {
+  const url = eutils(path);
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(url);
+      if (res.ok) return res;
+      if (res.status !== 429 && res.status < 500) return res;
+    } catch {
+      // network error; fall through to the backoff + retry below
+    }
+    if (attempt < retries) {
+      await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+    }
+  }
+  return null;
+}
+
 function pickTag(xml: string, tag: string): string | null {
   const m = xml.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`));
   return m ? m[1].replace(/<[^>]+>/g, "").trim() : null;
@@ -359,8 +398,8 @@ async function buildResultFromIds(opts: {
 }): Promise<EvidenceVerdict> {
   const { ids, query, name, slug, updated, generatedAt, pubmedSearchUrl, redditSearchUrl, fallback } = opts;
 
-  const efetch = await fetch(`${EUTILS}/efetch.fcgi?db=pubmed&retmode=xml&id=${ids.join(",")}`);
-  const xml = await efetch.text();
+  const efetch = await fetchPubmed(`efetch.fcgi?db=pubmed&retmode=xml&id=${ids.join(",")}`);
+  const xml = efetch ? await efetch.text() : "";
   const articleBlocks = xml.split(/<PubmedArticle[>\s]/).slice(1);
 
   const articles: EvidenceArticle[] = [];
@@ -523,10 +562,10 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
     }
 
     try {
-      const esearch = await fetch(
-        `${EUTILS}/esearch.fcgi?db=pubmed&retmode=json&retmax=15&sort=relevance&term=${encodeURIComponent(query)}`,
+      const esearch = await fetchPubmed(
+        `esearch.fcgi?db=pubmed&retmode=json&retmax=15&sort=relevance&term=${encodeURIComponent(query)}`,
       );
-      if (!esearch.ok) return empty("Couldn't reach PubMed right now. Try again in a moment.");
+      if (!esearch || !esearch.ok) return empty("Couldn't reach PubMed right now. Try again in a moment.");
 
       const sj = (await esearch.json()) as { esearchresult?: { idlist?: string[] } };
       const ids = sj.esearchresult?.idlist ?? [];
@@ -558,11 +597,11 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
             .map((t) => t.replace(/[()"]/g, "").trim())
             .filter(Boolean)
             .join(" OR ");
-          const fallbackSearch = await fetch(
-            `${EUTILS}/esearch.fcgi?db=pubmed&retmode=json&retmax=15&sort=relevance&term=${encodeURIComponent(fallbackTerm)}`,
+          const fallbackSearch = await fetchPubmed(
+            `esearch.fcgi?db=pubmed&retmode=json&retmax=15&sort=relevance&term=${encodeURIComponent(fallbackTerm)}`,
           );
 
-          if (fallbackSearch.ok) {
+          if (fallbackSearch && fallbackSearch.ok) {
             const fsj = (await fallbackSearch.json()) as { esearchresult?: { idlist?: string[] } };
             const fallbackIds = fsj.esearchresult?.idlist ?? [];
 
