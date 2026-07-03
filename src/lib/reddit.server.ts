@@ -1,5 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
-import { fetchYouTubeQuotes } from "./youtube.server";
+import { fetchYouTubeQuotes, YouTubeQuotaExceededError } from "./youtube.server";
+
+export { YouTubeQuotaExceededError };
 
 /**
  * TEMPORARY: the actual data source here is YouTube comments, not Reddit

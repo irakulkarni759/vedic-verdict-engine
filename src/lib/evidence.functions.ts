@@ -6,7 +6,7 @@ import {
   slugify,
 } from "./generatedTrends.functions";
 import { toTitleCase } from "./utils";
-import { fetchRedditQuotes, type RedditQuote } from "./reddit.server";
+import { fetchRedditQuotes, YouTubeQuotaExceededError, type RedditQuote } from "./reddit.server";
 
 export type EvidenceArticle = {
   pmid: string;
@@ -398,7 +398,14 @@ async function buildResultFromIds(opts: {
   // Real Reddit comments, fetched in parallel with the Claude call setup.
   // These are the ONLY source of "quotes" — Claude is never asked to invent
   // them, it only synthesizes communityVerdict/sentiment from real ones.
-  const redditQuotes = await fetchRedditQuotes(searchSubject);
+  // A quota-exhausted YouTube search shouldn't break the whole verdict —
+  // just means no fresh community quotes for this one search.
+  let redditQuotes: RedditQuote[] = [];
+  try {
+    redditQuotes = await fetchRedditQuotes(searchSubject);
+  } catch (err) {
+    if (!(err instanceof YouTubeQuotaExceededError)) throw err;
+  }
 
   const { displayName, researchVerdict, communityVerdict, safetyNote, bullets, sentiment, category, verdict: claudeVerdict } =
     await generateBulletsAndQuotes(searchSubject, abstractsForClaude, redditQuotes);

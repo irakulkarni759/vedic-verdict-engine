@@ -105,6 +105,14 @@ function AdminPage() {
       setRefreshQuotesResult(res.error ?? "Couldn't refresh quotes.");
       return;
     }
+    if (res.quotaHit) {
+      setRefreshQuotesResult(
+        `Stopped after ${res.processed} of ${res.total} — YouTube's daily search quota (100/day) ran out. ` +
+        `${res.updated} got real quotes, ${res.emptied} were empty, before it hit the wall. ` +
+        `Quota resets at midnight Pacific time — run this again after that to continue with the rest.`,
+      );
+      return;
+    }
     setRefreshQuotesResult(
       `${res.updated} of ${res.total} trends got real quotes; ${res.emptied} had none found and are now empty (not fabricated).`,
     );

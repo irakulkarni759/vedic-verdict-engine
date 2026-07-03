@@ -3,7 +3,7 @@ import { getSupabaseServiceClient } from "./supabase.server";
 import { CATEGORIES, type Trend, type Verdict } from "./trends";
 import { checkAdminPassword } from "./comments.functions";
 import { toTitleCase } from "./utils";
-import { fetchRedditQuotes } from "./reddit.server";
+import { fetchRedditQuotes, YouTubeQuotaExceededError } from "./reddit.server";
 
 export const CATEGORY_SLUGS = CATEGORIES.map((c) => c.slug);
 
@@ -542,7 +542,7 @@ Return ONLY this JSON, no other text:
 export const adminRefreshRedditQuotes = createServerFn({ method: "POST" })
   .inputValidator((d: { password: string }) => d)
   .handler(
-    async ({ data }): Promise<{ ok: boolean; updated?: number; emptied?: number; total?: number; error?: string }> => {
+    async ({ data }): Promise<{ ok: boolean; updated?: number; emptied?: number; total?: number; processed?: number; quotaHit?: boolean; error?: string }> => {
       if (!checkAdminPassword(data.password)) return { ok: false, error: "Wrong password." };
 
       try {
@@ -556,9 +556,25 @@ export const adminRefreshRedditQuotes = createServerFn({ method: "POST" })
 
         let updated = 0;
         let emptied = 0;
+        let processed = 0;
+        let quotaHit = false;
 
         for (const row of rows as { id: string; query: string; name: string; summary: string; sentiment_score: number }[]) {
-          const realQuotes = await fetchRedditQuotes(row.query);
+          let realQuotes: { handle: string; text: string; url: string }[];
+          try {
+            realQuotes = await fetchRedditQuotes(row.query);
+          } catch (err) {
+            if (err instanceof YouTubeQuotaExceededError) {
+              // Daily search quota (100/day, separate from the general
+              // 10,000-unit budget) is exhausted — stop immediately rather
+              // than grinding through the rest of the trends getting []
+              // for each one and reporting misleading "no quotes found."
+              quotaHit = true;
+              break;
+            }
+            throw err;
+          }
+          processed++;
 
           const { communityVerdict, sentiment } = await inferSentimentFromQuotes({
             name: row.name,
@@ -580,7 +596,7 @@ export const adminRefreshRedditQuotes = createServerFn({ method: "POST" })
           else emptied++;
         }
 
-        return { ok: true, updated, emptied, total: rows.length };
+        return { ok: true, updated, emptied, total: rows.length, processed, quotaHit };
       } catch {
         return { ok: false, error: "Refresh failed partway through." };
       }

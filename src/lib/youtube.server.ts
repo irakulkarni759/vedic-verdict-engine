@@ -153,30 +153,32 @@ Return ONLY a JSON array of the indices to keep, e.g. [0,2,4]. No other text.`;
   }
 }
 
-/** Strips a "for Y" purpose clause down to just the subject — e.g.
- *  "Jojoba Oil for Hair Growth" -> "Jojoba Oil". Used as a second, broader
- *  video search alongside the full query, since a general product-review
- *  video that never states the specific purpose in its title can still
- *  have genuinely relevant comments in it. */
-function subjectOnly(query: string): string | null {
-  const m = query.match(/^(.*?)\bfor\b/i);
-  const subject = m?.[1]?.trim();
-  return subject && subject.toLowerCase() !== query.toLowerCase() ? subject : null;
+/** Thrown when YouTube's search quota (separate 100/day cap, independent
+ *  from the general 10,000-unit budget) is exhausted — distinct from a
+ *  genuine "no results" so callers can stop and report it instead of
+ *  silently treating every remaining trend as having no real quotes. */
+export class YouTubeQuotaExceededError extends Error {
+  constructor() {
+    super("YouTube search quota exceeded");
+    this.name = "YouTubeQuotaExceededError";
+  }
 }
 
 async function searchVideos(query: string, apiKey: string, maxResults = 8): Promise<string[]> {
-  try {
-    const res = await fetch(
-      `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&order=relevance&maxResults=${maxResults}&q=${encodeURIComponent(query)}&key=${apiKey}`,
-    );
-    if (!res.ok) return [];
-    const json = (await res.json()) as { items?: YouTubeSearchItem[] };
-    return (json.items ?? [])
-      .map((item) => item.id?.videoId)
-      .filter((id): id is string => !!id);
-  } catch {
+  const res = await fetch(
+    `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&order=relevance&maxResults=${maxResults}&q=${encodeURIComponent(query)}&key=${apiKey}`,
+  );
+  if (!res.ok) {
+    if (res.status === 403) {
+      const body = await res.text().catch(() => "");
+      if (/quotaExceeded/i.test(body)) throw new YouTubeQuotaExceededError();
+    }
     return [];
   }
+  const json = (await res.json()) as { items?: YouTubeSearchItem[] };
+  return (json.items ?? [])
+    .map((item) => item.id?.videoId)
+    .filter((id): id is string => !!id);
 }
 
 async function fetchCommentsForVideo(
@@ -214,27 +216,29 @@ async function fetchCommentsForVideo(
 }
 
 /**
- * Searches real YouTube videos about `query` — plus, if it's an "X for Y"
- * style query, a broader search on just "X" so general product-review
- * videos that never state the purpose in their title still get a chance —
- * pulls top comments from the most relevant few, filters to ones that
- * actually mention the topic, and returns up to `limit` genuine quotes
- * sorted by like count. Returns [] on any failure, missing API key, or
- * when nothing usable/relevant is found — callers must not fall back to
- * fabricated quotes.
+ * Searches real YouTube videos about `query`, pulls top comments from the
+ * most relevant few, filters to ones that actually mention the topic, and
+ * returns up to `limit` genuine quotes sorted by like count. Returns []
+ * on any failure, missing API key, or when nothing usable/relevant is
+ * found — callers must not fall back to fabricated quotes. Throws
+ * YouTubeQuotaExceededError specifically when the daily search quota (a
+ * separate, much stricter 100/day cap) is exhausted, so batch callers can
+ * stop early and report it instead of treating every remaining trend as
+ * genuinely having no real quotes.
  */
 export async function fetchYouTubeQuotes(query: string, limit = 3): Promise<CommunityQuote[]> {
   const apiKey = process.env.YOUTUBE_API_KEY;
   if (!apiKey) return [];
 
   const keywords = extractKeywords(query);
-  const broaderQuery = subjectOnly(query);
 
-  const [primaryIds, broaderIds] = await Promise.all([
-    searchVideos(query, apiKey),
-    broaderQuery ? searchVideos(broaderQuery, apiKey, 6) : Promise.resolve([]),
-  ]);
-  const videoIds = Array.from(new Set([...primaryIds, ...broaderIds]));
+  let videoIds: string[];
+  try {
+    videoIds = await searchVideos(query, apiKey);
+  } catch (err) {
+    if (err instanceof YouTubeQuotaExceededError) throw err;
+    return [];
+  }
   if (videoIds.length === 0) return [];
 
   const commentBatches = await Promise.all(
