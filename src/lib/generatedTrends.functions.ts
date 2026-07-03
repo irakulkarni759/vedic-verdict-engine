@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { getSupabaseServiceClient } from "./supabase.server";
 import { CATEGORIES, type Trend, type Verdict } from "./trends";
 import { checkAdminPassword } from "./comments.functions";
-import { toTitleCase } from "./utils";
+import { toTitleCase, coreSubjectForReddit } from "./utils";
 import { fetchRedditQuotes } from "./reddit.server";
 
 export const CATEGORY_SLUGS = CATEGORIES.map((c) => c.slug);
@@ -612,7 +612,7 @@ export const adminRefreshRedditQuotes = createServerFn({ method: "POST" })
         for (const row of batch) {
           let realQuotes: { handle: string; text: string; url: string }[];
           try {
-            realQuotes = await fetchRedditQuotes(row.query);
+            realQuotes = await fetchRedditQuotes(coreSubjectForReddit(row.query));
           } catch {
             // fetchRedditQuotes already catches its own errors internally
             // and returns []; this is just a safety net.

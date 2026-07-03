@@ -31,3 +31,17 @@ export function toTitleCase(input: string): string {
     })
     .join(" ");
 }
+
+/**
+ * Strips a trailing " for <purpose>" clause before searching Reddit — people
+ * discuss "stomach vacuum," not "stomach vacuum for shrinking waist," so the
+ * purpose clause only dilutes the search and can cost real matches. Leaves
+ * the query unchanged if it has no " for " clause (or one right at the
+ * start, which isn't a purpose clause to strip).
+ */
+export function coreSubjectForReddit(query: string): string {
+  const idx = query.toLowerCase().indexOf(" for ");
+  if (idx <= 0) return query.trim();
+  const core = query.slice(0, idx).trim();
+  return core || query.trim();
+}

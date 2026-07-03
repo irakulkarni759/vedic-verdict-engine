@@ -3,7 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { TRENDS } from "@/lib/trends";
 import { TrendCard } from "@/components/TrendCard";
 import { Comments } from "@/components/Comments";
-import { toTitleCase } from "@/lib/utils";
+import { toTitleCase, coreSubjectForReddit } from "@/lib/utils";
 import { getRedditQuotes, type RedditQuote } from "@/lib/reddit.server";
 import {
   generateEvidenceVerdict,
@@ -118,7 +118,7 @@ function SearchPage() {
       return;
     }
     setCheckingQuotes(true);
-    getRedditQuotes({ data: { query: data.query } })
+    getRedditQuotes({ data: { query: coreSubjectForReddit(data.query) } })
       .then((rows) => {
         if (!cancelled) {
           if (rows.length > 0) setLiveQuotes(rows);

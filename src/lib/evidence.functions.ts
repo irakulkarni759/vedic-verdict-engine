@@ -5,7 +5,7 @@ import {
   saveGeneratedTrend,
   slugify,
 } from "./generatedTrends.functions";
-import { toTitleCase } from "./utils";
+import { toTitleCase, coreSubjectForReddit } from "./utils";
 import { fetchRedditQuotesFast, type RedditQuote } from "./reddit.server";
 
 export type EvidenceArticle = {
@@ -126,6 +126,54 @@ function decodeEntities(s: string): string {
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'");
+}
+
+const PUBMED_STOPWORDS = new Set([
+  "for", "the", "a", "an", "and", "or", "with", "to", "of", "in", "on",
+  "is", "are", "does", "do", "vs", "how", "what", "best", "good", "help",
+  "my", "your", "it", "that", "this",
+]);
+
+function extractQueryKeywords(query: string): string[] {
+  return query
+    .toLowerCase()
+    .split(/\s+/)
+    .map((w) => w.replace(/[^\w]/g, ""))
+    .filter((w) => w.length > 2 && !PUBMED_STOPWORDS.has(w));
+}
+
+/**
+ * Checks whether the returned PMIDs are actually ABOUT the query's subject,
+ * not just a count of hits. PubMed's automatic term mapping can return a
+ * full page of results by loosely matching on incidental shared words (e.g.
+ * "stomach vacuums for shrinking waist" pulling in generic aerobic-exercise
+ * and GLP-1 studies because they mention "waist") while missing on-topic
+ * studies that exist under different academic terminology entirely. A
+ * plentiful-but-irrelevant result set used to slip past the old
+ * count-only WEAK_RESULT_THRESHOLD check and feed bullets straight from
+ * off-topic abstracts. Fetches titles via esummary (cheap, one call for
+ * all ids) and requires a meaningful share of them to share a keyword with
+ * the query. Fails open (true) on any error or when there are no usable
+ * keywords, so this never blocks a legitimate result set.
+ */
+async function checkPubmedRelevance(ids: string[], query: string): Promise<boolean> {
+  if (ids.length === 0) return false;
+  const keywords = extractQueryKeywords(query);
+  if (keywords.length === 0) return true;
+
+  try {
+    const res = await fetchPubmed(`esummary.fcgi?db=pubmed&retmode=json&id=${ids.join(",")}`);
+    if (!res || !res.ok) return true;
+    const json = (await res.json()) as { result?: Record<string, { title?: string }> };
+    const result = json.result;
+    if (!result) return true;
+
+    const titles = ids.map((id) => (result[id]?.title ?? "").toLowerCase());
+    const relevantCount = titles.filter((t) => keywords.some((k) => t.includes(k))).length;
+    return relevantCount / ids.length >= 1 / 3;
+  } catch {
+    return true;
+  }
 }
 
 async function generateBulletsAndQuotes(
@@ -451,7 +499,7 @@ async function buildResultFromIds(opts: {
   // just means no fresh community quotes for this one search.
   let redditQuotes: RedditQuote[] = [];
   try {
-    redditQuotes = await fetchRedditQuotesFast(query);
+    redditQuotes = await fetchRedditQuotesFast(coreSubjectForReddit(query));
   } catch {
     // fetchRedditQuotes already catches its own errors and returns [];
     // this guard is just a safety net in case that contract ever changes.
@@ -570,15 +618,22 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
       const sj = (await esearch.json()) as { esearchresult?: { idlist?: string[] } };
       const ids = sj.esearchresult?.idlist ?? [];
 
-      // Trigger on WEAK results too, not just zero — a query can return a
-      // handful of loosely-related hits (matching on incidental keywords)
-      // while missing the actually-relevant research, which sits under
-      // different academic terminology. e.g. "vibration plate for weight
-      // loss" returned a few bone-density/neuromuscular studies via literal
-      // keyword match, while the real weight-loss-specific research lives
-      // under "whole body vibration" + body composition terminology.
+      // Trigger on WEAK results (too few) OR IRRELEVANT results (plenty of
+      // hits, but not actually about the query's subject) — a query can
+      // return a full page of loosely-related hits (matching on incidental
+      // keywords) while missing the actually-relevant research, which sits
+      // under different academic terminology. e.g. "vibration plate for
+      // weight loss" returned a few bone-density/neuromuscular studies via
+      // literal keyword match, while the real weight-loss-specific research
+      // lives under "whole body vibration" + body composition terminology.
+      // "stomach vacuums for shrinking waist" is the irrelevant-but-plentiful
+      // case: 15/15 hits matched on "waist"/"shrinking" alone (GLP-1,
+      // generic aerobic exercise) while missing the real research under
+      // "abdominal drawing-in maneuver" / "abdominal hollowing" terminology.
       const WEAK_RESULT_THRESHOLD = 5;
-      if (ids.length < WEAK_RESULT_THRESHOLD) {
+      const isWeakCount = ids.length < WEAK_RESULT_THRESHOLD;
+      const isIrrelevant = !isWeakCount && !(await checkPubmedRelevance(ids, query));
+      if (isWeakCount || isIrrelevant) {
         const fallback = await identifyFallbackTerms(query);
 
         if (fallback) {
@@ -606,10 +661,12 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
             const fallbackIds = fsj.esearchresult?.idlist ?? [];
 
             if (fallbackIds.length > 0) {
-              // Merge rather than replace — keep any genuinely relevant
-              // original hits alongside the better-targeted fallback ones,
-              // so Claude's summary draws from the fuller, more accurate pool.
-              const mergedIds = Array.from(new Set([...ids, ...fallbackIds])).slice(0, 15);
+              // Fallback ids first — they're matched on the correct academic
+              // terminology, so they must not get crowded out by the cap
+              // when the original set is already a full page (15) of
+              // loosely-matched hits, which is exactly the case that made
+              // this an "irrelevant" trigger in the first place.
+              const mergedIds = Array.from(new Set([...fallbackIds, ...ids])).slice(0, 15);
               return await buildResultFromIds({
                 ids: mergedIds,
                 query, name, slug, updated, generatedAt,

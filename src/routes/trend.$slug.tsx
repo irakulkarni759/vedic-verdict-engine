@@ -3,6 +3,7 @@ import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { trendBySlug, type Trend, type Verdict } from "@/lib/trends";
 import { getGeneratedTrendBySlug, persistTrendQuotes } from "@/lib/generatedTrends.functions";
 import { getRedditQuotes } from "@/lib/reddit.server";
+import { coreSubjectForReddit } from "@/lib/utils";
 import { TrendCard } from "@/components/TrendCard";
 import { Comments } from "@/components/Comments";
 
@@ -218,7 +219,7 @@ function CommunityQuotes({
     if (initialQuotes.length > 0) return;
     let cancelled = false;
     setLoading(true);
-    getRedditQuotes({ data: { query: searchQuery } })
+    getRedditQuotes({ data: { query: coreSubjectForReddit(searchQuery) } })
       .then((live) => {
         if (cancelled || live.length === 0) return;
         setQuotes(live);
