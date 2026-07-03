@@ -256,7 +256,7 @@ or
 or
 {"reason": null, "terms": []}
 
-"terms" should be 2-4 plain scientific/academic search phrases suitable for a PubMed query.`;
+"terms" should be 2-4 plain scientific/academic search phrases suitable for a PubMed query — no parentheses or special characters, just plain words/phrases (e.g. "polydeoxyribonucleotide" not "polydeoxyribonucleotide (PDRN)").`;
 
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -528,7 +528,13 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
         const fallback = await identifyFallbackTerms(query);
 
         if (fallback) {
-          const fallbackTerm = fallback.terms.join(" OR ");
+          // Quote each term as an exact phrase (otherwise "polydeoxyribonucleotide
+          // (PDRN)" OR'd unquoted sends individual words to PubMed, badly diluting
+          // the match), and strip stray parens since Entrez query syntax uses
+          // them for grouping — an unbalanced paren in a raw term breaks the query.
+          const fallbackTerm = fallback.terms
+            .map((t) => `"${t.replace(/[()]/g, "").trim()}"`)
+            .join(" OR ");
           const fallbackSearch = await fetch(
             `${EUTILS}/esearch.fcgi?db=pubmed&retmode=json&retmax=15&sort=relevance&term=${encodeURIComponent(fallbackTerm)}`,
           );
