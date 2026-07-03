@@ -107,8 +107,14 @@ function trimExcess(text, max = 600) {
 async function searchReddit(query, type) {
   try {
     const res = await fetch(
-      `https://www.reddit.com/search.json?q=${encodeURIComponent(query)}&type=${type}&sort=relevance&limit=25&raw_json=1`,
-      { headers: { "User-Agent": USER_AGENT } },
+      `https://old.reddit.com/search.json?q=${encodeURIComponent(query)}&type=${type}&sort=relevance&limit=25&raw_json=1`,
+      {
+        headers: {
+          "User-Agent": USER_AGENT,
+          "Accept": "application/json",
+          "Accept-Language": "en-US,en;q=0.9",
+        },
+      },
     );
     if (!res.ok) {
       const bodySnippet = await res.text().catch(() => "");
