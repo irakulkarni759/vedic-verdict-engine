@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { trendBySlug, type Trend, type Verdict } from "@/lib/trends";
 import { getGeneratedTrendBySlug, persistTrendQuotes } from "@/lib/generatedTrends.functions";
@@ -68,6 +68,27 @@ function redditUrl(q: string) {
 
 function TrendPage() {
   const { trend, related } = Route.useLoaderData();
+  // Lifted so CommunityQuotes can push a freshly-recomputed value up once it
+  // finds real quotes — otherwise this text stays frozen at whatever generic
+  // line was written when the trend was first generated with zero quotes.
+  const [communityVerdict, setCommunityVerdict] = useState(trend.communityVerdict);
+  const [sentiment, setSentiment] = useState(trend.sentiment);
+
+  // TrendPage doesn't remount across navigations to a different slug (only
+  // the loader data changes), so this state needs an explicit resync or a
+  // stale value from a previously-viewed trend would leak into this one.
+  useEffect(() => {
+    setCommunityVerdict(trend.communityVerdict);
+    setSentiment(trend.sentiment);
+  }, [trend.slug, trend.communityVerdict, trend.sentiment]);
+
+  // Stable reference — passed into CommunityQuotes' effect dependency array,
+  // so an inline arrow here would re-fire that effect (and re-fetch) every
+  // time this callback runs and re-renders the parent.
+  const handleVerdictUpdate = useCallback((cv: string, s: number) => {
+    setCommunityVerdict(cv);
+    setSentiment(s);
+  }, []);
 
   return (
     <main className="min-h-screen bg-[var(--parchment)] px-5 py-8 sm:px-8 sm:py-10">
@@ -103,7 +124,7 @@ function TrendPage() {
 
           <HeroSummary
             researchVerdict={trend.oneLiner}
-            communityVerdict={trend.communityVerdict}
+            communityVerdict={communityVerdict}
             safetyNote={trend.safetyNote}
           />
         </section>
@@ -156,14 +177,14 @@ function TrendPage() {
               </p>
 
               <p className="font-mono text-sm text-[var(--verdict-mixed)]">
-                {trend.sentiment}% positive
+                {sentiment}% positive
               </p>
             </div>
 
             <div className="h-2 overflow-hidden rounded-full bg-[var(--parchment-deep)]">
               <div
                 className="h-full rounded-full bg-[var(--verdict-mixed)]"
-                style={{ width: `${trend.sentiment}%` }}
+                style={{ width: `${sentiment}%` }}
               />
             </div>
 
@@ -172,6 +193,10 @@ function TrendPage() {
               slug={trend.slug}
               searchQuery={trend.query ?? trend.name}
               initialQuotes={trend.quotes}
+              name={trend.name}
+              researchSummary={trend.oneLiner}
+              existingSentiment={trend.sentiment}
+              onVerdictUpdate={handleVerdictUpdate}
             />
           </article>
         </section>
@@ -207,24 +232,46 @@ function CommunityQuotes({
   slug,
   searchQuery,
   initialQuotes,
+  name,
+  researchSummary,
+  existingSentiment,
+  onVerdictUpdate,
 }: {
   slug: string;
   searchQuery: string;
   initialQuotes: Quote[];
+  name: string;
+  researchSummary: string;
+  existingSentiment: number;
+  onVerdictUpdate: (communityVerdict: string, sentiment: number) => void;
 }) {
   const [quotes, setQuotes] = useState<Quote[]>(initialQuotes);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (initialQuotes.length > 0) return;
+    // Second guard beyond the initialQuotes check: once this effect has
+    // already found and set real quotes, never re-fetch even if it re-runs
+    // for some other dependency reason.
+    if (initialQuotes.length > 0 || quotes.length > 0) return;
     let cancelled = false;
     setLoading(true);
     getRedditQuotes({ data: { query: coreSubjectForReddit(searchQuery) } })
       .then((live) => {
         if (cancelled || live.length === 0) return;
         setQuotes(live);
-        // Fire-and-forget: save so future visits skip the slow fetch.
-        void persistTrendQuotes({ data: { slug, quotes: live } }).catch(() => {});
+        // Persist AND recompute the community verdict/sentiment from these
+        // specific quotes — saving the quotes alone left the summary text
+        // frozen at whatever generic line was written when generation first
+        // ran with zero quotes.
+        persistTrendQuotes({
+          data: { slug, name, summary: researchSummary, existingSentiment, quotes: live },
+        })
+          .then((res) => {
+            if (!cancelled && res.ok && res.communityVerdict && typeof res.sentiment === "number") {
+              onVerdictUpdate(res.communityVerdict, res.sentiment);
+            }
+          })
+          .catch(() => {});
       })
       .catch(() => {})
       .finally(() => {
@@ -233,7 +280,7 @@ function CommunityQuotes({
     return () => {
       cancelled = true;
     };
-  }, [slug, searchQuery, initialQuotes.length]);
+  }, [slug, searchQuery, initialQuotes.length, quotes.length, name, researchSummary, existingSentiment, onVerdictUpdate]);
 
   if (quotes.length === 0) {
     return (

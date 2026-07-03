@@ -187,17 +187,50 @@ export const getGeneratedTrendBySlug = createServerFn({ method: "GET" })
  * `id`); curated/hardcoded trends have no row, so this simply no-ops for
  * them. Fails silently, never blocks rendering.
  */
+/**
+ * Persist community quotes fetched live on the trend/search page back onto
+ * the stored trend, so the slow Reddit fetch only ever happens once per
+ * trend instead of on every visit. Only affects generated trends (rows
+ * keyed by `id`); curated/hardcoded trends have no row, so this simply
+ * no-ops for them.
+ *
+ * ALSO recomputes communityVerdict/sentiment from these specific quotes
+ * (reusing the same logic as the admin quote-refresh backfill) and persists
+ * that too, returning the fresh values to the caller. Just saving the
+ * quotes without this meant a trend generated with zero quotes (a fast,
+ * single-attempt fetch that missed a cold/slow scrape) kept its generic
+ * "Limited public discussion" summary forever, even once real quotes were
+ * found moments later on the same page — nothing ever told the summary to
+ * catch up. Fails silently, never blocks rendering.
+ */
 export const persistTrendQuotes = createServerFn({ method: "POST" })
-  .inputValidator((d: { slug: string; quotes: { handle: string; text: string; url: string }[] }) => d)
-  .handler(async ({ data }): Promise<{ ok: boolean }> => {
+  .inputValidator(
+    (d: {
+      slug: string;
+      name: string;
+      summary: string;
+      existingSentiment: number;
+      quotes: { handle: string; text: string; url: string }[];
+    }) => d,
+  )
+  .handler(async ({ data }): Promise<{ ok: boolean; communityVerdict?: string; sentiment?: number }> => {
     try {
       if (!data.quotes || data.quotes.length === 0) return { ok: false };
+
+      const { communityVerdict, sentiment } = await inferSentimentFromQuotes({
+        name: data.name,
+        summary: data.summary,
+        quotes: data.quotes,
+        existingSentiment: data.existingSentiment,
+      });
+
       const supabase = getSupabaseServiceClient();
-      const { error } = await supabase
-        .from("generated_trends")
-        .update({ opinions: data.quotes })
-        .eq("id", data.slug);
-      return { ok: !error };
+      const update: Record<string, unknown> = { opinions: data.quotes };
+      if (communityVerdict) update.community_verdict = communityVerdict;
+      if (typeof sentiment === "number") update.sentiment_score = sentiment;
+
+      const { error } = await supabase.from("generated_trends").update(update).eq("id", data.slug);
+      return { ok: !error, communityVerdict: communityVerdict ?? undefined, sentiment: sentiment ?? undefined };
     } catch {
       return { ok: false };
     }

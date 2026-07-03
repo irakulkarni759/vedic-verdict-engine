@@ -5,6 +5,7 @@ import { TrendCard } from "@/components/TrendCard";
 import { Comments } from "@/components/Comments";
 import { toTitleCase, coreSubjectForReddit } from "@/lib/utils";
 import { getRedditQuotes, type RedditQuote } from "@/lib/reddit.server";
+import { persistTrendQuotes } from "@/lib/generatedTrends.functions";
 import {
   generateEvidenceVerdict,
   type EvidenceVerdict,
@@ -110,9 +111,19 @@ function SearchPage() {
   // on Reddit, which returns zero matches even when threads clearly exist.
   const [liveQuotes, setLiveQuotes] = useState<RedditQuote[] | null>(null);
   const [checkingQuotes, setCheckingQuotes] = useState(data.quotes.length === 0 && !!data.query);
+  // Once the retry above finds real quotes, the community summary generated
+  // moments earlier (from zero quotes) is stale — it was written to say
+  // something like "Limited public discussion so far." These hold the
+  // recomputed values once persistTrendQuotes returns them, so the page
+  // catches up instead of leaving that stale line up indefinitely.
+  const [liveCommunityVerdict, setLiveCommunityVerdict] = useState<string | null>(null);
+  const [liveSentiment, setLiveSentiment] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    setLiveQuotes(null);
+    setLiveCommunityVerdict(null);
+    setLiveSentiment(null);
     if (data.quotes.length > 0 || !data.query) {
       setCheckingQuotes(false);
       return;
@@ -120,10 +131,30 @@ function SearchPage() {
     setCheckingQuotes(true);
     getRedditQuotes({ data: { query: coreSubjectForReddit(data.query) } })
       .then((rows) => {
-        if (!cancelled) {
-          if (rows.length > 0) setLiveQuotes(rows);
-          setCheckingQuotes(false);
-        }
+        if (cancelled) return;
+        setCheckingQuotes(false);
+        if (rows.length === 0) return;
+        setLiveQuotes(rows);
+        // Persist AND recompute the community verdict/sentiment from these
+        // specific quotes, so the trend's stored row and this page's own
+        // summary text both catch up instead of staying frozen on the
+        // generic line written when generation first ran with zero quotes.
+        persistTrendQuotes({
+          data: {
+            slug: data.slug,
+            name: data.name,
+            summary: data.oneLiner,
+            existingSentiment: data.sentiment,
+            quotes: rows,
+          },
+        })
+          .then((res) => {
+            if (!cancelled && res.ok && res.communityVerdict && typeof res.sentiment === "number") {
+              setLiveCommunityVerdict(res.communityVerdict);
+              setLiveSentiment(res.sentiment);
+            }
+          })
+          .catch(() => {});
       })
       .catch(() => {
         if (!cancelled) setCheckingQuotes(false);
@@ -131,9 +162,11 @@ function SearchPage() {
     return () => {
       cancelled = true;
     };
-  }, [data.query, data.quotes.length]);
+  }, [data.query, data.quotes.length, data.slug, data.name, data.oneLiner, data.sentiment]);
 
   const displayQuotes = data.quotes.length > 0 ? data.quotes : liveQuotes ?? [];
+  const displayCommunityVerdict = liveCommunityVerdict ?? data.communityVerdict;
+  const displaySentiment = liveSentiment ?? data.sentiment;
 
   const tokens = q
     .toLowerCase()
@@ -185,7 +218,7 @@ function SearchPage() {
 
           <HeroSummary
             researchVerdict={data.oneLiner}
-            communityVerdict={data.communityVerdict}
+            communityVerdict={displayCommunityVerdict}
             safetyNote={data.safetyNote}
           />
         </section>
@@ -250,14 +283,14 @@ function SearchPage() {
                       COMMUNITY SENTIMENT
                     </p>
                     <p className="font-mono text-sm" style={{ color }}>
-                      {data.sentiment}% positive
+                      {displaySentiment}% positive
                     </p>
                   </div>
 
                   <div className="h-2 overflow-hidden rounded-full bg-[var(--parchment-deep)]">
                     <div
                       className="h-full rounded-full"
-                      style={{ width: `${data.sentiment}%`, backgroundColor: color }}
+                      style={{ width: `${displaySentiment}%`, backgroundColor: color }}
                     />
                   </div>
 
