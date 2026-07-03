@@ -166,7 +166,12 @@ function TrendPage() {
               />
             </div>
 
-            <CommunityQuotes key={trend.slug} slug={trend.slug} name={trend.name} initialQuotes={trend.quotes} />
+            <CommunityQuotes
+              key={trend.slug}
+              slug={trend.slug}
+              searchQuery={trend.query ?? trend.name}
+              initialQuotes={trend.quotes}
+            />
           </article>
         </section>
 
@@ -199,11 +204,11 @@ function TrendPage() {
  */
 function CommunityQuotes({
   slug,
-  name,
+  searchQuery,
   initialQuotes,
 }: {
   slug: string;
-  name: string;
+  searchQuery: string;
   initialQuotes: Quote[];
 }) {
   const [quotes, setQuotes] = useState<Quote[]>(initialQuotes);
@@ -213,7 +218,7 @@ function CommunityQuotes({
     if (initialQuotes.length > 0) return;
     let cancelled = false;
     setLoading(true);
-    getRedditQuotes({ data: { query: name } })
+    getRedditQuotes({ data: { query: searchQuery } })
       .then((live) => {
         if (cancelled || live.length === 0) return;
         setQuotes(live);
@@ -227,7 +232,7 @@ function CommunityQuotes({
     return () => {
       cancelled = true;
     };
-  }, [slug, name, initialQuotes.length]);
+  }, [slug, searchQuery, initialQuotes.length]);
 
   if (quotes.length === 0) {
     return (

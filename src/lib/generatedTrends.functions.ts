@@ -80,6 +80,7 @@ function rowToTrend(row: GeneratedTrendRow): Trend | null {
   return {
     slug: row.id,
     name: row.name,
+    query: row.query,
     category: row.category,
     verdict: row.verdict.toUpperCase() as Verdict,
     oneLiner: row.summary,

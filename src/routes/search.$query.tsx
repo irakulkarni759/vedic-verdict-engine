@@ -104,18 +104,21 @@ function SearchPage() {
   // never blocks on a cold Railway container. If that fast attempt came back
   // empty, quietly retry in the background (longer timeout) and swap in the
   // real quotes if/when they show up — no need to hold up the summary render
-  // for them.
+  // for them. IMPORTANT: search Reddit with the user's ORIGINAL query
+  // (data.query), never the display name — the display name can be a
+  // scientific term (e.g. "Abdominal Drawing-In Maneuver") that no one uses
+  // on Reddit, which returns zero matches even when threads clearly exist.
   const [liveQuotes, setLiveQuotes] = useState<RedditQuote[] | null>(null);
-  const [checkingQuotes, setCheckingQuotes] = useState(data.quotes.length === 0 && !!data.name);
+  const [checkingQuotes, setCheckingQuotes] = useState(data.quotes.length === 0 && !!data.query);
 
   useEffect(() => {
     let cancelled = false;
-    if (data.quotes.length > 0 || !data.name) {
+    if (data.quotes.length > 0 || !data.query) {
       setCheckingQuotes(false);
       return;
     }
     setCheckingQuotes(true);
-    getRedditQuotes({ data: { query: data.name } })
+    getRedditQuotes({ data: { query: data.query } })
       .then((rows) => {
         if (!cancelled) {
           if (rows.length > 0) setLiveQuotes(rows);
@@ -128,7 +131,7 @@ function SearchPage() {
     return () => {
       cancelled = true;
     };
-  }, [data.name, data.quotes.length]);
+  }, [data.query, data.quotes.length]);
 
   const displayQuotes = data.quotes.length > 0 ? data.quotes : liveQuotes ?? [];
 

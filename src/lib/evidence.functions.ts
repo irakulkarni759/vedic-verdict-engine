@@ -91,6 +91,7 @@ function decodeEntities(s: string): string {
 
 async function generateBulletsAndQuotes(
   query: string,
+  originalQuery: string,
   abstracts: { abstract: string; url: string }[],
   redditQuotes: RedditQuote[],
 ): Promise<{
@@ -125,7 +126,7 @@ async function generateBulletsAndQuotes(
 
   const prompt = `You are a health research analyst. Given these PubMed abstracts and real Reddit comments about "${query}", return a JSON object with eight fields:
 
-1. "displayName": a standardized title in the exact form "X for Y" — X is the ingredient/product/practice being searched, Y is the specific outcome or purpose it's being evaluated for (e.g. "Rosemary Oil for Hair Growth"). If "${query}" already states a purpose, clean it up into this form (title case, no trailing punctuation). If it doesn't state one, infer the single most common/notable purpose people search this for, based on the abstracts and general knowledge — never leave Y generic like "for Health" or "for Wellness"; be specific (e.g. "for Hair Growth", "for Sleep Quality", "for Inflammation").
+1. "displayName": a standardized title in the exact form "X for Y", based on the USER'S ORIGINAL SEARCH, which was: "${originalQuery}". X is the thing the user actually searched for, kept in the everyday wording THEY used — if they searched "stomach vacuum", keep "Stomach Vacuum". Do NOT rename it to a clinical/academic term (e.g. do not turn "stomach vacuum" into "Abdominal Drawing-In Maneuver"), even though the abstracts below may use that scientific term for the same thing. Y is the specific outcome or purpose. If "${originalQuery}" already states a purpose, clean it up into this form (title case, no trailing punctuation). If it doesn't state one, infer the single most common/notable purpose people search this for — never leave Y generic like "for Health" or "for Wellness"; be specific (e.g. "for Hair Growth", "for a Smaller Waist"). The abstracts describe the same topic in scientific vocabulary; use them to understand the topic, NOT to rename it away from the user's own words.
 2. "verdict": your overall read of the evidence, one of "BACKED" (the bulk of studies support it working/being beneficial), "MIXED" (evidence is genuinely split or inconclusive), or "DEBUNKED" (the bulk of studies contradict it or find no effect). Base this on your actual understanding of what each abstract found, not just keyword counting — e.g. abstracts describing consistent, specific mechanisms and positive outcomes across most studies should read as BACKED even if few use the literal phrase "significant improvement".
 3. "researchVerdict": ONE short sentence, max ~90 chars, ONE idea only — write it the way you'd text a friend, not explain a study. Avoid clinical/technical jargon (say "muscle strength" not "phosphocreatine stores"). State only the single most important real-world takeaway. Do NOT stack multiple clauses with commas/dashes/semicolons (e.g. NOT "X shows promise, but effectiveness depends on Y, and data remain limited" — pick the ONE most important point and cut the rest). If a caveat truly matters more than the headline finding, lead with the caveat instead of appending it. Example good: "Works well when injected, but doesn't absorb through skin." Example bad (too dense, don't do this): "Injected PDRN shows promise for scar healing by stimulating tissue regeneration, but effectiveness depends heavily on delivery method—topical application is unlikely to work, and clinical data remain limited."
 4. "communityVerdict": ONE short sentence, max ~90 chars, ONE idea only, same plain/texting-a-friend style, synthesizing the REAL Reddit comments provided below — what people actually notice and talk about most. Do not stack multiple clauses together (no "X happens, and Y is unclear, and Z varies" — pick the single most important thing people say). Do not invent a quote or a specific claim that isn't supported by the real comments. ${quoteCountNote}
@@ -418,7 +419,7 @@ async function buildResultFromIds(opts: {
   }
 
   const { displayName, researchVerdict, communityVerdict, safetyNote, bullets, sentiment, category, verdict: claudeVerdict } =
-    await generateBulletsAndQuotes(searchSubject, abstractsForClaude, redditQuotes);
+    await generateBulletsAndQuotes(searchSubject, query, abstractsForClaude, redditQuotes);
 
   // Standardize the displayed title to "X for Y" — either Claude's inferred
   // purpose, or the raw title-cased query/name as a fallback when Claude

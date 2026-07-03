@@ -3,6 +3,11 @@ export type Verdict = "BACKED" | "MIXED" | "DEBUNKED";
 export type Trend = {
   slug: string;
   name: string;
+  /** The user's original raw search words, when this trend came from a real
+   *  search (generated trends). Used for community/Reddit lookups so they
+   *  match on everyday wording rather than a scientific display title.
+   *  Undefined for curated trends, which fall back to `name`. */
+  query?: string;
   category: string; // matches CATEGORIES slugs
   verdict: Verdict;
   oneLiner: string;
