@@ -92,6 +92,59 @@ function isRelevant(text: string, keywords: string[]): boolean {
   return keywords.some((k) => lower.includes(k));
 }
 
+/**
+ * Selects which candidates read as someone sharing their own experience or
+ * opinion, versus someone asking a question or requesting advice/comparison
+ * without sharing a result. This only picks a subset of REAL, already-
+ * fetched text — it never generates or rewrites anything. Keyword/regex
+ * heuristics can't reliably tell "sir which is better X or Y???" apart from
+ * "I switched from X to Y and my skin cleared up" — that takes judgment.
+ * Fails open (keeps everything) on any error so a Claude hiccup never
+ * empties out an otherwise-good candidate pool.
+ */
+async function selectGenuineReactions<T extends { text: string }>(candidates: T[]): Promise<T[]> {
+  if (candidates.length === 0) return candidates;
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return candidates;
+
+  const pool = candidates.slice(0, 15);
+  const listText = pool.map((c, i) => `[${i}] "${c.text}"`).join("\n\n");
+
+  const prompt = `Here are real YouTube comments. For each, decide whether it reads as someone sharing their OWN experience, result, or opinion about the product/topic (keep) — versus someone asking a question, requesting advice, or asking for a comparison without sharing their own result (exclude). A comment that mentions trying/using something AND asks a follow-up question can still count as "keep" if it shares real experience; a comment that's purely "which is better, X or Y?" or "does this work?" should be excluded.
+
+${listText}
+
+Return ONLY a JSON array of the indices to keep, e.g. [0,2,4]. No other text.`;
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 200,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+    if (!res.ok) return candidates;
+    const json = (await res.json()) as { content: { text: string }[] };
+    const text = json.content?.[0]?.text ?? "[]";
+    const indices = JSON.parse(text.replace(/```json|```/g, "").trim()) as unknown;
+    if (!Array.isArray(indices)) return candidates;
+
+    const kept = indices
+      .filter((i): i is number => typeof i === "number" && i >= 0 && i < pool.length)
+      .map((i) => pool[i]);
+    return kept.length > 0 ? kept : candidates;
+  } catch {
+    return candidates;
+  }
+}
+
 async function searchVideos(query: string, apiKey: string, maxResults = 8): Promise<string[]> {
   try {
     const res = await fetch(
@@ -166,5 +219,9 @@ export async function fetchYouTubeQuotes(query: string, limit = 3): Promise<Comm
     .filter((c) => isRelevant(c.text, keywords))
     .sort((a, b) => b.likeCount - a.likeCount);
 
-  return allComments.slice(0, limit).map(({ handle, text, url }) => ({ handle, text, url }));
+  if (allComments.length === 0) return [];
+
+  const genuine = await selectGenuineReactions(allComments);
+
+  return genuine.slice(0, limit).map(({ handle, text, url }) => ({ handle, text, url }));
 }
