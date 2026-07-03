@@ -54,16 +54,16 @@ function looksLikeSpam(text: string): boolean {
   return /https?:\/\/|www\.|youtu\.be/i.test(text);
 }
 
-/** Crude but effective English check: requires a couple common English
- *  function words and a low ratio of non-ASCII characters (catches
+/** Crude but effective English check: requires at least one common English
+ *  function word and a low ratio of non-ASCII characters (catches
  *  Spanish/French/etc. accented text and non-Latin scripts alike). */
 function looksEnglish(text: string): boolean {
   const lower = ` ${text.toLowerCase()} `;
-  const commonWords = [" the ", " and ", " is ", " was ", " this ", " with ", " for ", " i ", " my ", " have ", " it ", " you ", " to "];
+  const commonWords = [" the ", " and ", " is ", " was ", " this ", " with ", " for ", " i ", " my ", " have ", " it ", " you ", " to ", " a ", " that ", " so ", " but ", " me "];
   const hits = commonWords.filter((w) => lower.includes(w)).length;
   const nonAsciiCount = (text.match(/[^\x00-\x7F]/g) ?? []).length;
   const nonAsciiRatio = nonAsciiCount / text.length;
-  return hits >= 2 && nonAsciiRatio < 0.03;
+  return hits >= 1 && nonAsciiRatio < 0.03;
 }
 
 const STOPWORDS = new Set([
@@ -112,7 +112,7 @@ async function selectGenuineReactions<T extends { text: string }>(candidates: T[
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return candidates;
 
-  const pool = candidates.slice(0, 15);
+  const pool = candidates.slice(0, 25);
   const listText = pool.map((c, i) => `[${i}] "${c.text}"`).join("\n\n");
 
   const prompt = `Here are real YouTube comments found while researching "${topic}". Decide which ones should be KEPT, on two conditions that both must hold:
@@ -151,6 +151,17 @@ Return ONLY a JSON array of the indices to keep, e.g. [0,2,4]. No other text.`;
   } catch {
     return candidates;
   }
+}
+
+/** Strips a "for Y" purpose clause down to just the subject — e.g.
+ *  "Jojoba Oil for Hair Growth" -> "Jojoba Oil". Used as a second, broader
+ *  video search alongside the full query, since a general product-review
+ *  video that never states the specific purpose in its title can still
+ *  have genuinely relevant comments in it. */
+function subjectOnly(query: string): string | null {
+  const m = query.match(/^(.*?)\bfor\b/i);
+  const subject = m?.[1]?.trim();
+  return subject && subject.toLowerCase() !== query.toLowerCase() ? subject : null;
 }
 
 async function searchVideos(query: string, apiKey: string, maxResults = 8): Promise<string[]> {
@@ -203,19 +214,27 @@ async function fetchCommentsForVideo(
 }
 
 /**
- * Searches real YouTube videos about `query`, pulls top comments from the
- * most relevant few, filters to ones that actually mention the topic, and
- * returns up to `limit` genuine quotes sorted by like count. Returns []
- * on any failure, missing API key, or when nothing usable/relevant is
- * found — callers must not fall back to fabricated quotes.
+ * Searches real YouTube videos about `query` — plus, if it's an "X for Y"
+ * style query, a broader search on just "X" so general product-review
+ * videos that never state the purpose in their title still get a chance —
+ * pulls top comments from the most relevant few, filters to ones that
+ * actually mention the topic, and returns up to `limit` genuine quotes
+ * sorted by like count. Returns [] on any failure, missing API key, or
+ * when nothing usable/relevant is found — callers must not fall back to
+ * fabricated quotes.
  */
 export async function fetchYouTubeQuotes(query: string, limit = 3): Promise<CommunityQuote[]> {
   const apiKey = process.env.YOUTUBE_API_KEY;
   if (!apiKey) return [];
 
   const keywords = extractKeywords(query);
+  const broaderQuery = subjectOnly(query);
 
-  const videoIds = await searchVideos(query, apiKey);
+  const [primaryIds, broaderIds] = await Promise.all([
+    searchVideos(query, apiKey),
+    broaderQuery ? searchVideos(broaderQuery, apiKey, 6) : Promise.resolve([]),
+  ]);
+  const videoIds = Array.from(new Set([...primaryIds, ...broaderIds]));
   if (videoIds.length === 0) return [];
 
   const commentBatches = await Promise.all(
