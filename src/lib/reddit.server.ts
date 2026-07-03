@@ -36,6 +36,25 @@ type SentimentApiResponse = {
   top_quotes: SentimentApiTopQuote[];
 };
 
+/** Truncate at the last full sentence within maxLength, falling back to the
+ *  last word boundary — never a mid-word/mid-sentence chop like "...aft". */
+function truncateAtWordBoundary(text: string, maxLength: number): string {
+  if (text.length <= maxLength) return text;
+
+  const slice = text.slice(0, maxLength);
+  const lastSentenceEnd = Math.max(
+    slice.lastIndexOf(". "),
+    slice.lastIndexOf("! "),
+    slice.lastIndexOf("? ")
+  );
+  if (lastSentenceEnd > maxLength * 0.5) {
+    return slice.slice(0, lastSentenceEnd + 1);
+  }
+
+  const lastSpace = slice.lastIndexOf(" ");
+  return (lastSpace > 0 ? slice.slice(0, lastSpace) : slice) + "...";
+}
+
 export async function fetchRedditQuotes(query: string, limit = 3): Promise<RedditQuote[]> {
   try {
     const res = await fetch(
@@ -51,7 +70,7 @@ export async function fetchRedditQuotes(query: string, limit = 3): Promise<Reddi
       if (!c.body || !c.url) continue;
       quotes.push({
         handle: c.author ? `u/${c.author}` : `r/${c.subreddit ?? "reddit"}`,
-        text: c.body.length > 300 ? c.body.slice(0, 297) + "..." : c.body,
+        text: truncateAtWordBoundary(c.body, 600),
         url: c.url,
       });
       if (quotes.length >= limit) break;
