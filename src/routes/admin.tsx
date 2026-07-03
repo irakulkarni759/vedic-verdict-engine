@@ -220,7 +220,8 @@ function AdminPage() {
           <p className="mb-3 text-sm leading-6 text-[var(--ink)]">
             Replaces every stored trend's community quotes — which were previously fabricated by Claude
             with made-up handles — with real Reddit comments, re-searched using each trend's original
-            query. Requires REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET to be set. Trends where no real
+            query, using Reddit's public search (no API credentials needed, but no guarantees either —
+            Reddit can rate-limit this without notice). Trends where no real
             comments turn up get an empty list, never a fabricated fallback.
           </p>
           <button
