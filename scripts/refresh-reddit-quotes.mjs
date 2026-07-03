@@ -110,9 +110,17 @@ async function searchReddit(query, type) {
       `https://www.reddit.com/search.json?q=${encodeURIComponent(query)}&type=${type}&sort=relevance&limit=25&raw_json=1`,
       { headers: { "User-Agent": USER_AGENT } },
     );
-    if (!res.ok) return null;
-    return await res.json();
-  } catch {
+    if (!res.ok) {
+      const bodySnippet = await res.text().catch(() => "");
+      console.log(`\n    [DEBUG] Reddit ${type} search HTTP ${res.status} for "${query}": ${bodySnippet.slice(0, 200)}`);
+      return null;
+    }
+    const json = await res.json();
+    const rawCount = json?.data?.children?.length ?? 0;
+    console.log(`\n    [DEBUG] Reddit ${type} search for "${query}": HTTP ${res.status}, ${rawCount} raw results`);
+    return json;
+  } catch (err) {
+    console.log(`\n    [DEBUG] Reddit ${type} search threw: ${err.message}`);
     return null;
   }
 }
@@ -123,7 +131,8 @@ async function fetchRealCandidates(query) {
   const commentResults = await searchReddit(query, "comment");
   await sleep(DELAY_MS);
 
-  const commentCandidates = (commentResults?.data?.children ?? [])
+  const rawComments = commentResults?.data?.children ?? [];
+  const commentCandidates = rawComments
     .map((c) => c.data)
     .filter(
       (d) =>
@@ -142,6 +151,8 @@ async function fetchRealCandidates(query) {
       score: d.score ?? 0,
     }));
 
+  console.log(`    [DEBUG] ${rawComments.length} raw comments -> ${commentCandidates.length} passed filters`);
+
   if (commentCandidates.length > 0) {
     return commentCandidates.sort((a, b) => b.score - a.score);
   }
@@ -150,7 +161,8 @@ async function fetchRealCandidates(query) {
   const postResults = await searchReddit(query, "link");
   await sleep(DELAY_MS);
 
-  const postCandidates = (postResults?.data?.children ?? [])
+  const rawPosts = postResults?.data?.children ?? [];
+  const postCandidates = rawPosts
     .map((p) => p.data)
     .filter(
       (d) =>
@@ -168,6 +180,8 @@ async function fetchRealCandidates(query) {
       url: `https://www.reddit.com${d.permalink}`,
       score: d.score ?? 0,
     }));
+
+  console.log(`    [DEBUG] ${rawPosts.length} raw posts -> ${postCandidates.length} passed filters`);
 
   return postCandidates.sort((a, b) => b.score - a.score);
 }
@@ -281,12 +295,12 @@ async function main() {
   let emptied = 0;
 
   for (const [i, row] of rows.entries()) {
-    process.stdout.write(`[${i + 1}/${rows.length}] ${row.name} ... `);
+    console.log(`[${i + 1}/${rows.length}] ${row.name}`);
 
     const rawCandidates = await fetchRealCandidates(row.query);
-    const realQuotes = (await selectGenuineReactions(rawCandidates, row.query)).map(
-      ({ handle, text, url }) => ({ handle, text, url }),
-    ).slice(0, 3);
+    const genuine = await selectGenuineReactions(rawCandidates, row.query);
+    console.log(`    [DEBUG] ${rawCandidates.length} candidates -> ${genuine.length} kept after genuine/relevance check`);
+    const realQuotes = genuine.map(({ handle, text, url }) => ({ handle, text, url })).slice(0, 3);
 
     const { communityVerdict, sentiment } = await inferSentimentFromQuotes(
       row.name,
