@@ -95,26 +95,51 @@ function AdminPage() {
     setSummarizeResult(`Updated ${res.updated} of ${res.total} trends (${res.skipped} already fine or skipped).`);
   }
 
-  async function refreshQuotes() {
+  async function refreshQuotes(force: boolean) {
     const pw = window.sessionStorage.getItem(SESSION_KEY) ?? password;
     setRefreshingQuotes(true);
     setRefreshQuotesResult(null);
-    const res = await adminRefreshRedditQuotes({ data: { password: pw } });
-    setRefreshingQuotes(false);
-    if (!res.ok) {
-      setRefreshQuotesResult(res.error ?? "Couldn't refresh quotes.");
-      return;
-    }
-    if (res.quotaHit) {
+
+    let cursor: number | null = 0;
+    let totalUpdated = 0;
+    let totalEmptied = 0;
+    let totalSkipped = 0;
+    let totalProcessed = 0;
+    let batchTotal = 0;
+
+    while (cursor !== null) {
+      const res = await adminRefreshRedditQuotes({ data: { password: pw, force, cursor } });
+      if (!res.ok) {
+        setRefreshingQuotes(false);
+        setRefreshQuotesResult(res.error ?? "Couldn't refresh quotes.");
+        return;
+      }
+      totalUpdated += res.updated ?? 0;
+      totalEmptied += res.emptied ?? 0;
+      totalSkipped = res.skipped ?? totalSkipped;
+      totalProcessed += res.processed ?? 0;
+      batchTotal = res.batchTotal ?? batchTotal;
+
       setRefreshQuotesResult(
-        `Stopped after ${res.processed} of ${res.total} — YouTube's daily search quota (100/day) ran out. ` +
-        `${res.updated} got real quotes, ${res.emptied} were empty, before it hit the wall. ` +
-        `Quota resets at midnight Pacific time — run this again after that to continue with the rest.`,
+        `Working… ${totalProcessed} of ${batchTotal} processed (${totalUpdated} got real quotes, ${totalEmptied} empty).`,
       );
-      return;
+
+      if (res.quotaHit) {
+        setRefreshingQuotes(false);
+        setRefreshQuotesResult(
+          `Stopped after ${totalProcessed} of ${batchTotal} — quota ran out. ` +
+          `${totalUpdated} got real quotes, ${totalEmptied} were empty. ` +
+          `${totalSkipped} already had quotes and were skipped. Run this again later to continue.`,
+        );
+        return;
+      }
+
+      cursor = res.nextCursor ?? null;
     }
+
+    setRefreshingQuotes(false);
     setRefreshQuotesResult(
-      `${res.updated} of ${res.total} trends got real quotes; ${res.emptied} had none found and are now empty (not fabricated).`,
+      `Done. ${totalUpdated} of ${batchTotal} trends got real quotes; ${totalEmptied} had none found and are now empty (not fabricated). ${totalSkipped} already had quotes and were left alone.`,
     );
   }
 
@@ -226,18 +251,26 @@ function AdminPage() {
         <div className="mb-6 rounded-[16px] border-2 border-[var(--terracotta)] bg-white/90 p-5 shadow-[0_8px_24px_rgba(27,52,72,0.04)]">
           <p className="font-label mb-2 text-xs text-[var(--terracotta)]">REAL COMMUNITY QUOTES (IMPORTANT)</p>
           <p className="mb-3 text-sm leading-6 text-[var(--ink)]">
-            Replaces every stored trend's community quotes — which were previously fabricated by Claude
-            with made-up handles — with real ones, re-searched using each trend's original query, and
-            recalculates the sentiment %/community line at the top of the card to match the new quotes.
+            Backfills real community quotes — re-searched using each trend's original query — for
+            trends that don't have any yet, and recalculates the sentiment %/community line to match.
             Trends where no real comments turn up get an empty list, never a fabricated fallback.
           </p>
-          <button
-            onClick={refreshQuotes}
-            disabled={refreshingQuotes}
-            className="font-label rounded-full bg-[var(--terracotta)] px-5 py-2.5 text-xs text-white transition hover:translate-y-[-1px] disabled:opacity-40"
-          >
-            {refreshingQuotes ? "FETCHING FROM REDDIT…" : "REPLACE WITH REAL QUOTES"}
-          </button>
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={() => refreshQuotes(false)}
+              disabled={refreshingQuotes}
+              className="font-label rounded-full bg-[var(--terracotta)] px-5 py-2.5 text-xs text-white transition hover:translate-y-[-1px] disabled:opacity-40"
+            >
+              {refreshingQuotes ? "FETCHING FROM REDDIT…" : "FILL EMPTY CARDS ONLY"}
+            </button>
+            <button
+              onClick={() => refreshQuotes(true)}
+              disabled={refreshingQuotes}
+              className="font-label rounded-full border border-[var(--terracotta)] px-5 py-2.5 text-xs text-[var(--terracotta)] transition hover:translate-y-[-1px] disabled:opacity-40"
+            >
+              {refreshingQuotes ? "FETCHING FROM REDDIT…" : "RE-FETCH ALL (SLOW)"}
+            </button>
+          </div>
           {refreshQuotesResult && (
             <p className="font-mono mt-3 text-xs text-[var(--muted-ink)]">{refreshQuotesResult}</p>
           )}

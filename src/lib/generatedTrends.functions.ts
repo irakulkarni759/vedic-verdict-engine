@@ -539,27 +539,53 @@ Return ONLY this JSON, no other text:
   }
 }
 
+const REFRESH_QUOTES_BATCH_SIZE = 5;
+
 export const adminRefreshRedditQuotes = createServerFn({ method: "POST" })
-  .inputValidator((d: { password: string }) => d)
+  .inputValidator((d: { password: string; force?: boolean; cursor?: number }) => d)
   .handler(
-    async ({ data }): Promise<{ ok: boolean; updated?: number; emptied?: number; total?: number; processed?: number; quotaHit?: boolean; error?: string }> => {
+    async ({
+      data,
+    }): Promise<{
+      ok: boolean;
+      updated?: number;
+      emptied?: number;
+      skipped?: number;
+      processed?: number;
+      batchTotal?: number;
+      nextCursor?: number | null;
+      quotaHit?: boolean;
+      error?: string;
+    }> => {
       if (!checkAdminPassword(data.password)) return { ok: false, error: "Wrong password." };
 
       try {
         const supabase = getSupabaseServiceClient();
         const { data: rows, error } = await supabase
           .from("generated_trends")
-          .select("id, query, name, summary, sentiment_score")
+          .select("id, query, name, summary, sentiment_score, opinions")
           .neq("verdict", "unmapped")
+          .order("id", { ascending: true })
           .limit(500);
         if (error || !rows) return { ok: false, error: "Couldn't load trends." };
+
+        // Same target list every call (stable order by id) — a cursor into
+        // this list is what lets the client resume a specific batch without
+        // re-walking rows it already handled, and without one request ever
+        // having to process everything in a single long-running loop.
+        const targetRows = (
+          rows as { id: string; query: string; name: string; summary: string; sentiment_score: number; opinions: unknown[] | null }[]
+        ).filter((row) => data.force || !(Array.isArray(row.opinions) && row.opinions.length > 0));
+
+        const cursor = data.cursor ?? 0;
+        const batch = targetRows.slice(cursor, cursor + REFRESH_QUOTES_BATCH_SIZE);
 
         let updated = 0;
         let emptied = 0;
         let processed = 0;
         let quotaHit = false;
 
-        for (const row of rows as { id: string; query: string; name: string; summary: string; sentiment_score: number }[]) {
+        for (const row of batch) {
           let realQuotes: { handle: string; text: string; url: string }[];
           try {
             realQuotes = await fetchRedditQuotes(row.query);
@@ -590,7 +616,19 @@ export const adminRefreshRedditQuotes = createServerFn({ method: "POST" })
           else emptied++;
         }
 
-        return { ok: true, updated, emptied, total: rows.length, processed, quotaHit };
+        const nextCursor = cursor + batch.length;
+        const skipped = rows.length - targetRows.length;
+
+        return {
+          ok: true,
+          updated,
+          emptied,
+          skipped,
+          processed,
+          batchTotal: targetRows.length,
+          nextCursor: nextCursor < targetRows.length ? nextCursor : null,
+          quotaHit,
+        };
       } catch {
         return { ok: false, error: "Refresh failed partway through." };
       }
