@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { CATEGORIES, TRENDS, trendBySlug } from "@/lib/trends";
 import { getGeneratedTrendsMeta, getTrendingSearches } from "@/lib/generatedTrends.functions";
+import { warmSentimentBackend } from "@/lib/reddit.server";
 
 export const Route = createFileRoute("/")({
   loader: async () => {
@@ -53,6 +54,22 @@ function Veda() {
   const [searchError, setSearchError] = useState<string | null>(null);
   const navigate = useNavigate();
 
+  // Prewarm the sentiment backend on intent (page load, focusing the search
+  // box) so it's awake by the time a search hits the loader — without paying
+  // to keep Railway up 24/7. Throttled so repeated focus/typing can't spam it.
+  const lastWarmRef = useRef(0);
+  const prewarm = () => {
+    const now = Date.now();
+    if (now - lastWarmRef.current < 60_000) return;
+    lastWarmRef.current = now;
+    warmSentimentBackend().catch(() => {});
+  };
+  useEffect(() => {
+    prewarm();
+    // once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function updateQuery(v: string) {
     setQuery(v);
     if (searchError) setSearchError(null);
@@ -92,7 +109,7 @@ function Veda() {
   return (
     <div className="flex min-h-dvh flex-col pt-6 sm:pt-12" style={{ backgroundColor: "var(--parchment)" }}>
       <Nav />
-      <Hero query={query} setQuery={updateQuery} onSubmit={submit} count={count} trending={trendingRow} searchError={searchError} />
+      <Hero query={query} setQuery={updateQuery} onSubmit={submit} onWarm={prewarm} count={count} trending={trendingRow} searchError={searchError} />
       <WavyDivider from="var(--parchment)" to="var(--ink)" />
       <Stats />
     </div>
@@ -164,6 +181,7 @@ function Hero({
   query,
   setQuery,
   onSubmit,
+  onWarm,
   count,
   trending,
   searchError,
@@ -171,6 +189,7 @@ function Hero({
   query: string;
   setQuery: (s: string) => void;
   onSubmit: (n?: string) => void;
+  onWarm: () => void;
   count: number;
   trending: { slug: string; name: string }[];
   searchError: string | null;
@@ -232,6 +251,7 @@ function Hero({
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              onFocus={onWarm}
               placeholder="try 'creatine for muscle growth'..."
               className="flex-1 bg-transparent outline-none placeholder:opacity-70"
               style={{ color: "var(--ink)", fontSize: 15, fontWeight: 300 }}

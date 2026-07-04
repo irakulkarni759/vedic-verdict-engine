@@ -71,6 +71,32 @@ async function fetchOnce(query: string, timeoutMs: number): Promise<Response | n
   }
 }
 
+/** Fire-and-forget wake ping for the sentiment backend. On a tight budget it
+ *  runs with Railway app-sleeping ON (idle = free), so it cold-starts after
+ *  inactivity. Pinging the moment someone shows intent to search — lands on
+ *  the homepage, focuses the box — starts the container waking while they type,
+ *  so it's warm by the time the verdict loader needs it, without paying to keep
+ *  it up 24/7. Deliberately hits /api/claim/status (a trivial job lookup), NOT
+ *  /api/claim, so it never triggers a scrape or a Claude call — waking has to
+ *  stay cheap or it defeats the whole point. */
+export const warmSentimentBackend = createServerFn({ method: "GET" }).handler(
+  async (): Promise<null> => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
+    try {
+      await fetch(`${SENTIMENT_API_URL}/api/claim/status?job_id=warmup`, {
+        signal: controller.signal,
+      });
+    } catch {
+      // Best-effort: a failed/slow ping just means the loader may hit a colder
+      // backend, which the community fallback card already handles gracefully.
+    } finally {
+      clearTimeout(timeoutId);
+    }
+    return null;
+  },
+);
+
 /** In-loader path: a single bounded attempt, awaited synchronously inside the
  *  main verdict generation so real quotes land in the SAME render as the
  *  research — no async "checking…" step afterward. 10s is long enough for a
