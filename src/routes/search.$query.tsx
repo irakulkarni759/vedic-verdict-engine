@@ -1,8 +1,16 @@
+import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { TRENDS } from "@/lib/trends";
 import { TrendCard } from "@/components/TrendCard";
 import { Comments } from "@/components/Comments";
-import { toTitleCase } from "@/lib/utils";
+import { toTitleCase, coreSubjectForReddit, pollUntil } from "@/lib/utils";
+import {
+  startRedditQuoteJob,
+  pollRedditQuoteJob,
+  type RedditQuote,
+  type ClaimJobPollResult,
+} from "@/lib/reddit.server";
+import { persistTrendQuotes } from "@/lib/generatedTrends.functions";
 import {
   generateEvidenceVerdict,
   type EvidenceVerdict,
@@ -98,17 +106,76 @@ function SearchPage() {
   const q = decodeURIComponent(query);
   const color = verdictColor(data.verdict);
 
-  // Community quotes + sentiment are produced synchronously in the loader now
-  // (buildResultFromIds awaits the quote fetch, then Claude cleans/picks the
-  // quotes and reads sentiment in the same pass). So everything the loader
-  // returns is already final — they land in the SAME render as the research,
-  // with no async job, no polling, and no "checking…" state. When Railway
-  // can't deliver within the loader's budget, data.quotes is simply empty and
-  // the section below hides, while the Claude-written community line still
-  // shows in the hero. Nothing to fetch or reconcile here.
-  const displayQuotes = data.quotes;
-  const displayCommunityVerdict = data.communityVerdict;
-  const displaySentiment = data.sentiment;
+  // Warm searches already carry the scraped quotes + the summary written from
+  // them straight out of the loader — they render together with the research,
+  // done. This effect ONLY covers the cold-first-search case: the loader's
+  // scrape didn't finish in its budget (a stone-cold Railway container that
+  // prewarm hadn't fully woken yet), so the page shows research + the snapshot
+  // card, and this quietly finishes the scrape in the background and drops the
+  // real quotes AND the corrected summary in place — so the user never has to
+  // reload by hand to see them. Warm path: data.quotes is already populated, so
+  // the guard below returns immediately and nothing extra runs.
+  const [liveQuotes, setLiveQuotes] = useState<RedditQuote[] | null>(null);
+  const [liveCommunityVerdict, setLiveCommunityVerdict] = useState<string | null>(null);
+  const [liveSentiment, setLiveSentiment] = useState<number | null>(null);
+
+  useEffect(() => {
+    setLiveQuotes(null);
+    setLiveCommunityVerdict(null);
+    setLiveSentiment(null);
+
+    const noVerdict =
+      data.verdict === "PHARMA" || data.verdict === "UNKNOWN" || data.studies === 0;
+    if (data.quotes.length > 0 || !data.query || noVerdict) return;
+
+    let cancelled = false;
+    (async () => {
+      const start = await startRedditQuoteJob({
+        data: { query: coreSubjectForReddit(data.query) },
+      });
+      if (cancelled) return;
+
+      // Railway usually has the result cached from the loader's own attempt
+      // (which warmed it), so this often resolves "done" on the first call;
+      // otherwise poll a cheap status route until it lands.
+      const final: ClaimJobPollResult =
+        start.status === "pending"
+          ? await pollUntil<ClaimJobPollResult>(
+              () => pollRedditQuoteJob({ data: { jobId: start.jobId } }),
+              (r) => r.status === "pending",
+              { intervalMs: 3000, maxAttempts: 30, isCancelled: () => cancelled },
+            )
+          : start;
+
+      if (cancelled || final.status !== "done" || final.quotes.length === 0) return;
+      setLiveQuotes(final.quotes);
+
+      // Recompute the summary from these specific quotes and persist, so the
+      // stored row + this page both catch up from the generic first-pass line.
+      const res = await persistTrendQuotes({
+        data: {
+          slug: data.slug,
+          name: data.name,
+          summary: data.oneLiner,
+          existingSentiment: data.sentiment,
+          quotes: final.quotes,
+        },
+      }).catch(() => null);
+
+      if (!cancelled && res?.ok && res.communityVerdict && typeof res.sentiment === "number") {
+        setLiveCommunityVerdict(res.communityVerdict);
+        setLiveSentiment(res.sentiment);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [data.query, data.quotes.length, data.slug, data.name, data.oneLiner, data.sentiment, data.verdict, data.studies]);
+
+  const displayQuotes = data.quotes.length > 0 ? data.quotes : liveQuotes ?? [];
+  const displayCommunityVerdict = liveCommunityVerdict ?? data.communityVerdict;
+  const displaySentiment = liveSentiment ?? data.sentiment;
 
   const tokens = q
     .toLowerCase()
