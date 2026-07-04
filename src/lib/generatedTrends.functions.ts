@@ -387,6 +387,62 @@ export const adminStandardizeTrendNames = createServerFn({ method: "POST" })
   );
 
 /**
+ * One-off admin backfill for existing rows: moves any stored trend whose
+ * query/name is about stress, anxiety, adaptogens, cortisol, calming, or
+ * relaxation into the "mental-wellness" category, regardless of what
+ * category it was originally saved under (usually "supplements", since the
+ * category was picked based on the ingredient rather than the outcome —
+ * see applyOutcomeCategoryOverride in evidence.functions.ts, which now
+ * prevents this for NEW searches going forward). Pure regex, no Claude
+ * calls needed. Safe to re-run — rows already in mental-wellness are
+ * skipped.
+ */
+const STRESS_CATEGORY_PATTERN = /stress|anxiety|adaptogen|cortisol|calming|relaxation/i;
+
+export const adminRecategorizeStressTrends = createServerFn({ method: "POST" })
+  .inputValidator((d: { password: string }) => d)
+  .handler(
+    async ({ data }): Promise<{ ok: boolean; updated?: number; skipped?: number; total?: number; error?: string }> => {
+      if (!checkAdminPassword(data.password)) return { ok: false, error: "Wrong password." };
+
+      try {
+        const supabase = getSupabaseServiceClient();
+        const { data: rows, error } = await supabase
+          .from("generated_trends")
+          .select("id, query, name, category")
+          .neq("verdict", "unmapped")
+          .limit(500);
+        if (error || !rows) return { ok: false, error: "Couldn't load trends." };
+
+        let updated = 0;
+        let skipped = 0;
+
+        for (const row of rows as { id: string; query: string; name: string; category: string }[]) {
+          const isStressRelated = STRESS_CATEGORY_PATTERN.test(row.query) || STRESS_CATEGORY_PATTERN.test(row.name);
+          if (!isStressRelated || row.category === "mental-wellness") {
+            skipped++;
+            continue;
+          }
+          const { error: updateError } = await supabase
+            .from("generated_trends")
+            .update({ category: "mental-wellness" })
+            .eq("id", row.id);
+          if (updateError) {
+            skipped++;
+            continue;
+          }
+          updated++;
+        }
+
+        return { ok: true, updated, skipped, total: rows.length };
+      } catch {
+        return { ok: false, error: "Recategorize failed partway through." };
+      }
+    },
+  );
+
+
+/**
  * One-off Claude call per row to rewrite the templated summary sentence
  * ("Across N PubMed studies, the bulk of findings support X.") into an
  * actual analytical verdict, plus generate a community-sentiment verdict

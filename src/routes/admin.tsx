@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import { adminCheckPassword, adminDeleteComment, adminListComments, type AdminComment } from "@/lib/comments.functions";
-import { adminStandardizeTrendNames, adminBackfillVerdictSummaries, adminRefreshRedditQuotes } from "@/lib/generatedTrends.functions";
+import { adminStandardizeTrendNames, adminBackfillVerdictSummaries, adminRefreshRedditQuotes, adminRecategorizeStressTrends } from "@/lib/generatedTrends.functions";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -24,6 +24,8 @@ function AdminPage() {
   const [summarizeResult, setSummarizeResult] = useState<string | null>(null);
   const [refreshingQuotes, setRefreshingQuotes] = useState(false);
   const [refreshQuotesResult, setRefreshQuotesResult] = useState<string | null>(null);
+  const [recategorizing, setRecategorizing] = useState(false);
+  const [recategorizeResult, setRecategorizeResult] = useState<string | null>(null);
 
   async function loadComments(pw: string) {
     setLoading(true);
@@ -141,6 +143,19 @@ function AdminPage() {
     setRefreshQuotesResult(
       `Done. ${totalUpdated} of ${batchTotal} trends got real quotes; ${totalEmptied} had none found and are now empty (not fabricated). ${totalSkipped} already had quotes and were left alone.`,
     );
+  }
+
+  async function recategorizeStress() {
+    const pw = window.sessionStorage.getItem(SESSION_KEY) ?? password;
+    setRecategorizing(true);
+    setRecategorizeResult(null);
+    const res = await adminRecategorizeStressTrends({ data: { password: pw } });
+    setRecategorizing(false);
+    if (!res.ok) {
+      setRecategorizeResult(res.error ?? "Couldn't recategorize.");
+      return;
+    }
+    setRecategorizeResult(`Moved ${res.updated} of ${res.total} trends into mental-wellness (${res.skipped} already fine or not stress-related).`);
   }
 
   // Try to resume a session on first render.
@@ -273,6 +288,26 @@ function AdminPage() {
           </div>
           {refreshQuotesResult && (
             <p className="font-mono mt-3 text-xs text-[var(--muted-ink)]">{refreshQuotesResult}</p>
+          )}
+        </div>
+
+        <div className="mb-6 rounded-[16px] border border-white/75 bg-white/90 p-5 shadow-[0_8px_24px_rgba(27,52,72,0.04)]">
+          <p className="font-label mb-2 text-xs text-[var(--sage)]">CATEGORY FIX: STRESS → MENTAL WELLNESS</p>
+          <p className="mb-3 text-sm leading-6 text-[var(--ink)]">
+            Moves any existing trend about stress, anxiety, adaptogens, cortisol, calming, or relaxation
+            into "mental-wellness" — these were landing in "supplements" because the category followed the
+            ingredient (e.g. saffron) instead of the outcome being searched for. New searches are already
+            fixed going forward; this just backfills what's already stored. Safe to re-run.
+          </p>
+          <button
+            onClick={recategorizeStress}
+            disabled={recategorizing}
+            className="font-label rounded-full bg-[var(--ink)] px-5 py-2.5 text-xs text-white transition hover:translate-y-[-1px] disabled:opacity-40"
+          >
+            {recategorizing ? "WORKING…" : "RECATEGORIZE STRESS TRENDS"}
+          </button>
+          {recategorizeResult && (
+            <p className="font-mono mt-3 text-xs text-[var(--muted-ink)]">{recategorizeResult}</p>
           )}
         </div>
 
