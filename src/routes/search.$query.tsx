@@ -3,7 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { TRENDS } from "@/lib/trends";
 import { TrendCard } from "@/components/TrendCard";
 import { Comments } from "@/components/Comments";
-import { toTitleCase, coreSubjectForReddit } from "@/lib/utils";
+import { toTitleCase, coreSubjectForReddit, withTimeout } from "@/lib/utils";
 import { getRedditQuotes, type RedditQuote } from "@/lib/reddit.server";
 import { persistTrendQuotes } from "@/lib/generatedTrends.functions";
 import {
@@ -129,7 +129,15 @@ function SearchPage() {
       return;
     }
     setCheckingQuotes(true);
-    getRedditQuotes({ data: { query: coreSubjectForReddit(data.query) } })
+    // Hard ceiling on top of reddit.server.ts's own ~25s internal retry
+    // budget — guarantees this always settles to something displayable
+    // instead of leaving "Checking for community discussion…" on screen
+    // indefinitely if the backend is unusually slow or a request hangs.
+    withTimeout(
+      getRedditQuotes({ data: { query: coreSubjectForReddit(data.query) } }),
+      28_000,
+      [] as RedditQuote[],
+    )
       .then((rows) => {
         if (cancelled) return;
         setCheckingQuotes(false);

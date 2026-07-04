@@ -33,6 +33,42 @@ export function toTitleCase(input: string): string {
 }
 
 /**
+ * Races a promise against a timeout, resolving to `fallback` if the promise
+ * hasn't settled in time. Used to put a hard ceiling on client-side fetches
+ * to slow/cold backends (e.g. the Reddit sentiment service) — without this,
+ * an unusually slow response (or an underlying network/runtime hang that
+ * never cleanly rejects) can leave a "loading" state on screen indefinitely,
+ * since there's nothing else to flip it to a resolved state.
+ */
+export function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        resolve(fallback);
+      }
+    }, ms);
+    promise.then(
+      (value) => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          resolve(value);
+        }
+      },
+      () => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          resolve(fallback);
+        }
+      },
+    );
+  });
+}
+
+/**
  * Strips a trailing " for <purpose>" clause before searching Reddit — people
  * discuss "stomach vacuum," not "stomach vacuum for shrinking waist," so the
  * purpose clause only dilutes the search and can cost real matches. Leaves

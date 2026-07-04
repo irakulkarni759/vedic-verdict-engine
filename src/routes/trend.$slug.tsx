@@ -3,7 +3,7 @@ import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { trendBySlug, type Trend, type Verdict } from "@/lib/trends";
 import { getGeneratedTrendBySlug, persistTrendQuotes } from "@/lib/generatedTrends.functions";
 import { getRedditQuotes } from "@/lib/reddit.server";
-import { coreSubjectForReddit } from "@/lib/utils";
+import { coreSubjectForReddit, withTimeout } from "@/lib/utils";
 import { TrendCard } from "@/components/TrendCard";
 import { Comments } from "@/components/Comments";
 
@@ -255,7 +255,10 @@ function CommunityQuotes({
     if (initialQuotes.length > 0 || quotes.length > 0) return;
     let cancelled = false;
     setLoading(true);
-    getRedditQuotes({ data: { query: coreSubjectForReddit(searchQuery) } })
+    // Same hard ceiling as the search page — guarantees this settles even
+    // if the backend is unusually slow or a request hangs, instead of
+    // leaving the loading state on screen indefinitely.
+    withTimeout(getRedditQuotes({ data: { query: coreSubjectForReddit(searchQuery) } }), 28_000, [] as Quote[])
       .then((live) => {
         if (cancelled || live.length === 0) return;
         setQuotes(live);
