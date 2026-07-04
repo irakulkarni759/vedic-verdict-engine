@@ -118,6 +118,19 @@ function SearchPage() {
   const [liveQuotes, setLiveQuotes] = useState<RedditQuote[] | null>(null);
   const [liveCommunityVerdict, setLiveCommunityVerdict] = useState<string | null>(null);
   const [liveSentiment, setLiveSentiment] = useState<number | null>(null);
+  // Cards show the plain-English "text" by default; clicking reveals the
+  // fuller, more technical "detail" for that same finding. Keyed by index
+  // since bullets don't have a stable id.
+  const [expandedBullets, setExpandedBullets] = useState<Set<number>>(new Set());
+
+  function toggleBullet(i: number) {
+    setExpandedBullets((prev) => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
+      return next;
+    });
+  }
 
   useEffect(() => {
     setLiveQuotes(null);
@@ -242,31 +255,69 @@ function SearchPage() {
             />
 
             <div className="mt-4 space-y-3">
-              {data.bullets.map((b, i) => (
-                <article
-                  key={i}
-                  className="grid gap-4 rounded-[22px] border border-white/75 bg-white/90 p-7 shadow-[0_12px_35px_rgba(27,52,72,0.04)] sm:grid-cols-[48px_1fr] sm:p-8"
-                >
-                  <div className="font-mono text-sm text-[var(--sage)]">
-                    {String(i + 1).padStart(2, "0")}
-                  </div>
+              {data.bullets.map((b, i) => {
+                const isOpen = expandedBullets.has(i);
+                return (
+                  <article
+                    key={i}
+                    onClick={() => toggleBullet(i)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        toggleBullet(i);
+                      }
+                    }}
+                    aria-expanded={isOpen}
+                    className="grid cursor-pointer gap-4 rounded-[22px] border border-white/75 bg-white/90 p-7 shadow-[0_12px_35px_rgba(27,52,72,0.04)] transition hover:border-[var(--terracotta)]/40 sm:grid-cols-[48px_1fr] sm:p-8"
+                  >
+                    <div className="font-mono text-sm text-[var(--sage)]">
+                      {String(i + 1).padStart(2, "0")}
+                    </div>
 
-                  <div>
-                    <p className="text-lg leading-8 text-[var(--ink)]">
-                      {b.text}
-                    </p>
+                    <div>
+                      <p className="text-lg leading-8 text-[var(--ink)]">
+                        {b.text}
+                      </p>
 
-                    <a
-                      href={b.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="font-mono mt-5 inline-block text-xs text-[var(--terracotta)]"
-                    >
-                      view on pubmed ↗
-                    </a>
-                  </div>
-                </article>
-              ))}
+                      {isOpen && (
+                        <div className="mt-4 rounded-[14px] bg-[var(--parchment)] px-4 py-3.5">
+                          <p className="font-label mb-1.5 text-[10px] text-[var(--sage)]">
+                            THE RESEARCH DETAIL
+                          </p>
+                          <p className="font-mono text-sm leading-6 text-[var(--muted-ink)]">
+                            {b.detail}
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleBullet(i);
+                          }}
+                          className="font-label text-xs text-[var(--sage)] transition hover:opacity-70"
+                        >
+                          {isOpen ? "HIDE DETAIL ↑" : "SHOW RESEARCH DETAIL ↓"}
+                        </button>
+
+                        <a
+                          href={b.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="font-mono inline-block text-xs text-[var(--terracotta)]"
+                        >
+                          view on pubmed ↗
+                        </a>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
             </div>
           </section>
         )}
