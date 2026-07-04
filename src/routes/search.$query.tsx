@@ -205,7 +205,7 @@ function SearchPage() {
         )}
 
         {/* ── COMMUNITY SENTIMENT + QUOTES ── */}
-        {displayQuotes.length > 0 && (
+        {!isPharma && !isUnknown && (
           <section className="mt-8">
             <SectionHeader
               left="WHAT PEOPLE SAY"
@@ -231,22 +231,46 @@ function SearchPage() {
               </div>
 
               <div className="mt-8 space-y-8">
-                {displayQuotes.map((quote) => (
-                  <div key={`${quote.handle}-${quote.text}`}>
-                    <p className="text-lg italic leading-8 text-[var(--ink)]">
-                      "{quote.text}"
+                {displayQuotes.length > 0 ? (
+                  displayQuotes.map((quote) => (
+                    <div key={`${quote.handle}-${quote.text}`}>
+                      <p className="text-lg italic leading-8 text-[var(--ink)]">
+                        "{quote.text}"
+                      </p>
+
+                      <a
+                        href={quote.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-mono mt-3 inline-block text-xs text-[var(--terracotta)]"
+                      >
+                        {quote.handle.toUpperCase()} ↗
+                      </a>
+                    </div>
+                  ))
+                ) : (
+                  /* No real scraped quotes came back in time — show an honest
+                     synthesized snapshot rather than dropping the card or
+                     inventing a fake user. Not styled as a quotation (no
+                     italics/quote marks) and not attributed to a person; the
+                     link points to a real Reddit search so people can read
+                     actual threads themselves. */
+                  <div>
+                    <p className="text-lg leading-8 text-[var(--ink)]">
+                      {displayCommunityVerdict ||
+                        `Community sentiment sits at ${displaySentiment}% positive based on available discussion.`}
                     </p>
 
                     <a
-                      href={quote.url}
+                      href={data.redditSearchUrl}
                       target="_blank"
                       rel="noreferrer"
                       className="font-mono mt-3 inline-block text-xs text-[var(--terracotta)]"
                     >
-                      {quote.handle.toUpperCase()} ↗
+                      COMMUNITY SNAPSHOT · SEARCH REDDIT ↗
                     </a>
                   </div>
-                ))}
+                )}
               </div>
             </article>
           </section>
