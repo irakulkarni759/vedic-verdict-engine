@@ -99,6 +99,21 @@ function pickAll(xml: string, tag: string): string[] {
   return out;
 }
 
+/**
+ * Some outcomes should always land in a specific category no matter what
+ * ingredient/product is attached to the query or what Claude classifies it
+ * as — mirrors the same "stress" keyword guessCategoryFallback already uses,
+ * but applied as an override ON TOP of Claude's own pick (not just as a
+ * fallback for when Claude is unavailable), since Claude's classification
+ * keeps following the ingredient's usual bucket (e.g. "supplements" for
+ * saffron) instead of the purpose the query is actually about.
+ */
+function applyOutcomeCategoryOverride(query: string, category: string): string {
+  const q = query.toLowerCase();
+  if (/stress|anxiety|adaptogen|cortisol|calming|relaxation/.test(q)) return "mental-wellness";
+  return category;
+}
+
 function classifyAbstract(text: string): "pos" | "neg" | "neutral" {
   const t = text.toLowerCase();
   const pos = [
@@ -524,8 +539,17 @@ async function buildResultFromIds(opts: {
   // so the quotes and the summary derived from them are produced together.
   const redditQuotes: RedditQuote[] = await quotesPromise;
 
-  const { displayName, researchVerdict, communityVerdict, safetyNote, bullets, sentiment, category, verdict: claudeVerdict } =
+  const { displayName, researchVerdict, communityVerdict, safetyNote, bullets, sentiment, category: claudeCategory, verdict: claudeVerdict } =
     await generateBulletsAndQuotes(searchSubject, query, abstractsForClaude, redditQuotes);
+
+  // Claude's own category pick (inside generateBulletsAndQuotes) tends to
+  // follow the INGREDIENT's usual bucket rather than the OUTCOME being
+  // tested — e.g. "Saffron for Stress" keeps landing in "supplements"
+  // because saffron is a supplement, even though the actual purpose is
+  // squarely mental-wellness. This runs after Claude's classification and
+  // overrides it whenever the query's outcome keywords say otherwise, so
+  // it wins regardless of what ingredient/product is attached to it.
+  const category = applyOutcomeCategoryOverride(query, claudeCategory);
 
   // Standardize the displayed title to "X for Y" — either Claude's inferred
   // purpose, or the raw title-cased query/name as a fallback when Claude
