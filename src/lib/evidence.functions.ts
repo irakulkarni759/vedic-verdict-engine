@@ -462,6 +462,16 @@ async function buildResultFromIds(opts: {
 }): Promise<EvidenceVerdict> {
   const { ids, query, name, slug, updated, generatedAt, pubmedSearchUrl, redditSearchUrl, fallback } = opts;
 
+  // Kick the community scrape off NOW so its (slow) latency overlaps the PubMed
+  // article fetch + XML parse + abstract classification below, instead of
+  // stacking on top of them. It's awaited just before Claude writes the summary
+  // (which needs the quotes), so by then it's had a head start and usually the
+  // real quotes are already in hand. .catch keeps a scrape failure from taking
+  // down the whole verdict — it just degrades to no quotes for this search.
+  const quotesPromise = fetchRedditQuotesFast(coreSubjectForReddit(query)).catch(
+    () => [] as RedditQuote[],
+  );
+
   const efetch = await fetchPubmed(`efetch.fcgi?db=pubmed&retmode=xml&id=${ids.join(",")}`);
   const xml = efetch ? await efetch.text() : "";
   const articleBlocks = xml.split(/<PubmedArticle[>\s]/).slice(1);
@@ -508,18 +518,11 @@ async function buildResultFromIds(opts: {
   // still uses searchSubject.
   const searchSubject = fallback ? fallback.terms.join(" ") : query;
 
-  // Real Reddit comments, fetched in parallel with the Claude call setup.
-  // These are the ONLY source of "quotes" — Claude is never asked to invent
-  // them, it only synthesizes communityVerdict/sentiment from real ones.
-  // A quota-exhausted YouTube search shouldn't break the whole verdict —
-  // just means no fresh community quotes for this one search.
-  let redditQuotes: RedditQuote[] = [];
-  try {
-    redditQuotes = await fetchRedditQuotesFast(coreSubjectForReddit(query));
-  } catch {
-    // fetchRedditQuotes already catches its own errors and returns [];
-    // this guard is just a safety net in case that contract ever changes.
-  }
+  // The community scrape was kicked off at the top of this function so it could
+  // run while PubMed was being fetched and parsed; collect it now. Claude then
+  // cleans/picks the quotes and reads sentiment from them in generateBulletsAndQuotes,
+  // so the quotes and the summary derived from them are produced together.
+  const redditQuotes: RedditQuote[] = await quotesPromise;
 
   const { displayName, researchVerdict, communityVerdict, safetyNote, bullets, sentiment, category, verdict: claudeVerdict } =
     await generateBulletsAndQuotes(searchSubject, query, abstractsForClaude, redditQuotes);

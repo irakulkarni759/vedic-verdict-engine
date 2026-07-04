@@ -98,15 +98,18 @@ export const warmSentimentBackend = createServerFn({ method: "GET" }).handler(
 );
 
 /** In-loader path: a single bounded attempt, awaited synchronously inside the
- *  main verdict generation so real quotes land in the SAME render as the
- *  research — no async "checking…" step afterward. 10s is long enough for a
- *  warm Railway scrape but still bounded, so the loader can't hang past the
- *  platform's request ceiling: if Railway can't deliver in time we return []
- *  and generation falls back to a Claude-written community line, still in the
- *  same synchronous pass. Keeping Railway warm (so it isn't cold-starting) is
- *  what makes real quotes land inside this budget most of the time. */
+ *  main verdict generation so the scraped quotes land in the SAME render as the
+ *  research — and, because the community summary is written FROM these quotes in
+ *  the same pass, so does the correct summary. 20s is enough for a warm Railway
+ *  scrape to finish; combined with running this in parallel with the PubMed
+ *  fetch (see buildResultFromIds) the whole search stays within ~30s. Still
+ *  bounded: if the scrape can't finish in time the fetch aborts, quotes come
+ *  back [], and the summary + snapshot card fall back gracefully rather than
+ *  hanging the request. Keeping Railway warm (prewarm ping) is what makes the
+ *  scrape land inside this budget on the first search instead of only on a
+ *  warm re-search. */
 export async function fetchRedditQuotesFast(query: string, limit = 3): Promise<RedditQuote[]> {
-  const res = await fetchOnce(query, 10000);
+  const res = await fetchOnce(query, 20000);
   return parseQuotesResponse(res, limit);
 }
 
