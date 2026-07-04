@@ -1,16 +1,8 @@
-import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { TRENDS } from "@/lib/trends";
 import { TrendCard } from "@/components/TrendCard";
 import { Comments } from "@/components/Comments";
-import { toTitleCase, coreSubjectForReddit, pollUntil } from "@/lib/utils";
-import {
-  startRedditQuoteJob,
-  pollRedditQuoteJob,
-  type RedditQuote,
-  type ClaimJobPollResult,
-} from "@/lib/reddit.server";
-import { persistTrendQuotes } from "@/lib/generatedTrends.functions";
+import { toTitleCase } from "@/lib/utils";
 import {
   generateEvidenceVerdict,
   type EvidenceVerdict,
@@ -106,89 +98,17 @@ function SearchPage() {
   const q = decodeURIComponent(query);
   const color = verdictColor(data.verdict);
 
-  // The loader's Reddit fetch is a fast, single 5s attempt so the whole page
-  // never blocks on a cold Railway container. If that fast attempt came back
-  // empty, quietly retry in the background (longer timeout) and swap in the
-  // real quotes if/when they show up — no need to hold up the summary render
-  // for them. IMPORTANT: search Reddit with the user's ORIGINAL query
-  // (data.query), never the display name — the display name can be a
-  // scientific term (e.g. "Abdominal Drawing-In Maneuver") that no one uses
-  // on Reddit, which returns zero matches even when threads clearly exist.
-  const [liveQuotes, setLiveQuotes] = useState<RedditQuote[] | null>(null);
-  const [checkingQuotes, setCheckingQuotes] = useState(data.quotes.length === 0 && !!data.query);
-  // Once the retry above finds real quotes, the community summary generated
-  // moments earlier (from zero quotes) is stale — it was written to say
-  // something like "Limited public discussion so far." These hold the
-  // recomputed values once persistTrendQuotes returns them, so the page
-  // catches up instead of leaving that stale line up indefinitely.
-  const [liveCommunityVerdict, setLiveCommunityVerdict] = useState<string | null>(null);
-  const [liveSentiment, setLiveSentiment] = useState<number | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLiveQuotes(null);
-    setLiveCommunityVerdict(null);
-    setLiveSentiment(null);
-    if (data.quotes.length > 0 || !data.query) {
-      setCheckingQuotes(false);
-      return;
-    }
-    setCheckingQuotes(true);
-
-    (async () => {
-      const start = await startRedditQuoteJob({ data: { query: coreSubjectForReddit(data.query) } });
-      if (cancelled) return;
-
-      // A cache hit resolves instantly ("done"). Otherwise poll a cheap
-      // status endpoint every few seconds — up to ~3 minutes — instead of
-      // holding one request open. Each individual check is fast, so this
-      // never runs into a request-duration ceiling no matter how long the
-      // actual scrape takes; it only stops early if the job genuinely
-      // errors or gets lost (e.g. a backend restart).
-      const final: ClaimJobPollResult =
-        start.status === "pending"
-          ? await pollUntil<ClaimJobPollResult>(
-              () => pollRedditQuoteJob({ data: { jobId: start.jobId } }),
-              (r) => r.status === "pending",
-              { intervalMs: 4000, maxAttempts: 45, isCancelled: () => cancelled },
-            )
-          : start;
-
-      if (cancelled) return;
-      setCheckingQuotes(false);
-      if (final.status !== "done" || final.quotes.length === 0) return;
-
-      setLiveQuotes(final.quotes);
-      // Persist AND recompute the community verdict/sentiment from these
-      // specific quotes, so the trend's stored row and this page's own
-      // summary text both catch up instead of staying frozen on the
-      // generic line written when generation first ran with zero quotes.
-      persistTrendQuotes({
-        data: {
-          slug: data.slug,
-          name: data.name,
-          summary: data.oneLiner,
-          existingSentiment: data.sentiment,
-          quotes: final.quotes,
-        },
-      })
-        .then((res) => {
-          if (!cancelled && res.ok && res.communityVerdict && typeof res.sentiment === "number") {
-            setLiveCommunityVerdict(res.communityVerdict);
-            setLiveSentiment(res.sentiment);
-          }
-        })
-        .catch(() => {});
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [data.query, data.quotes.length, data.slug, data.name, data.oneLiner, data.sentiment]);
-
-  const displayQuotes = data.quotes.length > 0 ? data.quotes : liveQuotes ?? [];
-  const displayCommunityVerdict = liveCommunityVerdict ?? data.communityVerdict;
-  const displaySentiment = liveSentiment ?? data.sentiment;
+  // Community quotes + sentiment are produced synchronously in the loader now
+  // (buildResultFromIds awaits the quote fetch, then Claude cleans/picks the
+  // quotes and reads sentiment in the same pass). So everything the loader
+  // returns is already final — they land in the SAME render as the research,
+  // with no async job, no polling, and no "checking…" state. When Railway
+  // can't deliver within the loader's budget, data.quotes is simply empty and
+  // the section below hides, while the Claude-written community line still
+  // shows in the hero. Nothing to fetch or reconcile here.
+  const displayQuotes = data.quotes;
+  const displayCommunityVerdict = data.communityVerdict;
+  const displaySentiment = data.sentiment;
 
   const tokens = q
     .toLowerCase()
@@ -285,7 +205,7 @@ function SearchPage() {
         )}
 
         {/* ── COMMUNITY SENTIMENT + QUOTES ── */}
-        {(displayQuotes.length > 0 || checkingQuotes) && (
+        {displayQuotes.length > 0 && (
           <section className="mt-8">
             <SectionHeader
               left="WHAT PEOPLE SAY"
@@ -294,48 +214,40 @@ function SearchPage() {
             />
 
             <article className="mt-4 rounded-[22px] border border-white/75 bg-white/90 p-8 shadow-[0_12px_35px_rgba(27,52,72,0.04)]">
-              {checkingQuotes && displayQuotes.length === 0 ? (
-                <p className="font-mono text-xs text-[var(--muted-ink)]">
-                  Checking for community discussion…
+              <div className="mb-5 flex items-center justify-between gap-4">
+                <p className="font-label text-xs text-[var(--muted-ink)]">
+                  COMMUNITY SENTIMENT
                 </p>
-              ) : (
-                <>
-                  <div className="mb-5 flex items-center justify-between gap-4">
-                    <p className="font-label text-xs text-[var(--muted-ink)]">
-                      COMMUNITY SENTIMENT
+                <p className="font-mono text-sm" style={{ color }}>
+                  {displaySentiment}% positive
+                </p>
+              </div>
+
+              <div className="h-2 overflow-hidden rounded-full bg-[var(--parchment-deep)]">
+                <div
+                  className="h-full rounded-full"
+                  style={{ width: `${displaySentiment}%`, backgroundColor: color }}
+                />
+              </div>
+
+              <div className="mt-8 space-y-8">
+                {displayQuotes.map((quote) => (
+                  <div key={`${quote.handle}-${quote.text}`}>
+                    <p className="text-lg italic leading-8 text-[var(--ink)]">
+                      "{quote.text}"
                     </p>
-                    <p className="font-mono text-sm" style={{ color }}>
-                      {displaySentiment}% positive
-                    </p>
-                  </div>
 
-                  <div className="h-2 overflow-hidden rounded-full bg-[var(--parchment-deep)]">
-                    <div
-                      className="h-full rounded-full"
-                      style={{ width: `${displaySentiment}%`, backgroundColor: color }}
-                    />
+                    <a
+                      href={quote.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-mono mt-3 inline-block text-xs text-[var(--terracotta)]"
+                    >
+                      {quote.handle.toUpperCase()} ↗
+                    </a>
                   </div>
-
-                  <div className="mt-8 space-y-8">
-                    {displayQuotes.map((quote) => (
-                      <div key={`${quote.handle}-${quote.text}`}>
-                        <p className="text-lg italic leading-8 text-[var(--ink)]">
-                          "{quote.text}"
-                        </p>
-
-                        <a
-                          href={quote.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="font-mono mt-3 inline-block text-xs text-[var(--terracotta)]"
-                        >
-                          {quote.handle.toUpperCase()} ↗
-                        </a>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
+                ))}
+              </div>
             </article>
           </section>
         )}

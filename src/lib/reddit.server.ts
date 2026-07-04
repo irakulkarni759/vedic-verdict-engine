@@ -71,11 +71,16 @@ async function fetchOnce(query: string, timeoutMs: number): Promise<Response | n
   }
 }
 
-/** Fast path: single 5s attempt, no retry. Used inside the main verdict
- *  generation request — that request already has PubMed + Claude latency,
- *  so it can't afford a 25s worst case on top just for Reddit quotes. */
+/** In-loader path: a single bounded attempt, awaited synchronously inside the
+ *  main verdict generation so real quotes land in the SAME render as the
+ *  research — no async "checking…" step afterward. 10s is long enough for a
+ *  warm Railway scrape but still bounded, so the loader can't hang past the
+ *  platform's request ceiling: if Railway can't deliver in time we return []
+ *  and generation falls back to a Claude-written community line, still in the
+ *  same synchronous pass. Keeping Railway warm (so it isn't cold-starting) is
+ *  what makes real quotes land inside this budget most of the time. */
 export async function fetchRedditQuotesFast(query: string, limit = 3): Promise<RedditQuote[]> {
-  const res = await fetchOnce(query, 5000);
+  const res = await fetchOnce(query, 10000);
   return parseQuotesResponse(res, limit);
 }
 
