@@ -3,8 +3,13 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { TRENDS } from "@/lib/trends";
 import { TrendCard } from "@/components/TrendCard";
 import { Comments } from "@/components/Comments";
-import { toTitleCase, coreSubjectForReddit, withTimeout } from "@/lib/utils";
-import { getRedditQuotes, type RedditQuote } from "@/lib/reddit.server";
+import { toTitleCase, coreSubjectForReddit, pollUntil } from "@/lib/utils";
+import {
+  startRedditQuoteJob,
+  pollRedditQuoteJob,
+  type RedditQuote,
+  type ClaimJobPollResult,
+} from "@/lib/reddit.server";
 import { persistTrendQuotes } from "@/lib/generatedTrends.functions";
 import {
   generateEvidenceVerdict,
@@ -129,44 +134,53 @@ function SearchPage() {
       return;
     }
     setCheckingQuotes(true);
-    // Hard ceiling on top of reddit.server.ts's own ~25s internal retry
-    // budget — guarantees this always settles to something displayable
-    // instead of leaving "Checking for community discussion…" on screen
-    // indefinitely if the backend is unusually slow or a request hangs.
-    withTimeout(
-      getRedditQuotes({ data: { query: coreSubjectForReddit(data.query) } }),
-      28_000,
-      [] as RedditQuote[],
-    )
-      .then((rows) => {
-        if (cancelled) return;
-        setCheckingQuotes(false);
-        if (rows.length === 0) return;
-        setLiveQuotes(rows);
-        // Persist AND recompute the community verdict/sentiment from these
-        // specific quotes, so the trend's stored row and this page's own
-        // summary text both catch up instead of staying frozen on the
-        // generic line written when generation first ran with zero quotes.
-        persistTrendQuotes({
-          data: {
-            slug: data.slug,
-            name: data.name,
-            summary: data.oneLiner,
-            existingSentiment: data.sentiment,
-            quotes: rows,
-          },
-        })
-          .then((res) => {
-            if (!cancelled && res.ok && res.communityVerdict && typeof res.sentiment === "number") {
-              setLiveCommunityVerdict(res.communityVerdict);
-              setLiveSentiment(res.sentiment);
-            }
-          })
-          .catch(() => {});
+
+    (async () => {
+      const start = await startRedditQuoteJob({ data: { query: coreSubjectForReddit(data.query) } });
+      if (cancelled) return;
+
+      // A cache hit resolves instantly ("done"). Otherwise poll a cheap
+      // status endpoint every few seconds — up to ~3 minutes — instead of
+      // holding one request open. Each individual check is fast, so this
+      // never runs into a request-duration ceiling no matter how long the
+      // actual scrape takes; it only stops early if the job genuinely
+      // errors or gets lost (e.g. a backend restart).
+      const final: ClaimJobPollResult =
+        start.status === "pending"
+          ? await pollUntil<ClaimJobPollResult>(
+              () => pollRedditQuoteJob({ data: { jobId: start.jobId } }),
+              (r) => r.status === "pending",
+              { intervalMs: 4000, maxAttempts: 45, isCancelled: () => cancelled },
+            )
+          : start;
+
+      if (cancelled) return;
+      setCheckingQuotes(false);
+      if (final.status !== "done" || final.quotes.length === 0) return;
+
+      setLiveQuotes(final.quotes);
+      // Persist AND recompute the community verdict/sentiment from these
+      // specific quotes, so the trend's stored row and this page's own
+      // summary text both catch up instead of staying frozen on the
+      // generic line written when generation first ran with zero quotes.
+      persistTrendQuotes({
+        data: {
+          slug: data.slug,
+          name: data.name,
+          summary: data.oneLiner,
+          existingSentiment: data.sentiment,
+          quotes: final.quotes,
+        },
       })
-      .catch(() => {
-        if (!cancelled) setCheckingQuotes(false);
-      });
+        .then((res) => {
+          if (!cancelled && res.ok && res.communityVerdict && typeof res.sentiment === "number") {
+            setLiveCommunityVerdict(res.communityVerdict);
+            setLiveSentiment(res.sentiment);
+          }
+        })
+        .catch(() => {});
+    })();
+
     return () => {
       cancelled = true;
     };

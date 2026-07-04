@@ -98,22 +98,25 @@ async function parseQuotesResponse(res: Response | null, limit: number): Promise
   try {
     if (!res || !res.ok) return [];
     const data: SentimentApiResponse = await res.json();
-    if (!data.top_quotes || data.top_quotes.length === 0) return [];
-
-    const quotes: RedditQuote[] = [];
-    for (const c of data.top_quotes) {
-      if (!c.body || !c.url) continue;
-      quotes.push({
-        handle: c.author ? `u/${c.author}` : `r/${c.subreddit ?? "reddit"}`,
-        text: truncateAtWordBoundary(c.body, 600),
-        url: c.url,
-      });
-      if (quotes.length >= limit) break;
-    }
-    return quotes;
+    return topQuotesToRedditQuotes(data.top_quotes, limit);
   } catch {
     return [];
   }
+}
+
+function topQuotesToRedditQuotes(topQuotes: SentimentApiTopQuote[] | undefined, limit: number): RedditQuote[] {
+  if (!topQuotes || topQuotes.length === 0) return [];
+  const quotes: RedditQuote[] = [];
+  for (const c of topQuotes) {
+    if (!c.body || !c.url) continue;
+    quotes.push({
+      handle: c.author ? `u/${c.author}` : `r/${c.subreddit ?? "reddit"}`,
+      text: truncateAtWordBoundary(c.body, 600),
+      url: c.url,
+    });
+    if (quotes.length >= limit) break;
+  }
+  return quotes;
 }
 
 /** Client-callable wrapper, used to live-fetch quotes for curated trends
@@ -121,3 +124,64 @@ async function parseQuotesResponse(res: Response | null, limit: number): Promise
 export const getRedditQuotes = createServerFn({ method: "GET" })
   .inputValidator((d: { query: string }) => d)
   .handler(async ({ data }): Promise<RedditQuote[]> => fetchRedditQuotes(data.query));
+
+/**
+ * Async job pattern, used by the CLIENT-SIDE quote lookups (search page,
+ * trend page) instead of one long-lived request. A single browser request
+ * is at the mercy of whatever request-duration limit sits between it and
+ * this app (e.g. Cloudflare Workers' limits) — that ceiling is shorter than
+ * a slow, heavily-discussed claim's scrape can genuinely need. Polling
+ * sidesteps that entirely: each individual poll is a fast, trivial lookup
+ * that always returns quickly, while the actual scrape runs in the
+ * background on Railway (a normal long-running server, not
+ * duration-limited) for as long as it takes. The frontend can then keep
+ * polling for as long as it wants without any single request ever timing
+ * out — "keep trying" instead of "give up and say nothing found."
+ */
+export type ClaimJobStartResult =
+  | { status: "done"; quotes: RedditQuote[] }
+  | { status: "pending"; jobId: string }
+  | { status: "error" };
+
+export type ClaimJobPollResult =
+  | { status: "done"; quotes: RedditQuote[] }
+  | { status: "pending" }
+  | { status: "error" };
+
+async function startClaimJob(query: string, limit: number): Promise<ClaimJobStartResult> {
+  try {
+    const res = await fetch(`${SENTIMENT_API_URL}/api/claim/start?query=${encodeURIComponent(query)}`, {
+      method: "POST",
+    });
+    if (!res.ok) return { status: "error" };
+    const json = (await res.json()) as { status?: string; job_id?: string; top_quotes?: SentimentApiTopQuote[] };
+    if (json.status === "done") return { status: "done", quotes: topQuotesToRedditQuotes(json.top_quotes, limit) };
+    if (json.status === "pending" && json.job_id) return { status: "pending", jobId: json.job_id };
+    return { status: "error" };
+  } catch {
+    return { status: "error" };
+  }
+}
+
+async function pollClaimJob(jobId: string, limit: number): Promise<ClaimJobPollResult> {
+  try {
+    const res = await fetch(`${SENTIMENT_API_URL}/api/claim/status?job_id=${encodeURIComponent(jobId)}`);
+    if (!res.ok) return { status: "error" };
+    const json = (await res.json()) as { status?: string; top_quotes?: SentimentApiTopQuote[] };
+    if (json.status === "done") return { status: "done", quotes: topQuotesToRedditQuotes(json.top_quotes, limit) };
+    if (json.status === "pending") return { status: "pending" };
+    return { status: "error" };
+  } catch {
+    return { status: "error" };
+  }
+}
+
+/** Kicks off (or instantly resolves, on a cache hit) a claim lookup. */
+export const startRedditQuoteJob = createServerFn({ method: "POST" })
+  .inputValidator((d: { query: string }) => d)
+  .handler(async ({ data }): Promise<ClaimJobStartResult> => startClaimJob(data.query, 3));
+
+/** Checks in on a job started above. Cheap — safe to call every few seconds. */
+export const pollRedditQuoteJob = createServerFn({ method: "GET" })
+  .inputValidator((d: { jobId: string }) => d)
+  .handler(async ({ data }): Promise<ClaimJobPollResult> => pollClaimJob(data.jobId, 3));

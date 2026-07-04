@@ -33,39 +33,28 @@ export function toTitleCase(input: string): string {
 }
 
 /**
- * Races a promise against a timeout, resolving to `fallback` if the promise
- * hasn't settled in time. Used to put a hard ceiling on client-side fetches
- * to slow/cold backends (e.g. the Reddit sentiment service) — without this,
- * an unusually slow response (or an underlying network/runtime hang that
- * never cleanly rejects) can leave a "loading" state on screen indefinitely,
- * since there's nothing else to flip it to a resolved state.
+ * Repeatedly calls `poll` every `intervalMs` until it stops reporting
+ * pending (per `isPending`) or `maxAttempts` is hit. Returns the final
+ * result either way. Used for the Reddit-quote job polling: rather than one
+ * long-lived request (which is at the mercy of whatever request-duration
+ * limit sits in front of the backend), each poll is a fast, trivial check,
+ * so the actual background work can take as long as it genuinely needs
+ * without anything timing out.
  */
-export function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
-  return new Promise((resolve) => {
-    let settled = false;
-    const timer = setTimeout(() => {
-      if (!settled) {
-        settled = true;
-        resolve(fallback);
-      }
-    }, ms);
-    promise.then(
-      (value) => {
-        if (!settled) {
-          settled = true;
-          clearTimeout(timer);
-          resolve(value);
-        }
-      },
-      () => {
-        if (!settled) {
-          settled = true;
-          clearTimeout(timer);
-          resolve(fallback);
-        }
-      },
-    );
-  });
+export async function pollUntil<T>(
+  poll: () => Promise<T>,
+  isPending: (result: T) => boolean,
+  opts: { intervalMs: number; maxAttempts: number; isCancelled: () => boolean },
+): Promise<T> {
+  let result = await poll();
+  let attempts = 1;
+  while (isPending(result) && attempts < opts.maxAttempts && !opts.isCancelled()) {
+    await new Promise((resolve) => setTimeout(resolve, opts.intervalMs));
+    if (opts.isCancelled()) break;
+    result = await poll();
+    attempts++;
+  }
+  return result;
 }
 
 /**

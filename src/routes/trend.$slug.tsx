@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { trendBySlug, type Trend, type Verdict } from "@/lib/trends";
 import { getGeneratedTrendBySlug, persistTrendQuotes } from "@/lib/generatedTrends.functions";
-import { getRedditQuotes } from "@/lib/reddit.server";
-import { coreSubjectForReddit, withTimeout } from "@/lib/utils";
+import { startRedditQuoteJob, pollRedditQuoteJob, type ClaimJobPollResult } from "@/lib/reddit.server";
+import { coreSubjectForReddit, pollUntil } from "@/lib/utils";
 import { TrendCard } from "@/components/TrendCard";
 import { Comments } from "@/components/Comments";
 
@@ -255,31 +255,44 @@ function CommunityQuotes({
     if (initialQuotes.length > 0 || quotes.length > 0) return;
     let cancelled = false;
     setLoading(true);
-    // Same hard ceiling as the search page — guarantees this settles even
-    // if the backend is unusually slow or a request hangs, instead of
-    // leaving the loading state on screen indefinitely.
-    withTimeout(getRedditQuotes({ data: { query: coreSubjectForReddit(searchQuery) } }), 28_000, [] as Quote[])
-      .then((live) => {
-        if (cancelled || live.length === 0) return;
-        setQuotes(live);
-        // Persist AND recompute the community verdict/sentiment from these
-        // specific quotes — saving the quotes alone left the summary text
-        // frozen at whatever generic line was written when generation first
-        // ran with zero quotes.
-        persistTrendQuotes({
-          data: { slug, name, summary: researchSummary, existingSentiment, quotes: live },
-        })
-          .then((res) => {
-            if (!cancelled && res.ok && res.communityVerdict && typeof res.sentiment === "number") {
-              onVerdictUpdate(res.communityVerdict, res.sentiment);
-            }
-          })
-          .catch(() => {});
+
+    (async () => {
+      const start = await startRedditQuoteJob({ data: { query: coreSubjectForReddit(searchQuery) } });
+      if (cancelled) return;
+
+      // A cache hit resolves instantly ("done"). Otherwise poll a cheap
+      // status endpoint every few seconds — up to ~3 minutes — instead of
+      // holding one request open, so a slow scrape gets the time it
+      // actually needs rather than a premature "nothing found."
+      const final: ClaimJobPollResult =
+        start.status === "pending"
+          ? await pollUntil<ClaimJobPollResult>(
+              () => pollRedditQuoteJob({ data: { jobId: start.jobId } }),
+              (r) => r.status === "pending",
+              { intervalMs: 4000, maxAttempts: 45, isCancelled: () => cancelled },
+            )
+          : start;
+
+      if (cancelled) return;
+      setLoading(false);
+      if (final.status !== "done" || final.quotes.length === 0) return;
+
+      setQuotes(final.quotes);
+      // Persist AND recompute the community verdict/sentiment from these
+      // specific quotes — saving the quotes alone left the summary text
+      // frozen at whatever generic line was written when generation first
+      // ran with zero quotes.
+      persistTrendQuotes({
+        data: { slug, name, summary: researchSummary, existingSentiment, quotes: final.quotes },
       })
-      .catch(() => {})
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+        .then((res) => {
+          if (!cancelled && res.ok && res.communityVerdict && typeof res.sentiment === "number") {
+            onVerdictUpdate(res.communityVerdict, res.sentiment);
+          }
+        })
+        .catch(() => {});
+    })();
+
     return () => {
       cancelled = true;
     };
