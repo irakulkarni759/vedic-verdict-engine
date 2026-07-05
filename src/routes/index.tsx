@@ -132,16 +132,6 @@ function Nav() {
             <span style={{ color: "var(--muted-ink)", fontFamily: "var(--font-display)", fontSize: 26, lineHeight: 1, display: "inline-flex", alignItems: "center", height: "34px", position: "relative", top: "4px" }}>
               वेदा
             </span>
-            {/* Site-wide purpose line — shows on every page via Nav, not just
-                the homepage hero, so the "what is this" question is answered
-                immediately no matter where someone lands. Hidden below md
-                since there's no room next to the mobile category strip. */}
-            <span
-              className="font-label hidden md:inline-flex items-center"
-              style={{ color: "var(--muted-ink)", fontSize: 10, letterSpacing: "0.1em", opacity: 0.7, marginLeft: 6, paddingLeft: 12, borderLeft: "1px solid color-mix(in oklab, var(--ink) 15%, transparent)" }}
-            >
-              RESEARCH + REDDIT → ONE VERDICT
-            </span>
           </Link>
           <div className="hidden md:flex items-center gap-3 font-label" style={{ fontSize: 10, color: "var(--ink)" }}>
             {CATEGORIES.map((c, i) => (
@@ -229,38 +219,22 @@ function Hero({
             fontSize: "clamp(13px, 3.4vw, 16px)",
             fontWeight: 300,
             animation: "fade-up 1.2s ease-out 0.6s both",
-            whiteSpace: "pre-line",
           }}
         >
-          Your favorite influencer swears by rosemary oil for hair growth, collagen for bouncy skin, and ashwagandha for stress. But does any of it actually work, or is it just a good camera angle?{"\n"}
-          We check what real science and real people say, not what an ad wants you to believe.
+          Your favorite influencer swears by rosemary oil for hair growth, collagen for bouncy skin, and ashwagandha for stress. But does any of it actually work, or is it just a good camera angle?
         </p>
 
-        <div
-          className="mt-3 sm:mt-4 flex items-center justify-center gap-2 sm:gap-3"
-          style={{ animation: "fade-up 1.2s ease-out 0.8s both" }}
+        <p
+          className="mt-3 max-w-xl text-center leading-snug"
+          style={{
+            color: "var(--muted-ink)",
+            fontSize: "clamp(12px, 3vw, 14px)",
+            fontWeight: 300,
+            animation: "fade-up 1.2s ease-out 0.8s both",
+          }}
         >
-          {(
-            [
-              ["BACKED", "var(--verdict-backed)"],
-              ["MIXED", "var(--verdict-mixed)"],
-              ["DEBUNKED", "var(--verdict-debunked)"],
-            ] as const
-          ).map(([label, color]) => (
-            <span
-              key={label}
-              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-label"
-              style={{
-                fontSize: 9,
-                color,
-                backgroundColor: `color-mix(in oklab, ${color} 12%, transparent)`,
-              }}
-            >
-              <span className="inline-block rounded-full" style={{ width: 4, height: 4, backgroundColor: color }} />
-              {label}
-            </span>
-          ))}
-        </div>
+          We check what real science and real people say, not what an ad wants you to believe. Type a specific claim below, like "rosemary oil for hair growth," not a general question.
+        </p>
 
         <div
           className="relative mt-5 sm:mt-7"
@@ -306,7 +280,7 @@ function Hero({
             </button>
           </form>
 
-          {searchError ? (
+          {searchError && (
             <p
               className="mt-3 text-center"
               style={{
@@ -316,13 +290,6 @@ function Hero({
               }}
             >
               {searchError}
-            </p>
-          ) : (
-            <p
-              className="font-label mt-3 text-center"
-              style={{ color: "var(--muted-ink)", fontSize: 9.5, letterSpacing: "0.08em", opacity: 0.75 }}
-            >
-              FORMAT: [THING] FOR [WHAT YOU WANT IT TO DO]
             </p>
           )}
         </div>
