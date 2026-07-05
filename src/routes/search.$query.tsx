@@ -253,10 +253,26 @@ function SearchPage() {
         {data.ingredientBreakdown && data.ingredientBreakdown.length > 0 && (
           <section className="mt-8">
             <SectionHeader left="KEY INGREDIENTS" />
-            <p className="mt-1 text-sm leading-6" style={{ color: "var(--muted-ink)" }}>
-              We couldn't find direct research on "{data.name}" as a product, so here's what the
-              research says about each of its key ingredients.
-            </p>
+            {data.ingredientSource?.verified && data.ingredientSource.url ? (
+              <p className="mt-1 text-sm leading-6" style={{ color: "var(--muted-ink)" }}>
+                We couldn't find direct research on "{data.name}" as a whole product, so here's what the
+                research says about each of its key ingredients — sourced from{" "}
+                <a
+                  href={data.ingredientSource.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[var(--terracotta)] underline underline-offset-2"
+                >
+                  the real ingredient list
+                </a>
+                .
+              </p>
+            ) : (
+              <p className="mt-1 text-sm leading-6" style={{ color: "var(--muted-ink)" }}>
+                We couldn't find a verified ingredient list for "{data.name}," so this is our best estimate
+                of its likely key ingredients, not a confirmed formulation.
+              </p>
+            )}
 
             <div className="mt-4 space-y-3">
               {data.ingredientBreakdown.map((ing) => (

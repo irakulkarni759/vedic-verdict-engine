@@ -60,6 +60,12 @@ export type EvidenceVerdict = {
    *  shows what the research says about EACH of its key ingredients individually,
    *  instead of only one blended verdict for the whole product. */
   ingredientBreakdown: IngredientEvidence[] | null;
+  /** Where the ingredient list itself came from. verified=true means it was
+   *  actually found via a live web search of the product's real page
+   *  (sourceUrl points at it); verified=false means no real source was
+   *  found and this falls back to Claude's best estimate — surfaced
+   *  honestly in the UI rather than presented as a confirmed formulation. */
+  ingredientSource: { url: string | null; verified: boolean } | null;
 };
 
 const EUTILS = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils";
@@ -432,6 +438,92 @@ or
     return null;
   }
 }
+
+/**
+ * For branded products (identifyFallbackTerms already flagged "product"),
+ * this actually searches the web for the product's REAL, official
+ * ingredient list — the brand's own site first, then reputable retailers
+ * (Sephora, Ulta, Amazon) or INCIDecoder — instead of relying on Claude's
+ * training-data guess of "products like this typically contain X." Uses
+ * the Anthropic web_search server tool, so the model is reading an actual
+ * live page, not recalling one from memory.
+ *
+ * Returns null if no API key, the search comes back empty, or nothing
+ * matching this specific product's real ingredient list was found —
+ * callers should fall back to identifyFallbackTerms's guess in that case,
+ * clearly labeled as an estimate rather than a verified list.
+ */
+async function findRealIngredients(query: string): Promise<{
+  productName: string;
+  sourceUrl: string | null;
+  allIngredients: string[];
+  keyIngredients: string[];
+} | null> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return null;
+
+  const prompt = `Search the web for the REAL, official ingredient list (INCI list) of the specific product "${query}". Check the brand's own product page first, then reputable retailers (Sephora, Ulta, Amazon) or INCIDecoder if the brand site doesn't list ingredients. Do NOT guess or rely on general knowledge of what products like this "typically" contain — only use an ingredient list you actually find on a real page for this exact product.
+
+Once you find it (or determine you can't), return ONLY this JSON, no other text before or after it:
+{"found": true, "productName": "...", "sourceUrl": "https://...", "allIngredients": ["...", "..."], "keyIngredients": ["...", "..."]}
+
+"allIngredients": the full list exactly as shown on the source, in the same order.
+"keyIngredients": from that SAME real list, the 3-5 most notable/active ingredients actually worth researching for efficacy (skip plain water, generic fragrance, and standard preservatives/thickeners unless one of those IS the ingredient being marketed).
+
+If you search and cannot find a real, verifiable ingredient list for this exact product (can't find the product, discontinued, no retailer lists ingredients for it), return exactly: {"found": false}`;
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 2000,
+        messages: [{ role: "user", content: prompt }],
+        tools: [{ type: "web_search_20250305", name: "web_search" }],
+      }),
+    });
+
+    const json = (await res.json()) as { content?: { type: string; text?: string }[] };
+    // A web-search turn's response mixes text blocks with server_tool_use /
+    // web_search_tool_result blocks — only the text blocks carry Claude's
+    // actual written answer, which is where the JSON lives.
+    const text = (json.content ?? [])
+      .filter((b) => b.type === "text")
+      .map((b) => b.text ?? "")
+      .join("\n")
+      .trim();
+
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return null;
+
+    const parsed = JSON.parse(jsonMatch[0]) as {
+      found?: boolean;
+      productName?: string;
+      sourceUrl?: string;
+      allIngredients?: string[];
+      keyIngredients?: string[];
+    };
+
+    if (!parsed.found) return null;
+    const keyIngredients = (parsed.keyIngredients ?? []).filter(Boolean).slice(0, 5);
+    if (keyIngredients.length === 0) return null;
+
+    return {
+      productName: typeof parsed.productName === "string" && parsed.productName.trim() ? parsed.productName.trim() : query,
+      sourceUrl: typeof parsed.sourceUrl === "string" && parsed.sourceUrl.trim() ? parsed.sourceUrl.trim() : null,
+      allIngredients: (parsed.allIngredients ?? []).filter(Boolean).slice(0, 40),
+      keyIngredients,
+    };
+  } catch {
+    return null;
+  }
+}
+
 
 /**
  * Small, focused PubMed lookup for a single ingredient — used by
@@ -810,6 +902,7 @@ async function buildResultFromIds(opts: {
     // Defaulted here; the caller overrides this via spread for branded
     // products where buildIngredientBreakdown actually ran alongside this.
     ingredientBreakdown: null,
+    ingredientSource: null,
   };
 }
 
@@ -828,7 +921,7 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
       query, name, slug, category: guessCategoryFallback(query), verdict: "UNKNOWN", confidence: "low",
       oneLiner: msg, communityVerdict: "", safetyNote: "", studies: 0, sentiment: 0, updated,
       bullets: [], quotes: [], articles: [],
-      pubmedSearchUrl, redditSearchUrl, generatedAt, ingredientFallback: null, ingredientBreakdown: null,
+      pubmedSearchUrl, redditSearchUrl, generatedAt, ingredientFallback: null, ingredientBreakdown: null, ingredientSource: null,
     });
 
     if (!query) return empty("Enter a search to generate a verdict.");
@@ -842,7 +935,7 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
         oneLiner: `Veda doesn't cover pharmaceutical medicines like ${pharma.name ?? name} — we focus on supplements, wellness practices, and cosmetic ingredients. For questions about medications, talk to a doctor or pharmacist.`,
         communityVerdict: "", safetyNote: "", studies: 0, sentiment: 0, updated,
         bullets: [], quotes: [], articles: [],
-        pubmedSearchUrl, redditSearchUrl, generatedAt, ingredientFallback: null, ingredientBreakdown: null,
+        pubmedSearchUrl, redditSearchUrl, generatedAt, ingredientFallback: null, ingredientBreakdown: null, ingredientSource: null,
       };
     }
 
@@ -872,6 +965,23 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
       const isIrrelevant = !isWeakCount && !(await checkPubmedRelevance(ids, query));
       if (isWeakCount || isIrrelevant) {
         const fallback = await identifyFallbackTerms(query);
+
+        // For branded products specifically, try to replace Claude's guessed
+        // ingredients with the REAL, sourced list from an actual web search
+        // before doing anything else with `fallback.terms` — this affects
+        // both the merged PubMed search below and buildIngredientBreakdown
+        // later, so a verified formulation flows through the whole pipeline
+        // instead of just the guess.
+        let realIngredients: Awaited<ReturnType<typeof findRealIngredients>> = null;
+        if (fallback?.reason === "product") {
+          realIngredients = await findRealIngredients(query);
+          if (realIngredients) fallback.terms = realIngredients.keyIngredients;
+        }
+        const ingredientSource: EvidenceVerdict["ingredientSource"] = realIngredients
+          ? { url: realIngredients.sourceUrl, verified: true }
+          : fallback?.reason === "product"
+            ? { url: null, verified: false }
+            : null;
 
         if (fallback) {
           // Strip parens/quotes — Entrez query syntax uses parens for
@@ -913,16 +1023,16 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
               const [result, ingredientBreakdown] = await Promise.all([
                 buildResultFromIds({
                   ids: mergedIds,
-                  query, name, slug, updated, generatedAt,
+                  query, name: realIngredients?.productName ?? name, slug, updated, generatedAt,
                   pubmedSearchUrl: `https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(fallbackTerm)}`,
                   redditSearchUrl,
                   fallback,
                 }),
                 fallback.reason === "product"
-                  ? buildIngredientBreakdown(name, fallback.terms)
+                  ? buildIngredientBreakdown(realIngredients?.productName ?? name, fallback.terms)
                   : Promise.resolve(null),
               ]);
-              return { ...result, ingredientBreakdown };
+              return { ...result, ingredientBreakdown, ingredientSource };
             }
           }
         }
