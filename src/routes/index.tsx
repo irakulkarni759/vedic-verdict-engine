@@ -221,7 +221,7 @@ function Hero({
             animation: "fade-up 1.2s ease-out 0.6s both",
           }}
         >
-          Your favorite influencer swears by rosemary oil for hair growth, collagen for bouncy skin, and ashwagandha for stress. But does any of it actually work, or is it just a good camera angle?
+          Your favorite influencer swears by rosemary oil for hair growth or collagen for bouncy skin. But does any of it actually work?
         </p>
 
         <p
@@ -233,7 +233,7 @@ function Hero({
             animation: "fade-up 1.2s ease-out 0.8s both",
           }}
         >
-          We check what real science and real people say, not what an ad wants you to believe. Type a specific claim below, like "rosemary oil for hair growth," not a general question.
+          We check what real science and real people say, not what an ad wants you to believe.
         </p>
 
         <div
@@ -280,7 +280,7 @@ function Hero({
             </button>
           </form>
 
-          {searchError && (
+          {searchError ? (
             <p
               className="mt-3 text-center"
               style={{
@@ -290,6 +290,13 @@ function Hero({
               }}
             >
               {searchError}
+            </p>
+          ) : (
+            <p
+              className="mt-3 text-center"
+              style={{ color: "var(--muted-ink)", fontSize: "clamp(10.5px, 2.6vw, 12px)", fontWeight: 300, opacity: 0.8 }}
+            >
+              Type a specific claim below, like "rosemary oil for hair growth," not a general question.
             </p>
           )}
         </div>
