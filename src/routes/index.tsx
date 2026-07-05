@@ -47,7 +47,7 @@ function Veda() {
       .map((slug) => trendBySlug(slug))
       .filter((t): t is NonNullable<typeof t> => !!t)
       .map((t) => ({ slug: t.slug, name: t.name })),
-  ].slice(0, 4);
+  ].slice(0, 3);
 
   const [count, setCount] = useState<number>(TRENDS.length + generatedCount);
   const [query, setQuery] = useState("");
@@ -213,10 +213,10 @@ function Hero({
         </h1>
 
         <p
-          className="mt-3 sm:mt-5 max-w-2xl text-center leading-snug"
+          className="mt-3 sm:mt-5 max-w-3xl px-2 text-center leading-snug whitespace-normal md:whitespace-nowrap"
           style={{
             color: "var(--ink)",
-            fontSize: "clamp(13px, 3.4vw, 16px)",
+            fontSize: "clamp(13px, 2.6vw, 16px)",
             fontWeight: 300,
             animation: "fade-up 1.2s ease-out 0.6s both",
           }}
@@ -227,9 +227,9 @@ function Hero({
         <p
           className="mt-3 max-w-xl text-center leading-snug"
           style={{
-            color: "var(--muted-ink)",
-            fontSize: "clamp(12px, 3vw, 14px)",
-            fontWeight: 300,
+            color: "var(--terracotta)",
+            fontSize: "clamp(13px, 3.2vw, 15px)",
+            fontWeight: 500,
             animation: "fade-up 1.2s ease-out 0.8s both",
           }}
         >
@@ -294,7 +294,7 @@ function Hero({
           ) : (
             <p
               className="mt-3 text-center"
-              style={{ color: "var(--muted-ink)", fontSize: "clamp(10.5px, 2.6vw, 12px)", fontWeight: 300, opacity: 0.8 }}
+              style={{ color: "var(--ink)", fontSize: "clamp(11px, 2.8vw, 13px)", fontWeight: 400, opacity: 0.65 }}
             >
               Type a specific claim below, like "rosemary oil for hair growth," not a general question.
             </p>
