@@ -25,6 +25,14 @@ export type EvidenceBullet = {
   url: string;
 };
 
+export type IngredientEvidence = {
+  ingredient: string;
+  verdict: "BACKED" | "MIXED" | "DEBUNKED" | "UNKNOWN";
+  oneLiner: string;
+  studies: number;
+  pubmedSearchUrl: string;
+};
+
 export type EvidenceVerdict = {
   query: string;
   name: string;
@@ -47,6 +55,11 @@ export type EvidenceVerdict = {
   /** Set when the direct query had zero PubMed hits and we fell back to
    *  searching its likely active ingredients instead (e.g. a branded product). */
   ingredientFallback: string[] | null;
+  /** Only set for branded-product queries (ingredientFallback.reason === "product"
+   *  under the hood) — a per-ingredient verdict/explanation, so "Chanel Lotion"
+   *  shows what the research says about EACH of its key ingredients individually,
+   *  instead of only one blended verdict for the whole product. */
+  ingredientBreakdown: IngredientEvidence[] | null;
 };
 
 const EUTILS = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils";
@@ -421,6 +434,177 @@ or
 }
 
 /**
+ * Small, focused PubMed lookup for a single ingredient — used by
+ * buildIngredientBreakdown, deliberately separate from buildResultFromIds
+ * (which does a lot more: Reddit, saving to Supabase, full verdict/bullets).
+ * retmax is intentionally small (6) since this runs once per ingredient
+ * (up to 4 in parallel) and only needs enough abstracts for a one-line
+ * per-ingredient verdict, not a full evidence card.
+ */
+async function fetchAbstractsForIngredient(
+  term: string,
+): Promise<{ studies: number; abstracts: { abstract: string; url: string }[] }> {
+  try {
+    const esearch = await fetchPubmed(
+      `esearch.fcgi?db=pubmed&retmode=json&retmax=6&sort=relevance&term=${encodeURIComponent(term)}`,
+    );
+    if (!esearch || !esearch.ok) return { studies: 0, abstracts: [] };
+    const sj = (await esearch.json()) as { esearchresult?: { idlist?: string[] } };
+    const ids = sj.esearchresult?.idlist ?? [];
+    if (ids.length === 0) return { studies: 0, abstracts: [] };
+
+    const efetch = await fetchPubmed(`efetch.fcgi?db=pubmed&retmode=xml&id=${ids.join(",")}`);
+    const xml = efetch ? await efetch.text() : "";
+    const blocks = xml.split(/<PubmedArticle[>\s]/).slice(1);
+
+    const abstracts: { abstract: string; url: string }[] = [];
+    for (const raw of blocks) {
+      const block = decodeEntities(raw);
+      const pmid = pickTag(block, "PMID") ?? "";
+      const abstract = pickAll(block, "AbstractText").join(" ");
+      if (pmid && abstract) {
+        abstracts.push({ abstract: abstract.slice(0, 600), url: `https://pubmed.ncbi.nlm.nih.gov/${pmid}/` });
+      }
+    }
+    return { studies: ids.length, abstracts: abstracts.slice(0, 4) };
+  } catch {
+    return { studies: 0, abstracts: [] };
+  }
+}
+
+/**
+ * For a branded product like "Chanel Lotion" — where PubMed has nothing on
+ * the product itself but identifyFallbackTerms found its likely key
+ * ingredients — this looks up each ingredient SEPARATELY and returns an
+ * individual verdict + plain-English explanation per ingredient, instead of
+ * only the one blended verdict buildResultFromIds produces from all
+ * ingredients' abstracts merged together. That blended verdict still runs
+ * and still shows (it's a reasonable "overall" read), this is additive: it
+ * answers "well, which specific ingredient is actually backed vs not."
+ *
+ * One Claude call total (not one per ingredient) — all ingredients' abstracts
+ * go in a single prompt and come back as a same-order JSON array, keeping
+ * this to the same API cost as the rest of the pipeline. Falls back to the
+ * cheap keyword scan (like keywordVerdict elsewhere) if there's no API key
+ * or the call fails, so a Claude hiccup never blanks the whole section.
+ */
+async function buildIngredientBreakdown(
+  productName: string,
+  ingredients: string[],
+): Promise<IngredientEvidence[]> {
+  const capped = ingredients.slice(0, 4);
+  const looked = await Promise.all(
+    capped.map(async (ingredient) => {
+      const { studies, abstracts } = await fetchAbstractsForIngredient(ingredient);
+      return {
+        ingredient,
+        studies,
+        abstracts,
+        pubmedSearchUrl: `https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(ingredient)}`,
+      };
+    }),
+  );
+
+  const withStudies = looked.filter((r) => r.abstracts.length > 0);
+  const withoutStudies = looked.filter((r) => r.abstracts.length === 0);
+
+  const noStudyEntries: IngredientEvidence[] = withoutStudies.map((r) => ({
+    ingredient: toTitleCase(r.ingredient),
+    verdict: "UNKNOWN",
+    oneLiner: `No PubMed studies found specifically on ${toTitleCase(r.ingredient)}.`,
+    studies: r.studies,
+    pubmedSearchUrl: r.pubmedSearchUrl,
+  }));
+
+  if (withStudies.length === 0) return noStudyEntries;
+
+  const keywordFallbackEntries = (): IngredientEvidence[] =>
+    withStudies.map((r) => {
+      let pos = 0, neg = 0, neutral = 0;
+      for (const a of r.abstracts) {
+        const cls = classifyAbstract(a.abstract);
+        if (cls === "pos") pos++;
+        else if (cls === "neg") neg++;
+        else neutral++;
+      }
+      const total = pos + neg + neutral || 1;
+      let verdict: IngredientEvidence["verdict"] = "MIXED";
+      if (pos / total >= 0.55 && pos > neg) verdict = "BACKED";
+      else if (neg / total >= 0.45 && neg > pos) verdict = "DEBUNKED";
+      const plain =
+        verdict === "BACKED" ? "mostly supportive" : verdict === "DEBUNKED" ? "mostly unsupportive" : "mixed";
+      return {
+        ingredient: toTitleCase(r.ingredient),
+        verdict,
+        oneLiner: `Across ${r.studies} PubMed ${r.studies === 1 ? "study" : "studies"}, findings are ${plain}.`,
+        studies: r.studies,
+        pubmedSearchUrl: r.pubmedSearchUrl,
+      };
+    });
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return [...keywordFallbackEntries(), ...noStudyEntries];
+
+  const prompt = `"${productName}" is a branded product. Below are PubMed abstracts for ${withStudies.length} of its key ingredients. For EACH ingredient, read ONLY its own abstracts (don't mix findings across ingredients) and give a plain-English, layman verdict — no jargon, 1 short sentence, like you'd explain to a friend (e.g. "Helps with hydration in a few small studies" not "demonstrates humectant properties in RCTs").
+
+${withStudies
+  .map(
+    (r, i) =>
+      `INGREDIENT ${i + 1}: "${r.ingredient}"\n${r.abstracts
+        .map((a, j) => `Abstract ${j + 1}: ${a.abstract}`)
+        .join("\n")}`,
+  )
+  .join("\n\n")}
+
+Return ONLY this JSON array, one entry per ingredient IN THE SAME ORDER given above, no other text:
+[{"verdict": "BACKED" | "MIXED" | "DEBUNKED", "oneLiner": "..."}]
+
+"verdict": BACKED if the abstracts mostly support it working, DEBUNKED if they mostly don't, MIXED if split or unclear. Base this only on what's in the abstracts above — never invent a finding that isn't there.`;
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 700,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+    const json = (await res.json()) as { content: { text: string }[] };
+    const text = json.content?.[0]?.text ?? "[]";
+    const parsed = JSON.parse(text.replace(/```json|```/g, "").trim()) as
+      { verdict?: string; oneLiner?: string }[];
+
+    const claudeEntries: IngredientEvidence[] = withStudies.map((r, i) => {
+      const item = parsed[i];
+      const verdict: IngredientEvidence["verdict"] =
+        item?.verdict === "BACKED" || item?.verdict === "MIXED" || item?.verdict === "DEBUNKED"
+          ? item.verdict
+          : "MIXED";
+      return {
+        ingredient: toTitleCase(r.ingredient),
+        verdict,
+        oneLiner:
+          typeof item?.oneLiner === "string" && item.oneLiner.trim()
+            ? item.oneLiner.trim()
+            : `Across ${r.studies} PubMed studies, findings are mixed.`,
+        studies: r.studies,
+        pubmedSearchUrl: r.pubmedSearchUrl,
+      };
+    });
+    return [...claudeEntries, ...noStudyEntries];
+  } catch {
+    return [...keywordFallbackEntries(), ...noStudyEntries];
+  }
+}
+
+
+/**
  * Veda covers supplements, wellness practices, and cosmetic ingredients —
  * not pharmaceutical medicines. Prescription and OTC drugs need a doctor
  * or pharmacist, not a BACKED/MIXED/DEBUNKED verdict, so this runs before
@@ -623,6 +807,9 @@ async function buildResultFromIds(opts: {
     bullets, quotes: redditQuotes, articles: articles.slice(0, 6),
     pubmedSearchUrl, redditSearchUrl, generatedAt,
     ingredientFallback: fallback ? fallback.terms : null,
+    // Defaulted here; the caller overrides this via spread for branded
+    // products where buildIngredientBreakdown actually ran alongside this.
+    ingredientBreakdown: null,
   };
 }
 
@@ -641,7 +828,7 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
       query, name, slug, category: guessCategoryFallback(query), verdict: "UNKNOWN", confidence: "low",
       oneLiner: msg, communityVerdict: "", safetyNote: "", studies: 0, sentiment: 0, updated,
       bullets: [], quotes: [], articles: [],
-      pubmedSearchUrl, redditSearchUrl, generatedAt, ingredientFallback: null,
+      pubmedSearchUrl, redditSearchUrl, generatedAt, ingredientFallback: null, ingredientBreakdown: null,
     });
 
     if (!query) return empty("Enter a search to generate a verdict.");
@@ -655,7 +842,7 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
         oneLiner: `Veda doesn't cover pharmaceutical medicines like ${pharma.name ?? name} — we focus on supplements, wellness practices, and cosmetic ingredients. For questions about medications, talk to a doctor or pharmacist.`,
         communityVerdict: "", safetyNote: "", studies: 0, sentiment: 0, updated,
         bullets: [], quotes: [], articles: [],
-        pubmedSearchUrl, redditSearchUrl, generatedAt, ingredientFallback: null,
+        pubmedSearchUrl, redditSearchUrl, generatedAt, ingredientFallback: null, ingredientBreakdown: null,
       };
     }
 
@@ -717,13 +904,25 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
               // loosely-matched hits, which is exactly the case that made
               // this an "irrelevant" trigger in the first place.
               const mergedIds = Array.from(new Set([...fallbackIds, ...ids])).slice(0, 15);
-              return await buildResultFromIds({
-                ids: mergedIds,
-                query, name, slug, updated, generatedAt,
-                pubmedSearchUrl: `https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(fallbackTerm)}`,
-                redditSearchUrl,
-                fallback,
-              });
+
+              // Runs alongside buildResultFromIds (not after it) since they
+              // don't depend on each other — this is the extra per-ingredient
+              // breakdown for branded products only ("Chanel Lotion" -> what
+              // does the research say about EACH of its key ingredients),
+              // buildResultFromIds still produces the main blended verdict.
+              const [result, ingredientBreakdown] = await Promise.all([
+                buildResultFromIds({
+                  ids: mergedIds,
+                  query, name, slug, updated, generatedAt,
+                  pubmedSearchUrl: `https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(fallbackTerm)}`,
+                  redditSearchUrl,
+                  fallback,
+                }),
+                fallback.reason === "product"
+                  ? buildIngredientBreakdown(name, fallback.terms)
+                  : Promise.resolve(null),
+              ]);
+              return { ...result, ingredientBreakdown };
             }
           }
         }

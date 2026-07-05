@@ -245,6 +245,62 @@ function SearchPage() {
           />
         </section>
 
+        {/* ── KEY INGREDIENTS (branded products only) ──
+            Only set when the query is a specific product (e.g. "Chanel
+            Lotion") that PubMed doesn't index by name — instead of one
+            blended verdict for the whole product, this shows what the
+            research says about EACH key ingredient individually. */}
+        {data.ingredientBreakdown && data.ingredientBreakdown.length > 0 && (
+          <section className="mt-8">
+            <SectionHeader left="KEY INGREDIENTS" />
+            <p className="mt-1 text-sm leading-6" style={{ color: "var(--muted-ink)" }}>
+              We couldn't find direct research on "{data.name}" as a product, so here's what the
+              research says about each of its key ingredients.
+            </p>
+
+            <div className="mt-4 space-y-3">
+              {data.ingredientBreakdown.map((ing) => (
+                <article
+                  key={ing.ingredient}
+                  className="grid gap-3 rounded-[22px] border border-white/75 bg-white/90 p-6 shadow-[0_12px_35px_rgba(27,52,72,0.04)] sm:grid-cols-[1fr_auto] sm:items-center sm:p-7"
+                >
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <p className="text-base font-medium text-[var(--ink)]">{ing.ingredient}</p>
+                      <span
+                        className="font-label inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5"
+                        style={{
+                          fontSize: 9,
+                          color: verdictColor(ing.verdict),
+                          backgroundColor: `color-mix(in oklab, ${verdictColor(ing.verdict)} 12%, transparent)`,
+                        }}
+                      >
+                        <span
+                          className="inline-block rounded-full"
+                          style={{ width: 4, height: 4, backgroundColor: verdictColor(ing.verdict) }}
+                        />
+                        {ing.verdict}
+                      </span>
+                    </div>
+                    <p className="mt-1.5 text-sm leading-6" style={{ color: "var(--muted-ink)" }}>
+                      {ing.oneLiner}
+                    </p>
+                  </div>
+
+                  <a
+                    href={ing.pubmedSearchUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-mono shrink-0 text-xs whitespace-nowrap text-[var(--terracotta)]"
+                  >
+                    view on pubmed ↗
+                  </a>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* ── EVIDENCE BULLETS ── */}
         {data.bullets.length > 0 && (
           <section className="mt-8">
@@ -467,21 +523,23 @@ function SectionHeader({
   href,
 }: {
   left: string;
-  right: string;
-  href: string;
+  right?: string;
+  href?: string;
 }) {
   return (
     <div className="flex items-center justify-between gap-4">
       <p className="font-label text-xs text-[var(--sage)]">{left}</p>
 
-      <a
-        href={href}
-        target="_blank"
-        rel="noreferrer"
-        className="font-label text-xs text-[var(--terracotta)] transition hover:opacity-70"
-      >
-        {right}
-      </a>
+      {right && href && (
+        <a
+          href={href}
+          target="_blank"
+          rel="noreferrer"
+          className="font-label text-xs text-[var(--terracotta)] transition hover:opacity-70"
+        >
+          {right}
+        </a>
+      )}
     </div>
   );
 }
