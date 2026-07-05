@@ -34,11 +34,22 @@ export const Route = createFileRoute("/")({
 // has accumulated (or if Supabase is briefly unreachable).
 const FALLBACK_TRENDING_SLUGS = ["rosemary-oil", "collagen-peptides", "ashwagandha", "slugging"];
 
+// Real trending searches are pulled straight from what people search, which
+// occasionally surfaces something clinical-sounding/intimidating (e.g.
+// "lithium orotate") as someone's very first impression of the product.
+// Filtered out of the homepage row specifically — still fully searchable
+// and still shows up everywhere else (category pages, the trend itself).
+const TRENDING_ROW_DENYLIST = ["lithium orotate"];
+
 function Veda() {
-  const { count: generatedCount, trending } = Route.useLoaderData() as {
+  const { count: generatedCount, trending: rawTrending } = Route.useLoaderData() as {
     count: number;
     trending: { slug: string; name: string }[];
   };
+
+  const trending = rawTrending.filter(
+    (t) => !TRENDING_ROW_DENYLIST.some((term) => t.name.toLowerCase().includes(term)),
+  );
 
   const trendingRow = [
     ...trending,
@@ -225,10 +236,10 @@ function Hero({
         </p>
 
         <p
-          className="mt-3 max-w-xl text-center leading-snug"
+          className="mt-1 max-w-3xl px-2 text-center leading-snug whitespace-normal md:whitespace-nowrap"
           style={{
             color: "var(--terracotta)",
-            fontSize: "clamp(13px, 3.2vw, 15px)",
+            fontSize: "clamp(12px, 2.4vw, 15px)",
             fontWeight: 500,
             animation: "fade-up 1.2s ease-out 0.8s both",
           }}
@@ -293,8 +304,8 @@ function Hero({
             </p>
           ) : (
             <p
-              className="mt-3 text-center"
-              style={{ color: "var(--ink)", fontSize: "clamp(11px, 2.8vw, 13px)", fontWeight: 400, opacity: 0.65 }}
+              className="mt-3 max-w-2xl px-2 text-center whitespace-normal md:whitespace-nowrap"
+              style={{ color: "var(--ink)", fontSize: "clamp(10.5px, 2.4vw, 13px)", fontWeight: 400, opacity: 0.85 }}
             >
               Type a specific claim below, like "rosemary oil for hair growth," not a general question.
             </p>
