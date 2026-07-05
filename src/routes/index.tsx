@@ -14,13 +14,13 @@ export const Route = createFileRoute("/")({
   },
   head: () => ({
     meta: [
-      { title: "Veda — Is it actually worth it?" },
+      { title: "Veda — Social media wellness, fact-checked." },
       {
         name: "description",
         content:
-          "A wellness evidence engine. Search any ingredient, product, or ritual — get a verdict that cross-references clinical research and community sentiment.",
+          "Your favorite influencer swears by rosemary oil, collagen, ashwagandha. We check what real science and real people say, and give you a straight verdict: backed, mixed, or debunked.",
       },
-      { property: "og:title", content: "Veda — Is it actually worth it?" },
+      { property: "og:title", content: "Veda — Social media wellness, fact-checked." },
       {
         property: "og:description",
         content: "BACKED, MIXED, or DEBUNKED — for every wellness claim.",
@@ -213,17 +213,17 @@ function Hero({
         <h1
           className="font-display text-center leading-[0.95]"
           style={{
-            fontSize: "clamp(34px, 9vw, 96px)",
+            fontSize: "clamp(30px, 7.5vw, 76px)",
             color: "var(--ink)",
             letterSpacing: "-0.02em",
             animation: "fade-up 1.2s ease-out 0.2s both",
           }}
         >
-          Is it actually <span style={{ color: "var(--terracotta)" }}>worth it?</span>
+          Social media wellness, <span style={{ color: "var(--terracotta)" }}>fact-checked.</span>
         </h1>
 
         <p
-          className="mt-3 sm:mt-5 max-w-xl text-center leading-snug"
+          className="mt-3 sm:mt-5 max-w-2xl text-center leading-snug"
           style={{
             color: "var(--ink)",
             fontSize: "clamp(13px, 3.4vw, 16px)",
@@ -232,8 +232,8 @@ function Hero({
             whiteSpace: "pre-line",
           }}
         >
-          Search any ingredient, product, or ritual, paired with what you want it to do — like "ashwagandha for sleep."{"\n"}
-          We check the PubMed research and real Reddit threads, then hand you one verdict: backed, mixed, or debunked.
+          Your favorite influencer swears by rosemary oil for hair growth, collagen for bouncy skin, and ashwagandha for stress. But does any of it actually work, or is it just a good camera angle?{"\n"}
+          We check what real science and real people say, not what an ad wants you to believe.
         </p>
 
         <div
