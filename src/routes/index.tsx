@@ -248,7 +248,7 @@ function Hero({
         </p>
 
         <div
-          className="relative mt-5 sm:mt-7"
+          className="relative mt-8 sm:mt-10"
           style={{
             width: "min(480px, 90vw)",
             animation: "fade-up 1.2s ease-out 1.0s both",
