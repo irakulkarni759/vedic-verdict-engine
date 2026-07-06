@@ -722,9 +722,13 @@ async function checkIsPharmaceutical(query: string): Promise<{ isMedicine: boole
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return { isMedicine: false };
 
-  const prompt = `Is "${query}" primarily a pharmaceutical medicine — a prescription drug or a regulator-approved over-the-counter medicine (examples: ibuprofen, metformin, Ozempic, amoxicillin, Prozac, insulin, Tylenol)?
+  const prompt = `Is "${query}" a SYSTEMIC medicine — a prescription drug or an oral/injectable over-the-counter medicine taken to treat or manage a diagnosed medical condition (examples: ibuprofen, metformin, Ozempic, amoxicillin, Prozac, insulin, Tylenol, Pepto-Bismol, antihistamines like Benadryl/Claritin)?
 
-Answer "yes" ONLY for actual medicines/drugs used to treat or manage a diagnosed condition. Answer "no" for supplements, vitamins, herbs, cosmetic ingredients, foods, and general wellness practices — even ones that sound clinical (e.g. "melatonin", "creatine", "electrolytes", "collagen" are NOT medicines for this purpose).
+Answer "no" for:
+- Supplements, vitamins, herbs, foods, and general wellness practices — even ones that sound clinical (e.g. "melatonin", "creatine", "electrolytes", "collagen" are NOT medicines for this purpose).
+- TOPICAL skincare/haircare active ingredients, even ones that happen to be regulated as OTC drug monographs — e.g. "benzoyl peroxide", "salicylic acid", "retinol", "adapalene", "hydroquinone", "minoxidil", "azelaic acid", zinc oxide/titanium dioxide sunscreens. These are exactly the kind of ingredient Veda exists to cover (people research them constantly for skincare), and being FDA-regulated doesn't make them "a medicine" the way an oral/injectable drug is — answer "no" for these regardless of their regulatory status.
+
+Answer "yes" ONLY for actual systemic medicines/drugs used to treat or manage a diagnosed condition.
 
 Return ONLY this JSON, no other text:
 {"is_medicine": true, "name": "common name of the medicine"}
