@@ -337,10 +337,11 @@ function Hero({
         </div>
 
         <div
-          className="mt-3 sm:mt-4 text-center font-display"
+          className="mt-3 sm:mt-4 text-center"
           style={{
             color: "var(--ink)",
-            fontSize: "clamp(18px, 5vw, 26px)",
+            fontSize: "clamp(13px, 3.2vw, 16px)",
+            fontWeight: 500,
             animation: "fade-up 1.2s ease-out 1.6s both",
           }}
         >

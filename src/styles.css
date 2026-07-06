@@ -45,7 +45,12 @@
 
   --font-display: "Cormorant Garamond", serif;
   --font-sans: "DM Sans", sans-serif;
-  --font-mono: "Space Mono", monospace;
+  /* Was "Space Mono" — collapsing to the sans font site-wide so UI chrome
+     (buttons, tags, pubmed links, labels) reads as one consistent voice
+     instead of a third typeface. font-label's letter-spacing + uppercase
+     (below) still gives these elements their own distinct feel without
+     needing a separate font family to do it. */
+  --font-mono: "DM Sans", sans-serif;
 }
 
 :root {
@@ -99,7 +104,7 @@
 
 @utility font-label {
   font-family: var(--font-mono);
-  font-weight: 400;
+  font-weight: 500;
   letter-spacing: 0.18em;
   text-transform: uppercase;
 }
