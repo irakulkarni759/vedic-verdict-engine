@@ -22,6 +22,13 @@ export type EvidenceBullet = {
   /** Fuller, more technical version of the same finding — mechanism,
    *  stats, clinical terms — shown only once the card is clicked open. */
   detail: string;
+  /** e.g. "Randomized controlled trial", "Animal study", "Observational
+   *  study", "Meta-analysis", "In vitro study" — shown on the card itself. */
+  studyType: string;
+  /** A real caveat worth knowing at a glance, e.g. "Animal study — may not
+   *  apply to humans", "Small sample (n=12)", "No control group". Empty
+   *  string when the abstract doesn't surface a notable limitation. */
+  limitations: string;
   url: string;
 };
 
@@ -272,7 +279,12 @@ async function generateBulletsAndQuotes(
 3. "researchVerdict": ONE short sentence, max ~90 chars, ONE idea only — write it the way you'd text a friend, not explain a study. Avoid clinical/technical jargon (say "muscle strength" not "phosphocreatine stores"). State only the single most important real-world takeaway. Do NOT stack multiple clauses with commas/dashes/semicolons (e.g. NOT "X shows promise, but effectiveness depends on Y, and data remain limited" — pick the ONE most important point and cut the rest). If a caveat truly matters more than the headline finding, lead with the caveat instead of appending it. Example good: "Works well when injected, but doesn't absorb through skin." Example bad (too dense, don't do this): "Injected PDRN shows promise for scar healing by stimulating tissue regeneration, but effectiveness depends heavily on delivery method—topical application is unlikely to work, and clinical data remain limited."
 4. "communityVerdict": ONE short sentence, max ~90 chars, ONE idea only, same plain/texting-a-friend style, synthesizing the REAL Reddit comments provided below — what people actually notice and talk about most. Do not stack multiple clauses together (no "X happens, and Y is unclear, and Z varies" — pick the single most important thing people say). Do not invent a quote or a specific claim that isn't supported by the real comments. ${quoteCountNote}
 5. "safetyNote": ONE short sentence, max ~90 chars, ONE idea, on the most common real safety consideration for "${query}" — drug interactions, pregnancy/breastfeeding warnings, allergy risk, or who should check with a doctor first. Plain language, based on general medical knowledge, not just this abstract set. If there's genuinely nothing notable for typical healthy-adult use, return an empty string "" — don't invent a caution that doesn't apply.
-6. "bullets": 3-4 key findings from the PUBMED ABSTRACTS ONLY — never from the Reddit comments. Each bullet must specifically evaluate/test/discuss "${query}" ITSELF (the exact ingredient/product/practice), not just the same broader condition or category. E.g. if the query is about a specific compound for treating acne scars, a study about microneedling or lasers for acne scars is NOT a valid bullet even though it's on-topic for "acne scars" generally — it doesn't study the actual compound. Each bullet must have an accurate "index" pointing at which abstract (1-based) it came from. Never summarize, paraphrase, or reference Reddit/community opinion here — that belongs only in "communityVerdict". If FEWER than 3 (or zero) abstracts specifically evaluate "${query}" itself, return that fewer number of bullets — do not pad with abstracts about the broader condition/category just to reach 3-4, and do not borrow from Reddit content. Each bullet has TWO versions of the SAME finding: "text" is the plain-English headline shown at first glance — no jargon, no mechanism names, no units/dosages unless a normal person would say it that way (say "helped people fall asleep faster" not "reduced sleep onset latency"), 1 sentence, 50-150 chars. "detail" is the fuller, technical version of that exact same finding, shown only once someone clicks for more — include the actual mechanism, specific stats/dosage/sample size/effect size from the abstract when available, clinical terminology is fine here, 1-2 sentences, up to ~280 chars. Never invent a number that isn't in the abstract.
+6. "bullets": 3-4 key findings from the PUBMED ABSTRACTS ONLY — never from the Reddit comments. Each bullet must specifically evaluate/test/discuss "${query}" ITSELF (the exact ingredient/product/practice), not just the same broader condition or category. E.g. if the query is about a specific compound for treating acne scars, a study about microneedling or lasers for acne scars is NOT a valid bullet even though it's on-topic for "acne scars" generally — it doesn't study the actual compound. Each bullet must have an accurate "index" pointing at which abstract (1-based) it came from. Never summarize, paraphrase, or reference Reddit/community opinion here — that belongs only in "communityVerdict". If FEWER than 3 (or zero) abstracts specifically evaluate "${query}" itself, return that fewer number of bullets — do not pad with abstracts about the broader condition/category just to reach 3-4, and do not borrow from Reddit content. Each bullet has FOUR fields:
+"text" — the plain-English headline shown at first glance. Write it for someone with NO science background: short words, one idea, one clause if at all possible. No jargon, no mechanism names, no chemical/compound names beyond the ingredient itself, no units or dosages unless a normal person would casually say them. Say "helped people fall asleep faster" not "reduced sleep onset latency"; say "reduced redness" not "decreased erythema"; say "worked about as well as a placebo" not "showed no statistically significant difference from control." Prefer everyday comparisons over numbers where it keeps things clear (e.g. "about half the people" over "48.3%"). 1 short sentence, aim for under 100 characters, hard cap 150.
+"detail" — the fuller, technical version of that exact same finding, shown only once someone clicks for more — include the actual mechanism, specific stats/dosage/sample size/effect size from the abstract when available, clinical terminology is fine here, 1-2 sentences, up to ~280 chars.
+"studyType" — the kind of study this abstract describes, in plain terms: "Randomized controlled trial", "Animal study", "Observational study", "Meta-analysis", "In vitro study" (i.e. a lab/petri-dish study, not living subjects), "Case report", "Review", or "Small pilot study". Infer this from the abstract's methodology, don't guess if truly unclear — use "Study" as a last resort.
+"limitations" — ONE short, genuinely useful caveat a normal person would want to know before trusting this finding, e.g. "Animal study — may not apply to humans", "Small study (12 people)", "No control group", "Funded by the ingredient's manufacturer", "Self-reported results". Empty string "" if the abstract doesn't clearly support a specific limitation — never invent one just to fill the field.
+Never invent a number, study type, or limitation that isn't actually supported by the abstract.
 7. "sentiment": a number 0-100 representing how positive the community sentiment is about "${query}", based on the real Reddit comments below (if any) and the evidence — not invented.
 8. "category": the single best-fit category slug for "${query}", chosen ONLY from this exact list: ${CATEGORY_SLUGS.join(", ")}.
 
@@ -289,7 +301,7 @@ Return ONLY this JSON shape, no other text:
   "researchVerdict": "...",
   "communityVerdict": "...",
   "safetyNote": "...",
-  "bullets": [{"text": "...", "detail": "...", "index": 1}, ...],
+  "bullets": [{"text": "...", "detail": "...", "studyType": "...", "limitations": "...", "index": 1}, ...],
   "sentiment": 75,
   "category": "supplements"
 }`;
@@ -317,7 +329,7 @@ Return ONLY this JSON shape, no other text:
       researchVerdict?: string;
       communityVerdict?: string;
       safetyNote?: string;
-      bullets: { text: string; detail?: string; index: number }[];
+      bullets: { text: string; detail?: string; studyType?: string; limitations?: string; index: number }[];
       sentiment: number;
       category?: string;
     };
@@ -327,6 +339,8 @@ Return ONLY this JSON shape, no other text:
       // Fall back to the plain text if Claude ever omits detail, so the
       // click-to-expand never reveals a blank/undefined card.
       detail: typeof item.detail === "string" && item.detail.trim() ? item.detail.trim() : item.text,
+      studyType: typeof item.studyType === "string" && item.studyType.trim() ? item.studyType.trim() : "Study",
+      limitations: typeof item.limitations === "string" ? item.limitations.trim() : "",
       url: abstracts[item.index - 1]?.url ?? abstracts[0]?.url,
     }));
 

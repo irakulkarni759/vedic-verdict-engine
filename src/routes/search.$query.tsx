@@ -326,6 +326,18 @@ function SearchPage() {
               href={data.pubmedSearchUrl}
             />
 
+            {/* Study-count banner — answers "how much research is this
+                actually based on" before reading a single card. */}
+            <div
+              className="mt-3 inline-flex items-center gap-2 rounded-full px-3.5 py-1.5"
+              style={{ backgroundColor: "color-mix(in oklab, var(--sage) 10%, transparent)" }}
+            >
+              <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: "var(--sage)" }} />
+              <span className="font-label text-[10px]" style={{ color: "var(--sage)" }}>
+                BASED ON {data.studies} PUBMED {data.studies === 1 ? "STUDY" : "STUDIES"}
+              </span>
+            </div>
+
             <div className="mt-4 space-y-3">
               {data.bullets.map((b, i) => {
                 const isOpen = expandedBullets.has(i);
@@ -349,6 +361,30 @@ function SearchPage() {
                     </div>
 
                     <div>
+                      {/* Study type + limitations — visible up front, not
+                          hidden behind the click, since knowing "this is an
+                          animal study" changes how much weight to give the
+                          headline before you even read it. */}
+                      <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                        <span
+                          className="font-label rounded-full px-2 py-0.5 text-[9px]"
+                          style={{ color: "var(--muted-ink)", backgroundColor: "color-mix(in oklab, var(--ink) 6%, transparent)" }}
+                        >
+                          {b.studyType.toUpperCase()}
+                        </span>
+                        {b.limitations && (
+                          <span
+                            className="font-label inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px]"
+                            style={{
+                              color: "var(--verdict-mixed)",
+                              backgroundColor: "color-mix(in oklab, var(--verdict-mixed) 10%, transparent)",
+                            }}
+                          >
+                            ⚠ {b.limitations.toUpperCase()}
+                          </span>
+                        )}
+                      </div>
+
                       <p className="text-lg leading-8 text-[var(--ink)]">
                         {b.text}
                       </p>
