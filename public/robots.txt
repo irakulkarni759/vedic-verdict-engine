@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://vedic-verdict-engine.lovable.app/sitemap.xml
