@@ -77,6 +77,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { name: "google-site-verification", content: "74w-7yYESxxcfVD5P0fvbpUQhhZMm2KaiJcPaozaHvU" },
       { title: "Veda — Is it actually worth it?" },
       { name: "description", content: "Veda is a wellness evidence engine. Search any ingredient, product, or ritual and get a verdict backed by PubMed research and community sentiment." },
       { name: "author", content: "Veda" },
