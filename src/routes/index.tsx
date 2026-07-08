@@ -224,7 +224,7 @@ function Hero({
         </h1>
 
         <p
-          className="mt-3 sm:mt-5 max-w-3xl px-2 text-center leading-snug whitespace-normal md:whitespace-nowrap"
+          className="mt-3 sm:mt-5 max-w-5xl px-2 text-center leading-snug whitespace-normal 2xl:whitespace-nowrap"
           style={{
             color: "var(--ink)",
             fontSize: "clamp(13px, 2.6vw, 16px)",
@@ -236,7 +236,7 @@ function Hero({
         </p>
 
         <p
-          className="mt-1 max-w-3xl px-2 text-center leading-snug whitespace-normal md:whitespace-nowrap"
+          className="mt-1 max-w-3xl px-2 text-center leading-snug whitespace-normal 2xl:whitespace-nowrap"
           style={{
             color: "var(--terracotta)",
             fontSize: "clamp(12px, 2.4vw, 15px)",
@@ -304,7 +304,7 @@ function Hero({
             </p>
           ) : (
             <p
-              className="mt-3 max-w-2xl px-2 text-center whitespace-normal md:whitespace-nowrap"
+              className="mt-3 max-w-3xl px-2 text-center whitespace-normal lg:whitespace-nowrap"
               style={{ color: "var(--ink)", fontSize: "clamp(10.5px, 2.4vw, 13px)", fontWeight: 400, opacity: 0.85 }}
             >
               Type a specific claim below, like "rosemary oil for hair growth," not a general question.
