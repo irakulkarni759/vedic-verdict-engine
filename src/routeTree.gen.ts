@@ -9,12 +9,18 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TrendSlugRouteImport } from './routes/trend.$slug'
 import { Route as SearchQueryRouteImport } from './routes/search.$query'
 import { Route as CategorySlugRouteImport } from './routes/category.$slug'
 
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
   path: '/admin',
@@ -44,6 +50,7 @@ const CategorySlugRoute = CategorySlugRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/category/$slug': typeof CategorySlugRoute
   '/search/$query': typeof SearchQueryRoute
   '/trend/$slug': typeof TrendSlugRoute
@@ -51,6 +58,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/category/$slug': typeof CategorySlugRoute
   '/search/$query': typeof SearchQueryRoute
   '/trend/$slug': typeof TrendSlugRoute
@@ -59,6 +67,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/category/$slug': typeof CategorySlugRoute
   '/search/$query': typeof SearchQueryRoute
   '/trend/$slug': typeof TrendSlugRoute
@@ -68,15 +77,23 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/admin'
+    | '/sitemap.xml'
     | '/category/$slug'
     | '/search/$query'
     | '/trend/$slug'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/category/$slug' | '/search/$query' | '/trend/$slug'
+  to:
+    | '/'
+    | '/admin'
+    | '/sitemap.xml'
+    | '/category/$slug'
+    | '/search/$query'
+    | '/trend/$slug'
   id:
     | '__root__'
     | '/'
     | '/admin'
+    | '/sitemap.xml'
     | '/category/$slug'
     | '/search/$query'
     | '/trend/$slug'
@@ -85,6 +102,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   CategorySlugRoute: typeof CategorySlugRoute
   SearchQueryRoute: typeof SearchQueryRoute
   TrendSlugRoute: typeof TrendSlugRoute
@@ -92,6 +110,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin': {
       id: '/admin'
       path: '/admin'
@@ -133,6 +158,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
   CategorySlugRoute: CategorySlugRoute,
   SearchQueryRoute: SearchQueryRoute,
   TrendSlugRoute: TrendSlugRoute,

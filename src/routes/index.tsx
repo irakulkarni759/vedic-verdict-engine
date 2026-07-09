@@ -211,41 +211,43 @@ function Hero({
         className="relative z-10 flex flex-col items-center justify-center px-4 pb-6 sm:pb-10"
         style={{ paddingTop: "clamp(2rem, 6vh, 6rem)" }}
       >
-        <h1
-          className="font-display text-center leading-[0.95]"
-          style={{
-            fontSize: "clamp(30px, 7.5vw, 76px)",
-            color: "var(--ink)",
-            letterSpacing: "-0.02em",
-            animation: "fade-up 1.2s ease-out 0.2s both",
-          }}
-        >
-          Social media wellness, <span style={{ color: "var(--terracotta)" }}>fact-checked.</span>
-        </h1>
+        <div className="w-full flex flex-col items-center text-center">
+          <h1
+            className="font-display leading-[0.95]"
+            style={{
+              fontSize: "clamp(30px, 7.5vw, 76px)",
+              color: "var(--ink)",
+              letterSpacing: "-0.02em",
+              animation: "fade-up 1.2s ease-out 0.2s both",
+            }}
+          >
+            Social media wellness, <span style={{ color: "var(--terracotta)" }}>fact-checked.</span>
+          </h1>
 
-        <p
-          className="mt-3 sm:mt-5 max-w-3xl px-2 text-center leading-snug whitespace-normal md:whitespace-nowrap"
-          style={{
-            color: "var(--ink)",
-            fontSize: "clamp(13px, 2.6vw, 16px)",
-            fontWeight: 300,
-            animation: "fade-up 1.2s ease-out 0.6s both",
-          }}
-        >
-          Your favorite influencer swears by rosemary oil for hair growth or collagen for bouncy skin. But does any of it actually work?
-        </p>
+          <p
+            className="mt-3 sm:mt-5 max-w-5xl px-2 leading-snug whitespace-normal 2xl:whitespace-nowrap"
+            style={{
+              color: "var(--ink)",
+              fontSize: "clamp(13px, 2.6vw, 16px)",
+              fontWeight: 300,
+              animation: "fade-up 1.2s ease-out 0.6s both",
+            }}
+          >
+            Your favorite influencer swears by rosemary oil for hair growth or collagen for bouncy skin. But does any of it actually work?
+          </p>
 
-        <p
-          className="mt-1 max-w-3xl px-2 text-center leading-snug whitespace-normal md:whitespace-nowrap"
-          style={{
-            color: "var(--terracotta)",
-            fontSize: "clamp(12px, 2.4vw, 15px)",
-            fontWeight: 500,
-            animation: "fade-up 1.2s ease-out 0.8s both",
-          }}
-        >
-          We check what real science and real people say, not what an ad wants you to believe.
-        </p>
+          <p
+            className="mt-1 max-w-3xl px-2 leading-snug whitespace-normal 2xl:whitespace-nowrap"
+            style={{
+              color: "var(--terracotta)",
+              fontSize: "clamp(12px, 2.4vw, 15px)",
+              fontWeight: 500,
+              animation: "fade-up 1.2s ease-out 0.8s both",
+            }}
+          >
+            We check what real science and real people say, not what an ad wants you to believe.
+          </p>
+        </div>
 
         <div
           className="relative mt-12 sm:mt-16"
@@ -304,7 +306,7 @@ function Hero({
             </p>
           ) : (
             <p
-              className="mt-3 max-w-2xl px-2 text-center whitespace-normal md:whitespace-nowrap"
+              className="mt-3 max-w-3xl px-2 text-center whitespace-normal lg:whitespace-nowrap"
               style={{ color: "var(--ink)", fontSize: "clamp(10.5px, 2.4vw, 13px)", fontWeight: 400, opacity: 0.85 }}
             >
               Type a specific claim below, like "rosemary oil for hair growth," not a general question.
