@@ -1087,13 +1087,19 @@ async function generateFreshEvidenceVerdict(query: string): Promise<EvidenceVerd
     if (isWeakCount || isIrrelevant || isKnownProduct) {
       const fallback = await identifyFallbackTerms(query);
 
-      // checkIsBrandedProduct already confirmed this above — don't let a
-      // second, slightly-differently-worded classification call disagree
-      // and silently drop back to the "terminology" path (or null) for
-      // what's already a known product. If identifyFallbackTerms came back
-      // null (couldn't find any usable terms at all), leave it null — no
-      // amount of "yes it's a product" fixes a total lack of terms.
-      if (isKnownProduct && fallback) fallback.reason = "product";
+      // checkIsBrandedProduct (run earlier, dedicated to exactly this
+      // question) is the single source of truth for "is this a branded
+      // product" — override identifyFallbackTerms's own guess at reason
+      // in BOTH directions, not just when it agrees. Without this, a plain
+      // ingredient/practice with weak PubMed coverage could still get
+      // classified "product" by identifyFallbackTerms's own independent
+      // judgment and incorrectly trigger the Key Ingredients section for
+      // something that was never actually a product — the exact same kind
+      // of inconsistency this whole change was meant to fix, just coming
+      // from the other classifier instead. If identifyFallbackTerms came
+      // back null (no usable terms at all), leave it null either way — no
+      // classification fixes a total lack of terms.
+      if (fallback) fallback.reason = isKnownProduct ? "product" : "terminology";
 
       // For branded products specifically, try to replace Claude's guessed
       // ingredients with the REAL, sourced list from an actual web search
