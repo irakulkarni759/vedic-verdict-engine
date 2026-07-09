@@ -729,6 +729,54 @@ Return ONLY this JSON array, one entry per ingredient IN THE SAME ORDER given ab
   }
 }
 
+/**
+ * Folds the per-ingredient verdicts into ONE bullet for the main "WHAT THE
+ * RESEARCH SAYS" list, instead of a separate Key Ingredients section — same
+ * text/detail click-to-expand pattern as every other bullet: "text" is the
+ * top-5-names-plus-overall-read headline shown up front, "detail" is the
+ * full per-ingredient breakdown shown only once clicked open. The
+ * underlying per-ingredient research check (buildIngredientBreakdown) still
+ * runs exactly as before — this only changes how it's SURFACED.
+ */
+function buildIngredientSummaryBullet(
+  ingredientBreakdown: IngredientEvidence[],
+  ingredientSource: EvidenceVerdict["ingredientSource"],
+): EvidenceBullet | null {
+  if (ingredientBreakdown.length === 0) return null;
+
+  const top5 = ingredientBreakdown.slice(0, 5);
+  const names = top5.map((i) => i.ingredient).join(", ");
+
+  const withVerdictData = top5.filter((i) => i.verdict !== "UNKNOWN");
+  const backedShare = withVerdictData.length
+    ? withVerdictData.filter((i) => i.verdict === "BACKED").length / withVerdictData.length
+    : 0;
+  const debunkedShare = withVerdictData.length
+    ? withVerdictData.filter((i) => i.verdict === "DEBUNKED").length / withVerdictData.length
+    : 0;
+  const assessment =
+    withVerdictData.length === 0
+      ? "not much direct research on them individually"
+      : backedShare >= 0.6
+        ? "most are backed by real research"
+        : debunkedShare >= 0.5
+          ? "research doesn't back up most of them"
+          : "the research on them is mixed";
+
+  const text = `Key ingredients: ${names} — ${assessment}.`;
+  const detail = top5.map((i) => `${i.ingredient} (${i.verdict.toLowerCase()}): ${i.oneLiner}`).join(" ");
+
+  return {
+    text,
+    detail,
+    studyType: "Ingredient Overview",
+    limitations: ingredientSource?.verified
+      ? ""
+      : "Estimated ingredient list — not a confirmed formulation",
+    url: ingredientSource?.url ?? top5[0]?.pubmedSearchUrl ?? "",
+  };
+}
+
 
 /**
  * Veda covers supplements, wellness practices, and cosmetic ingredients —
@@ -1167,7 +1215,23 @@ async function generateFreshEvidenceVerdict(query: string): Promise<EvidenceVerd
                 ? buildIngredientBreakdown(realIngredients?.productName ?? name, fallback.terms)
                 : Promise.resolve(null),
             ]);
-            const merged = { ...result, ingredientBreakdown, ingredientSource };
+
+            // Folded into ONE bullet in the main list (same text/detail
+            // click-to-expand pattern as every other bullet) rather than a
+            // separate Key Ingredients section — the per-ingredient
+            // research check still runs exactly as before via
+            // buildIngredientBreakdown above, this just changes how the
+            // result is surfaced.
+            const summaryBullet = ingredientBreakdown
+              ? buildIngredientSummaryBullet(ingredientBreakdown, ingredientSource)
+              : null;
+
+            const merged: EvidenceVerdict = {
+              ...result,
+              bullets: summaryBullet ? [summaryBullet, ...result.bullets] : result.bullets,
+              ingredientBreakdown,
+              ingredientSource,
+            };
             await persistGeneratedVerdict(merged);
             return merged;
           }
