@@ -3,6 +3,7 @@ import {
   CATEGORY_SLUGS,
   guessCategoryFallback,
   saveGeneratedTrend,
+  getGeneratedEvidenceBySlug,
   slugify,
 } from "./generatedTrends.functions";
 import { toTitleCase, coreSubjectForReddit } from "./utils";
@@ -901,15 +902,6 @@ async function buildResultFromIds(opts: {
 
   const finalSafetyNote = safetyNote ?? "";
 
-  await saveGeneratedTrend({
-    data: {
-      slug, query, name: finalName, category, verdict: verdict.toLowerCase() as "backed" | "mixed" | "debunked",
-      summary: oneLiner, communityVerdict: communitySummary, safetyNote: finalSafetyNote, studyCount: studies, confidence, updated,
-      evidencePoints: bullets.map((b) => b.text), sentiment, opinions: redditQuotes,
-      sourceUrls: articles.slice(0, 6).map((a) => a.url),
-    },
-  });
-
   return {
     query, name: finalName, slug, category, verdict, confidence, oneLiner, communityVerdict: communitySummary,
     safetyNote: finalSafetyNote, studies,
@@ -922,6 +914,33 @@ async function buildResultFromIds(opts: {
     ingredientBreakdown: null,
     ingredientSource: null,
   };
+}
+
+/**
+ * Persists a finished EvidenceVerdict to Supabase for the full-result cache
+ * (and for "trends verified" / category pages / trending, same as before).
+ * Deliberately takes the COMPLETE final object — called once per real
+ * generation, at the point a result is about to be returned to the client,
+ * after any ingredientBreakdown merge — rather than living inside
+ * buildResultFromIds, since that runs in parallel with
+ * buildIngredientBreakdown for branded products and wouldn't have the
+ * ingredient data yet if it saved itself immediately.
+ */
+async function persistGeneratedVerdict(result: EvidenceVerdict): Promise<void> {
+  await saveGeneratedTrend({
+    data: {
+      slug: result.slug, query: result.query, name: result.name, category: result.category,
+      verdict: result.verdict.toLowerCase() as "backed" | "mixed" | "debunked",
+      summary: result.oneLiner, communityVerdict: result.communityVerdict, safetyNote: result.safetyNote,
+      studyCount: result.studies, confidence: result.confidence, updated: result.updated,
+      evidencePoints: result.bullets.map((b) => b.text), sentiment: result.sentiment, opinions: result.quotes,
+      sourceUrls: result.articles.map((a) => a.url),
+      bullets: result.bullets, articles: result.articles,
+      pubmedSearchUrl: result.pubmedSearchUrl, redditSearchUrl: result.redditSearchUrl, generatedAt: result.generatedAt,
+      ingredientFallback: result.ingredientFallback, ingredientBreakdown: result.ingredientBreakdown,
+      ingredientSource: result.ingredientSource,
+    },
+  });
 }
 
 export const generateEvidenceVerdict = createServerFn({ method: "GET" })
@@ -943,6 +962,21 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
     });
 
     if (!query) return empty("Enter a search to generate a verdict.");
+
+    // Cache: if this exact query was already fully generated recently, serve
+    // that instead of regenerating from scratch. Every visit used to re-run
+    // the ENTIRE pipeline (PubMed, Reddit, 2-3 Claude calls) even for a query
+    // searched a minute ago — slow, costly, and since none of those calls are
+    // fully deterministic, a re-generation could come back subtly different
+    // each time (a bullet reworded, an ingredient's verdict flipping), which
+    // is why leaving and coming back to "the same" result could look like
+    // things were disappearing or changing. A cache hit returns the exact
+    // same saved object, not a fresh roll of the dice.
+    const CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+    const cached = await getGeneratedEvidenceBySlug({ data: { slug } });
+    if (cached && Date.now() - new Date(cached.generatedAt).getTime() < CACHE_MAX_AGE_MS) {
+      return cached;
+    }
 
     const pharma = await checkIsPharmaceutical(query);
     if (pharma.isMedicine) {
@@ -1050,7 +1084,9 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
                   ? buildIngredientBreakdown(realIngredients?.productName ?? name, fallback.terms)
                   : Promise.resolve(null),
               ]);
-              return { ...result, ingredientBreakdown, ingredientSource };
+              const merged = { ...result, ingredientBreakdown, ingredientSource };
+              await persistGeneratedVerdict(merged);
+              return merged;
             }
           }
         }
@@ -1058,10 +1094,12 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
         if (ids.length > 0) {
           // Fallback search found nothing better — the original (weak but
           // non-empty) results are still the best we have, use them.
-          return await buildResultFromIds({
+          const result = await buildResultFromIds({
             ids, query, name, slug, updated, generatedAt,
             pubmedSearchUrl, redditSearchUrl, fallback: null,
           });
+          await persistGeneratedVerdict(result);
+          return result;
         }
 
         const result = { ...empty("No PubMed results — this one isn't well-studied yet."), verdict: "UNKNOWN" as const };
@@ -1077,10 +1115,12 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
         return result;
       }
 
-      return await buildResultFromIds({
+      const result = await buildResultFromIds({
         ids, query, name, slug, updated, generatedAt,
         pubmedSearchUrl, redditSearchUrl, fallback: null,
       });
+      await persistGeneratedVerdict(result);
+      return result;
     } catch {
       return empty("Couldn't reach PubMed right now. Try again in a moment.");
     }

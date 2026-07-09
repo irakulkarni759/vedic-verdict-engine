@@ -4,6 +4,10 @@ import { CATEGORIES, type Trend, type Verdict } from "./trends";
 import { checkAdminPassword } from "./comments.functions";
 import { toTitleCase, coreSubjectForReddit } from "./utils";
 import { fetchRedditQuotes } from "./reddit.server";
+// Type-only — erased at compile time, so this doesn't create a runtime
+// circular dependency even though evidence.functions.ts imports
+// saveGeneratedTrend (a value) from this file.
+import type { EvidenceBullet, EvidenceArticle, EvidenceVerdict, IngredientEvidence } from "./evidence.functions";
 
 export const CATEGORY_SLUGS = CATEGORIES.map((c) => c.slug);
 
@@ -54,6 +58,16 @@ type GeneratedTrendRow = {
   source_urls: string[];
   created_at: string;
   search_count: number;
+  // Added for the full-result cache — nullable/defaulted since older rows
+  // (written before this column existed) won't have them.
+  bullets: EvidenceBullet[] | null;
+  articles: EvidenceArticle[] | null;
+  pubmed_search_url: string | null;
+  reddit_search_url: string | null;
+  generated_at: string | null;
+  ingredient_fallback: string[] | null;
+  ingredient_breakdown: IngredientEvidence[] | null;
+  ingredient_source: { url: string | null; verified: boolean } | null;
 };
 
 export type SaveGeneratedTrendInput = {
@@ -72,6 +86,17 @@ export type SaveGeneratedTrendInput = {
   sentiment: number;
   opinions: { handle: string; text: string; url: string }[];
   sourceUrls: string[];
+  // Optional — only real (non-"unmapped") saves populate these, for the
+  // full-result cache. Existing callers that only ever wrote the lossy
+  // summary still work unchanged since these are optional.
+  bullets?: EvidenceBullet[];
+  articles?: EvidenceArticle[];
+  pubmedSearchUrl?: string;
+  redditSearchUrl?: string;
+  generatedAt?: string;
+  ingredientFallback?: string[] | null;
+  ingredientBreakdown?: IngredientEvidence[] | null;
+  ingredientSource?: { url: string | null; verified: boolean } | null;
 };
 
 /** Converts a DB row into the shared `Trend` shape so it can reuse TrendCard / TrendPage. */
@@ -132,6 +157,14 @@ export const saveGeneratedTrend = createServerFn({ method: "POST" })
           related_ids: [],
           source_urls: data.sourceUrls,
           search_count: searchCount,
+          bullets: data.bullets ?? [],
+          articles: data.articles ?? [],
+          pubmed_search_url: data.pubmedSearchUrl ?? "",
+          reddit_search_url: data.redditSearchUrl ?? "",
+          generated_at: data.generatedAt ?? new Date().toISOString(),
+          ingredient_fallback: data.ingredientFallback ?? null,
+          ingredient_breakdown: data.ingredientBreakdown ?? null,
+          ingredient_source: data.ingredientSource ?? null,
         },
         { onConflict: "id" },
       );
@@ -175,6 +208,63 @@ export const getGeneratedTrendBySlug = createServerFn({ method: "GET" })
         .maybeSingle();
       if (error || !row) return null;
       return rowToTrend(row as GeneratedTrendRow);
+    } catch {
+      return null;
+    }
+  });
+
+/** Converts a DB row into the full EvidenceVerdict shape — everything
+ *  search.$query.tsx needs, straight from the row, no regeneration. Only
+ *  meaningful for rows written after the 0007 migration (bullets/articles
+ *  columns); older rows return null so the caller falls through to a fresh
+ *  generation instead of serving a broken/empty-looking cached page. */
+function rowToEvidenceVerdict(row: GeneratedTrendRow): EvidenceVerdict | null {
+  if (row.verdict === "unmapped") return null; // never serve a "we found nothing" row as a cache hit
+  if (!row.bullets || !row.articles || !row.generated_at) return null; // pre-migration row, no rich data to serve
+  return {
+    query: row.query,
+    name: row.name,
+    slug: row.id,
+    category: row.category,
+    verdict: row.verdict.toUpperCase() as EvidenceVerdict["verdict"],
+    confidence: row.confidence,
+    oneLiner: row.summary,
+    communityVerdict: row.community_verdict ?? "",
+    safetyNote: row.safety_note ?? "",
+    studies: row.study_count,
+    sentiment: row.sentiment_score,
+    updated: row.last_updated,
+    bullets: row.bullets,
+    quotes: row.opinions ?? [],
+    articles: row.articles,
+    pubmedSearchUrl: row.pubmed_search_url || `https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(row.query)}`,
+    redditSearchUrl: row.reddit_search_url || `https://www.reddit.com/search/?q=${encodeURIComponent(row.query)}`,
+    generatedAt: row.generated_at,
+    ingredientFallback: row.ingredient_fallback ?? null,
+    ingredientBreakdown: row.ingredient_breakdown ?? null,
+    ingredientSource: row.ingredient_source ?? null,
+  };
+}
+
+/**
+ * Cache read for a full evidence result, keyed by slug (same slug the
+ * search page already uses). Returns null on a miss (never generated, or
+ * generated before the full-cache migration) — the caller is responsible
+ * for deciding freshness (via the returned generatedAt) and falling back
+ * to a real generation either way.
+ */
+export const getGeneratedEvidenceBySlug = createServerFn({ method: "GET" })
+  .inputValidator((d: { slug: string }) => d)
+  .handler(async ({ data }): Promise<EvidenceVerdict | null> => {
+    try {
+      const supabase = getSupabaseServiceClient();
+      const { data: row, error } = await supabase
+        .from("generated_trends")
+        .select("*")
+        .eq("id", data.slug)
+        .maybeSingle();
+      if (error || !row) return null;
+      return rowToEvidenceVerdict(row as GeneratedTrendRow);
     } catch {
       return null;
     }
