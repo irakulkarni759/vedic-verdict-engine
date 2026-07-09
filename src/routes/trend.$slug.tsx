@@ -343,24 +343,41 @@ function HeroSummary({
 }) {
   if (!communityVerdict) {
     return (
-      <p className="mt-4 max-w-3xl text-base leading-7 text-[var(--ink)] sm:text-lg">
-        {researchVerdict}
-      </p>
+      <ul className="mt-4 max-w-3xl">
+        <li className="flex gap-3">
+          <span
+            className="mt-[11px] inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+            style={{ backgroundColor: "var(--sage)" }}
+          />
+          <p className="text-base leading-7 text-[var(--ink)] sm:text-lg">{researchVerdict}</p>
+        </li>
+      </ul>
     );
   }
 
   return (
-    <div className="mt-4 max-w-3xl space-y-3.5">
-      <div>
-        <p className="font-label text-[10px] text-[var(--sage)]">RESEARCH</p>
-        <p className="mt-1 text-base leading-7 text-[var(--ink)] sm:text-lg">{researchVerdict}</p>
-      </div>
-      <div>
-        <p className="font-label text-[10px] text-[var(--sage)]">COMMUNITY</p>
-        <p className="mt-1 text-base leading-7 text-[var(--ink)] sm:text-lg">{communityVerdict}</p>
-      </div>
+    <>
+      <ul className="mt-4 max-w-3xl space-y-3">
+        <li className="flex gap-3">
+          <span
+            className="mt-[11px] inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+            style={{ backgroundColor: "var(--sage)" }}
+          />
+          <p className="text-base leading-7 text-[var(--ink)] sm:text-lg">{researchVerdict}</p>
+        </li>
+        <li className="flex gap-3">
+          <span
+            className="mt-[11px] inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+            style={{ backgroundColor: "var(--terracotta)" }}
+          />
+          <p className="text-base leading-7 text-[var(--ink)] sm:text-lg">{communityVerdict}</p>
+        </li>
+      </ul>
       {safetyNote && (
-        <div className="flex gap-2 rounded-[14px] px-4 py-3" style={{ backgroundColor: "color-mix(in oklab, var(--verdict-mixed) 10%, transparent)" }}>
+        <div
+          className="mt-3.5 flex max-w-3xl gap-2 rounded-[14px] px-4 py-3"
+          style={{ backgroundColor: "color-mix(in oklab, var(--verdict-mixed) 10%, transparent)" }}
+        >
           <span className="shrink-0" style={{ color: "var(--verdict-mixed)", fontSize: 15, lineHeight: "24px" }}>⚠</span>
           <p className="text-sm leading-6" style={{ color: "var(--ink)" }}>
             <span className="font-label mr-1.5 text-[10px]" style={{ color: "var(--verdict-mixed)" }}>SAFETY</span>
@@ -368,7 +385,7 @@ function HeroSummary({
           </p>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
