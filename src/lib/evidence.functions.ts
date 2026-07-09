@@ -543,6 +543,23 @@ If you search and cannot find a real, verifiable ingredient list for this exact 
 
 
 /**
+ * Real ingredient names (from a verified source) usually already arrive
+ * correctly formatted — acronyms like "PEG-40" or "BHT", parenthetical
+ * notes like "Aqua (Water)". Running that through toTitleCase (which
+ * lowercases everything first, then capitalizes only the first letter of
+ * each whitespace-separated word) destroys exactly that formatting:
+ * "PEG-40" becomes "Peg-40", "Aqua (Water)" becomes "Aqua (water)" since
+ * nothing after an opening parenthesis gets touched. Only apply toTitleCase
+ * to names that look like they actually need it — i.e. arrived essentially
+ * all lowercase, the way Claude's own guesses tend to — otherwise trust the
+ * source's own casing as-is.
+ */
+function formatIngredientName(raw: string): string {
+  const trimmed = raw.trim();
+  return /[A-Z]/.test(trimmed) ? trimmed : toTitleCase(trimmed);
+}
+
+/**
  * Small, focused PubMed lookup for a single ingredient — used by
  * buildIngredientBreakdown, deliberately separate from buildResultFromIds
  * (which does a lot more: Reddit, saving to Supabase, full verdict/bullets).
@@ -618,7 +635,7 @@ async function buildIngredientBreakdown(
   const withoutStudies = looked.filter((r) => r.abstracts.length === 0);
 
   const noStudyEntries: IngredientEvidence[] = withoutStudies.map((r) => ({
-    ingredient: toTitleCase(r.ingredient),
+    ingredient: formatIngredientName(r.ingredient),
     verdict: "UNKNOWN",
     oneLiner: `No PubMed studies found specifically on ${toTitleCase(r.ingredient)}.`,
     studies: r.studies,
@@ -643,7 +660,7 @@ async function buildIngredientBreakdown(
       const plain =
         verdict === "BACKED" ? "mostly supportive" : verdict === "DEBUNKED" ? "mostly unsupportive" : "mixed";
       return {
-        ingredient: toTitleCase(r.ingredient),
+        ingredient: formatIngredientName(r.ingredient),
         verdict,
         oneLiner: `Across ${r.studies} PubMed ${r.studies === 1 ? "study" : "studies"}, findings are ${plain}.`,
         studies: r.studies,
@@ -696,7 +713,7 @@ Return ONLY this JSON array, one entry per ingredient IN THE SAME ORDER given ab
           ? item.verdict
           : "MIXED";
       return {
-        ingredient: toTitleCase(r.ingredient),
+        ingredient: formatIngredientName(r.ingredient),
         verdict,
         oneLiner:
           typeof item?.oneLiner === "string" && item.oneLiner.trim()
@@ -721,6 +738,58 @@ Return ONLY this JSON array, one entry per ingredient IN THE SAME ORDER given ab
  * Fails open (returns not-a-medicine) on any error so an API hiccup never
  * blocks a legitimate search.
  */
+/**
+ * Dedicated, EARLY check for "is this query a specific branded/commercial
+ * product" (e.g. "Chanel Lotion", "The Ordinary Niacinamide 10%"). This is
+ * deliberately separate from — and runs before — the isWeakCount/isIrrelevant
+ * PubMed heuristic that used to be the ONLY trigger for the whole
+ * ingredient-breakdown pipeline. That heuristic is a proxy for "is the raw
+ * query poorly covered by PubMed," which is a DIFFERENT question from "is
+ * this a product" — a product's name can coincidentally pull in enough
+ * loosely-related PubMed hits (or hits checkPubmedRelevance judges 'relevant
+ * enough') to skip the fallback path entirely, even though it's obviously a
+ * branded product, which is exactly why the Key Ingredients section used to
+ * show up inconsistently for what should behave the same way every time.
+ */
+async function checkIsBrandedProduct(query: string): Promise<boolean> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return false;
+
+  const prompt = `Is "${query}" a specific branded/commercial PRODUCT — something with a brand name you'd find on a store shelf or product page (e.g. "Chanel Lotion", "CeraVe Moisturizing Cream", "The Ordinary Niacinamide 10%", "Neutrogena Hydro Boost")? PubMed indexes research on INGREDIENTS and ACTIVE COMPOUNDS, never on a specific commercial product by its brand name, so a product query needs its ingredients looked up separately rather than searched directly.
+
+Answer "no" for a plain ingredient, compound, supplement, or practice on its own, even a well-known specific one (e.g. "niacinamide", "salicylic acid", "ashwagandha", "collagen peptides", "cold plunges") — these ARE directly searchable on PubMed by name, they don't need this.
+
+Answer "yes" ONLY when the query names or clearly implies a specific commercial product (a brand, a product line, or "brand + product type" like "Ordinary serum" or "CeraVe cream"), not just an ingredient category.
+
+Return ONLY this JSON, no other text:
+{"is_product": true}
+or
+{"is_product": false}`;
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 50,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+
+    const json = (await res.json()) as { content: { text: string }[] };
+    const text = json.content?.[0]?.text ?? "{}";
+    const parsed = JSON.parse(text.replace(/```json|```/g, "").trim()) as { is_product?: boolean };
+    return parsed.is_product === true;
+  } catch {
+    return false;
+  }
+}
+
 async function checkIsPharmaceutical(query: string): Promise<{ isMedicine: boolean; name?: string }> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return { isMedicine: false };
@@ -984,31 +1053,47 @@ async function generateFreshEvidenceVerdict(query: string): Promise<EvidenceVerd
   }
 
   try {
-    const esearch = await fetchPubmed(
-      `esearch.fcgi?db=pubmed&retmode=json&retmax=15&sort=relevance&term=${encodeURIComponent(query)}`,
-    );
+    // Runs alongside the PubMed search below, not after it — dedicated
+    // product detection shouldn't cost extra latency on top of the search
+    // it's independent from.
+    const [esearch, isKnownProduct] = await Promise.all([
+      fetchPubmed(`esearch.fcgi?db=pubmed&retmode=json&retmax=15&sort=relevance&term=${encodeURIComponent(query)}`),
+      checkIsBrandedProduct(query),
+    ]);
     if (!esearch || !esearch.ok) return empty("Couldn't reach PubMed right now. Try again in a moment.");
 
     const sj = (await esearch.json()) as { esearchresult?: { idlist?: string[] } };
     const ids = sj.esearchresult?.idlist ?? [];
 
-    // Trigger on WEAK results (too few) OR IRRELEVANT results (plenty of
-    // hits, but not actually about the query's subject) — a query can
-    // return a full page of loosely-related hits (matching on incidental
-    // keywords) while missing the actually-relevant research, which sits
-    // under different academic terminology. e.g. "vibration plate for
-    // weight loss" returned a few bone-density/neuromuscular studies via
-    // literal keyword match, while the real weight-loss-specific research
-    // lives under "whole body vibration" + body composition terminology.
-    // "stomach vacuums for shrinking waist" is the irrelevant-but-plentiful
-    // case: 15/15 hits matched on "waist"/"shrinking" alone (GLP-1,
-    // generic aerobic exercise) while missing the real research under
-    // "abdominal drawing-in maneuver" / "abdominal hollowing" terminology.
+    // Trigger on WEAK results (too few), IRRELEVANT results (plenty of hits,
+    // but not actually about the query's subject), OR a confirmed BRANDED
+    // PRODUCT — that last one runs regardless of what the raw PubMed search
+    // returned, since a product's name can coincidentally pull in enough
+    // loosely-related hits to look "fine" by the other two checks even
+    // though it's obviously a product with no direct research of its own.
+    // Without this, whether the Key Ingredients section showed up was an
+    // accident of PubMed's keyword matching rather than a consistent rule.
+    //
+    // e.g. "vibration plate for weight loss" returned a few bone-density/
+    // neuromuscular studies via literal keyword match, while the real
+    // weight-loss-specific research lives under "whole body vibration" +
+    // body composition terminology. "stomach vacuums for shrinking waist" is
+    // the irrelevant-but-plentiful case: 15/15 hits matched on "waist"/
+    // "shrinking" alone (GLP-1, generic aerobic exercise) while missing the
+    // real research under "abdominal drawing-in maneuver" terminology.
     const WEAK_RESULT_THRESHOLD = 5;
     const isWeakCount = ids.length < WEAK_RESULT_THRESHOLD;
-    const isIrrelevant = !isWeakCount && !(await checkPubmedRelevance(ids, query));
-    if (isWeakCount || isIrrelevant) {
+    const isIrrelevant = !isWeakCount && !isKnownProduct && !(await checkPubmedRelevance(ids, query));
+    if (isWeakCount || isIrrelevant || isKnownProduct) {
       const fallback = await identifyFallbackTerms(query);
+
+      // checkIsBrandedProduct already confirmed this above — don't let a
+      // second, slightly-differently-worded classification call disagree
+      // and silently drop back to the "terminology" path (or null) for
+      // what's already a known product. If identifyFallbackTerms came back
+      // null (couldn't find any usable terms at all), leave it null — no
+      // amount of "yes it's a product" fixes a total lack of terms.
+      if (isKnownProduct && fallback) fallback.reason = "product";
 
       // For branded products specifically, try to replace Claude's guessed
       // ingredients with the REAL, sourced list from an actual web search
