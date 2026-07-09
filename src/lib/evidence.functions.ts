@@ -8,6 +8,8 @@ import {
 } from "./generatedTrends.functions";
 import { toTitleCase, coreSubjectForReddit } from "./utils";
 import { fetchRedditQuotesFast, type RedditQuote } from "./reddit.server";
+import { checkAdminPassword } from "./comments.functions";
+import { getSupabaseServiceClient } from "./supabase.server";
 
 export type EvidenceArticle = {
   pmid: string;
@@ -943,25 +945,186 @@ async function persistGeneratedVerdict(result: EvidenceVerdict): Promise<void> {
   });
 }
 
+/**
+ * The actual generation pipeline — PubMed, Reddit, Claude, the works.
+ * Deliberately NOT a createServerFn itself and takes no cache shortcut —
+ * this is what "a fresh generation" means. Two callers: generateEvidenceVerdict
+ * below (only reaches this on a cache miss) and adminRegenerateBatch (which
+ * calls this directly, on purpose, to force a real regeneration of rows
+ * that predate a pipeline/prompt change).
+ */
+async function generateFreshEvidenceVerdict(query: string): Promise<EvidenceVerdict> {
+  const name = toTitleCase(query);
+  const slug = slugify(query);
+  const pubmedSearchUrl = `https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(query)}`;
+  const redditSearchUrl = `https://www.reddit.com/search/?q=${encodeURIComponent(query)}`;
+  const generatedAt = new Date().toISOString();
+  const updated = new Date().toISOString().split("T")[0];
+
+  const empty = (msg: string): EvidenceVerdict => ({
+    query, name, slug, category: guessCategoryFallback(query), verdict: "UNKNOWN", confidence: "low",
+    oneLiner: msg, communityVerdict: "", safetyNote: "", studies: 0, sentiment: 0, updated,
+    bullets: [], quotes: [], articles: [],
+    pubmedSearchUrl, redditSearchUrl, generatedAt, ingredientFallback: null, ingredientBreakdown: null, ingredientSource: null,
+  });
+
+  if (!query) return empty("Enter a search to generate a verdict.");
+
+  const pharma = await checkIsPharmaceutical(query);
+  if (pharma.isMedicine) {
+    // Intentionally not saved to Supabase — pharma queries shouldn't count
+    // toward "trends verified" or ever surface as a card anywhere.
+    return {
+      query, name, slug, category: guessCategoryFallback(query), verdict: "PHARMA", confidence: "low",
+      oneLiner: `Veda doesn't cover pharmaceutical medicines like ${pharma.name ?? name} — we focus on supplements, wellness practices, and cosmetic ingredients. For questions about medications, talk to a doctor or pharmacist.`,
+      communityVerdict: "", safetyNote: "", studies: 0, sentiment: 0, updated,
+      bullets: [], quotes: [], articles: [],
+      pubmedSearchUrl, redditSearchUrl, generatedAt, ingredientFallback: null, ingredientBreakdown: null, ingredientSource: null,
+    };
+  }
+
+  try {
+    const esearch = await fetchPubmed(
+      `esearch.fcgi?db=pubmed&retmode=json&retmax=15&sort=relevance&term=${encodeURIComponent(query)}`,
+    );
+    if (!esearch || !esearch.ok) return empty("Couldn't reach PubMed right now. Try again in a moment.");
+
+    const sj = (await esearch.json()) as { esearchresult?: { idlist?: string[] } };
+    const ids = sj.esearchresult?.idlist ?? [];
+
+    // Trigger on WEAK results (too few) OR IRRELEVANT results (plenty of
+    // hits, but not actually about the query's subject) — a query can
+    // return a full page of loosely-related hits (matching on incidental
+    // keywords) while missing the actually-relevant research, which sits
+    // under different academic terminology. e.g. "vibration plate for
+    // weight loss" returned a few bone-density/neuromuscular studies via
+    // literal keyword match, while the real weight-loss-specific research
+    // lives under "whole body vibration" + body composition terminology.
+    // "stomach vacuums for shrinking waist" is the irrelevant-but-plentiful
+    // case: 15/15 hits matched on "waist"/"shrinking" alone (GLP-1,
+    // generic aerobic exercise) while missing the real research under
+    // "abdominal drawing-in maneuver" / "abdominal hollowing" terminology.
+    const WEAK_RESULT_THRESHOLD = 5;
+    const isWeakCount = ids.length < WEAK_RESULT_THRESHOLD;
+    const isIrrelevant = !isWeakCount && !(await checkPubmedRelevance(ids, query));
+    if (isWeakCount || isIrrelevant) {
+      const fallback = await identifyFallbackTerms(query);
+
+      // For branded products specifically, try to replace Claude's guessed
+      // ingredients with the REAL, sourced list from an actual web search
+      // before doing anything else with `fallback.terms` — this affects
+      // both the merged PubMed search below and buildIngredientBreakdown
+      // later, so a verified formulation flows through the whole pipeline
+      // instead of just the guess.
+      let realIngredients: Awaited<ReturnType<typeof findRealIngredients>> = null;
+      if (fallback?.reason === "product") {
+        realIngredients = await findRealIngredients(query);
+        if (realIngredients) fallback.terms = realIngredients.keyIngredients;
+      }
+      const ingredientSource: EvidenceVerdict["ingredientSource"] = realIngredients
+        ? { url: realIngredients.sourceUrl, verified: true }
+        : fallback?.reason === "product"
+          ? { url: null, verified: false }
+          : null;
+
+      if (fallback) {
+        // Strip parens/quotes — Entrez query syntax uses parens for
+        // grouping, so a raw term like "polydeoxyribonucleotide (PDRN)"
+        // sends an unbalanced paren that breaks/dilutes the query.
+        //
+        // Deliberately NOT wrapping terms in quotes for exact-phrase
+        // matching — that's too strict for multi-word academic phrases
+        // (a real paper's exact wording rarely matches a generated phrase
+        // word-for-word) and caused genuinely relevant terms like "Carum
+        // copticum digestive effects" to return zero results even though
+        // real papers on Carum copticum/ajwain exist. Unquoted terms let
+        // PubMed's own automatic term mapping do its job.
+        const fallbackTerm = fallback.terms
+          .map((t) => t.replace(/[()"]/g, "").trim())
+          .filter(Boolean)
+          .join(" OR ");
+        const fallbackSearch = await fetchPubmed(
+          `esearch.fcgi?db=pubmed&retmode=json&retmax=15&sort=relevance&term=${encodeURIComponent(fallbackTerm)}`,
+        );
+
+        if (fallbackSearch && fallbackSearch.ok) {
+          const fsj = (await fallbackSearch.json()) as { esearchresult?: { idlist?: string[] } };
+          const fallbackIds = fsj.esearchresult?.idlist ?? [];
+
+          if (fallbackIds.length > 0) {
+            // Fallback ids first — they're matched on the correct academic
+            // terminology, so they must not get crowded out by the cap
+            // when the original set is already a full page (15) of
+            // loosely-matched hits, which is exactly the case that made
+            // this an "irrelevant" trigger in the first place.
+            const mergedIds = Array.from(new Set([...fallbackIds, ...ids])).slice(0, 15);
+
+            // Runs alongside buildResultFromIds (not after it) since they
+            // don't depend on each other — this is the extra per-ingredient
+            // breakdown for branded products only ("Chanel Lotion" -> what
+            // does the research say about EACH of its key ingredients),
+            // buildResultFromIds still produces the main blended verdict.
+            const [result, ingredientBreakdown] = await Promise.all([
+              buildResultFromIds({
+                ids: mergedIds,
+                query, name: realIngredients?.productName ?? name, slug, updated, generatedAt,
+                pubmedSearchUrl: `https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(fallbackTerm)}`,
+                redditSearchUrl,
+                fallback,
+              }),
+              fallback.reason === "product"
+                ? buildIngredientBreakdown(realIngredients?.productName ?? name, fallback.terms)
+                : Promise.resolve(null),
+            ]);
+            const merged = { ...result, ingredientBreakdown, ingredientSource };
+            await persistGeneratedVerdict(merged);
+            return merged;
+          }
+        }
+      }
+
+      if (ids.length > 0) {
+        // Fallback search found nothing better — the original (weak but
+        // non-empty) results are still the best we have, use them.
+        const result = await buildResultFromIds({
+          ids, query, name, slug, updated, generatedAt,
+          pubmedSearchUrl, redditSearchUrl, fallback: null,
+        });
+        await persistGeneratedVerdict(result);
+        return result;
+      }
+
+      const result = { ...empty("No PubMed results — this one isn't well-studied yet."), verdict: "UNKNOWN" as const };
+      // Still record the attempt, so it counts toward "trends searched" — but
+      // as "unmapped" so it never renders as a real verdict card anywhere.
+      await saveGeneratedTrend({
+        data: {
+          slug, query, name, category: result.category, verdict: "unmapped",
+          summary: result.oneLiner, communityVerdict: "", safetyNote: "", studyCount: 0, confidence: "low", updated,
+          evidencePoints: [], sentiment: 0, opinions: [], sourceUrls: [pubmedSearchUrl],
+        },
+      });
+      return result;
+    }
+
+    const result = await buildResultFromIds({
+      ids, query, name, slug, updated, generatedAt,
+      pubmedSearchUrl, redditSearchUrl, fallback: null,
+    });
+    await persistGeneratedVerdict(result);
+    return result;
+  } catch {
+    return empty("Couldn't reach PubMed right now. Try again in a moment.");
+  }
+}
+
 export const generateEvidenceVerdict = createServerFn({ method: "GET" })
   .inputValidator((d: { query: string }) => ({ query: String(d.query || "").slice(0, 200) }))
   .handler(async ({ data }): Promise<EvidenceVerdict> => {
     const query = data.query.trim();
-    const name = toTitleCase(query);
+    if (!query) return generateFreshEvidenceVerdict(query);
+
     const slug = slugify(query);
-    const pubmedSearchUrl = `https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(query)}`;
-    const redditSearchUrl = `https://www.reddit.com/search/?q=${encodeURIComponent(query)}`;
-    const generatedAt = new Date().toISOString();
-    const updated = new Date().toISOString().split("T")[0];
-
-    const empty = (msg: string): EvidenceVerdict => ({
-      query, name, slug, category: guessCategoryFallback(query), verdict: "UNKNOWN", confidence: "low",
-      oneLiner: msg, communityVerdict: "", safetyNote: "", studies: 0, sentiment: 0, updated,
-      bullets: [], quotes: [], articles: [],
-      pubmedSearchUrl, redditSearchUrl, generatedAt, ingredientFallback: null, ingredientBreakdown: null, ingredientSource: null,
-    });
-
-    if (!query) return empty("Enter a search to generate a verdict.");
 
     // Cache: if this exact query was already fully generated recently, serve
     // that instead of regenerating from scratch. Every visit used to re-run
@@ -978,150 +1141,76 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
       return cached;
     }
 
-    const pharma = await checkIsPharmaceutical(query);
-    if (pharma.isMedicine) {
-      // Intentionally not saved to Supabase — pharma queries shouldn't count
-      // toward "trends verified" or ever surface as a card anywhere.
-      return {
-        query, name, slug, category: guessCategoryFallback(query), verdict: "PHARMA", confidence: "low",
-        oneLiner: `Veda doesn't cover pharmaceutical medicines like ${pharma.name ?? name} — we focus on supplements, wellness practices, and cosmetic ingredients. For questions about medications, talk to a doctor or pharmacist.`,
-        communityVerdict: "", safetyNote: "", studies: 0, sentiment: 0, updated,
-        bullets: [], quotes: [], articles: [],
-        pubmedSearchUrl, redditSearchUrl, generatedAt, ingredientFallback: null, ingredientBreakdown: null, ingredientSource: null,
-      };
-    }
+    return generateFreshEvidenceVerdict(query);
+  });
 
-    try {
-      const esearch = await fetchPubmed(
-        `esearch.fcgi?db=pubmed&retmode=json&retmax=15&sort=relevance&term=${encodeURIComponent(query)}`,
-      );
-      if (!esearch || !esearch.ok) return empty("Couldn't reach PubMed right now. Try again in a moment.");
+/**
+ * Admin-only forced regeneration, in small batches — used after a pipeline
+ * or prompt change to bring existing cached rows up to date, WITHOUT
+ * blindly re-running every row in one shot (expensive in both API spend
+ * and PubMed rate limits, and one request would almost certainly hit a
+ * serverless function timeout long before finishing 100+ rows).
+ *
+ * Call repeatedly from the client with an increasing offset (the response's
+ * nextOffset) until it comes back null — each call handles a small slice
+ * (default 3 rows) and returns immediately after, so the admin page can
+ * show live progress and the whole thing can be stopped between batches.
+ *
+ * mode "stale" (default): only rows missing the rich cache fields (written
+ * before the 0007 migration) or past the same 7-day cache window regular
+ * visits use — i.e. only rows that would regenerate on their own eventually
+ * anyway, just doing it proactively/in bulk. mode "all": every real
+ * (non-unmapped) row, regardless of freshness — meaningfully more API
+ * spend, meant for "I changed a prompt and want everything to reflect it
+ * now," not a routine action.
+ */
+export const adminRegenerateBatch = createServerFn({ method: "POST" })
+  .inputValidator((d: { password: string; offset: number; limit?: number; mode?: "stale" | "all" }) => d)
+  .handler(
+    async ({
+      data,
+    }): Promise<{ ok: boolean; processed?: number; failed?: number; total?: number; nextOffset?: number | null; error?: string }> => {
+      if (!checkAdminPassword(data.password)) return { ok: false, error: "Wrong password." };
 
-      const sj = (await esearch.json()) as { esearchresult?: { idlist?: string[] } };
-      const ids = sj.esearchresult?.idlist ?? [];
+      try {
+        const limit = Math.min(Math.max(data.limit ?? 3, 1), 10);
+        const supabase = getSupabaseServiceClient();
 
-      // Trigger on WEAK results (too few) OR IRRELEVANT results (plenty of
-      // hits, but not actually about the query's subject) — a query can
-      // return a full page of loosely-related hits (matching on incidental
-      // keywords) while missing the actually-relevant research, which sits
-      // under different academic terminology. e.g. "vibration plate for
-      // weight loss" returned a few bone-density/neuromuscular studies via
-      // literal keyword match, while the real weight-loss-specific research
-      // lives under "whole body vibration" + body composition terminology.
-      // "stomach vacuums for shrinking waist" is the irrelevant-but-plentiful
-      // case: 15/15 hits matched on "waist"/"shrinking" alone (GLP-1,
-      // generic aerobic exercise) while missing the real research under
-      // "abdominal drawing-in maneuver" / "abdominal hollowing" terminology.
-      const WEAK_RESULT_THRESHOLD = 5;
-      const isWeakCount = ids.length < WEAK_RESULT_THRESHOLD;
-      const isIrrelevant = !isWeakCount && !(await checkPubmedRelevance(ids, query));
-      if (isWeakCount || isIrrelevant) {
-        const fallback = await identifyFallbackTerms(query);
+        let queryBuilder = supabase
+          .from("generated_trends")
+          .select("id, query, generated_at, bullets", { count: "exact" })
+          .neq("verdict", "unmapped")
+          .order("id", { ascending: true })
+          .range(data.offset, data.offset + limit - 1);
 
-        // For branded products specifically, try to replace Claude's guessed
-        // ingredients with the REAL, sourced list from an actual web search
-        // before doing anything else with `fallback.terms` — this affects
-        // both the merged PubMed search below and buildIngredientBreakdown
-        // later, so a verified formulation flows through the whole pipeline
-        // instead of just the guess.
-        let realIngredients: Awaited<ReturnType<typeof findRealIngredients>> = null;
-        if (fallback?.reason === "product") {
-          realIngredients = await findRealIngredients(query);
-          if (realIngredients) fallback.terms = realIngredients.keyIngredients;
-        }
-        const ingredientSource: EvidenceVerdict["ingredientSource"] = realIngredients
-          ? { url: realIngredients.sourceUrl, verified: true }
-          : fallback?.reason === "product"
-            ? { url: null, verified: false }
-            : null;
+        const { data: rows, error, count } = await queryBuilder;
+        if (error || !rows) return { ok: false, error: "Couldn't load trends." };
 
-        if (fallback) {
-          // Strip parens/quotes — Entrez query syntax uses parens for
-          // grouping, so a raw term like "polydeoxyribonucleotide (PDRN)"
-          // sends an unbalanced paren that breaks/dilutes the query.
-          //
-          // Deliberately NOT wrapping terms in quotes for exact-phrase
-          // matching — that's too strict for multi-word academic phrases
-          // (a real paper's exact wording rarely matches a generated phrase
-          // word-for-word) and caused genuinely relevant terms like "Carum
-          // copticum digestive effects" to return zero results even though
-          // real papers on Carum copticum/ajwain exist. Unquoted terms let
-          // PubMed's own automatic term mapping do its job.
-          const fallbackTerm = fallback.terms
-            .map((t) => t.replace(/[()"]/g, "").trim())
-            .filter(Boolean)
-            .join(" OR ");
-          const fallbackSearch = await fetchPubmed(
-            `esearch.fcgi?db=pubmed&retmode=json&retmax=15&sort=relevance&term=${encodeURIComponent(fallbackTerm)}`,
-          );
+        const CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+        const isStale = (row: { generated_at: string | null; bullets: unknown[] | null }) =>
+          !row.generated_at ||
+          !row.bullets ||
+          row.bullets.length === 0 ||
+          Date.now() - new Date(row.generated_at).getTime() >= CACHE_MAX_AGE_MS;
 
-          if (fallbackSearch && fallbackSearch.ok) {
-            const fsj = (await fallbackSearch.json()) as { esearchresult?: { idlist?: string[] } };
-            const fallbackIds = fsj.esearchresult?.idlist ?? [];
+        const targets = data.mode === "all" ? rows : rows.filter(isStale);
 
-            if (fallbackIds.length > 0) {
-              // Fallback ids first — they're matched on the correct academic
-              // terminology, so they must not get crowded out by the cap
-              // when the original set is already a full page (15) of
-              // loosely-matched hits, which is exactly the case that made
-              // this an "irrelevant" trigger in the first place.
-              const mergedIds = Array.from(new Set([...fallbackIds, ...ids])).slice(0, 15);
-
-              // Runs alongside buildResultFromIds (not after it) since they
-              // don't depend on each other — this is the extra per-ingredient
-              // breakdown for branded products only ("Chanel Lotion" -> what
-              // does the research say about EACH of its key ingredients),
-              // buildResultFromIds still produces the main blended verdict.
-              const [result, ingredientBreakdown] = await Promise.all([
-                buildResultFromIds({
-                  ids: mergedIds,
-                  query, name: realIngredients?.productName ?? name, slug, updated, generatedAt,
-                  pubmedSearchUrl: `https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(fallbackTerm)}`,
-                  redditSearchUrl,
-                  fallback,
-                }),
-                fallback.reason === "product"
-                  ? buildIngredientBreakdown(realIngredients?.productName ?? name, fallback.terms)
-                  : Promise.resolve(null),
-              ]);
-              const merged = { ...result, ingredientBreakdown, ingredientSource };
-              await persistGeneratedVerdict(merged);
-              return merged;
-            }
+        let processed = 0;
+        let failed = 0;
+        for (const row of targets) {
+          try {
+            await generateFreshEvidenceVerdict(row.query);
+            processed++;
+          } catch {
+            failed++;
           }
         }
 
-        if (ids.length > 0) {
-          // Fallback search found nothing better — the original (weak but
-          // non-empty) results are still the best we have, use them.
-          const result = await buildResultFromIds({
-            ids, query, name, slug, updated, generatedAt,
-            pubmedSearchUrl, redditSearchUrl, fallback: null,
-          });
-          await persistGeneratedVerdict(result);
-          return result;
-        }
-
-        const result = { ...empty("No PubMed results — this one isn't well-studied yet."), verdict: "UNKNOWN" as const };
-        // Still record the attempt, so it counts toward "trends searched" — but
-        // as "unmapped" so it never renders as a real verdict card anywhere.
-        await saveGeneratedTrend({
-          data: {
-            slug, query, name, category: result.category, verdict: "unmapped",
-            summary: result.oneLiner, communityVerdict: "", safetyNote: "", studyCount: 0, confidence: "low", updated,
-            evidencePoints: [], sentiment: 0, opinions: [], sourceUrls: [pubmedSearchUrl],
-          },
-        });
-        return result;
+        const nextOffset = data.offset + rows.length;
+        const done = !count || nextOffset >= count || rows.length < limit;
+        return { ok: true, processed, failed, total: count ?? undefined, nextOffset: done ? null : nextOffset };
+      } catch {
+        return { ok: false, error: "Regenerate batch failed." };
       }
-
-      const result = await buildResultFromIds({
-        ids, query, name, slug, updated, generatedAt,
-        pubmedSearchUrl, redditSearchUrl, fallback: null,
-      });
-      await persistGeneratedVerdict(result);
-      return result;
-    } catch {
-      return empty("Couldn't reach PubMed right now. Try again in a moment.");
-    }
-  });
+    },
+  );

@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { adminCheckPassword, adminDeleteComment, adminListComments, type AdminComment } from "@/lib/comments.functions";
 import { adminStandardizeTrendNames, adminBackfillVerdictSummaries, adminRefreshRedditQuotes, adminRecategorizeStressTrends } from "@/lib/generatedTrends.functions";
+import { adminRegenerateBatch } from "@/lib/evidence.functions";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -26,6 +27,9 @@ function AdminPage() {
   const [refreshQuotesResult, setRefreshQuotesResult] = useState<string | null>(null);
   const [recategorizing, setRecategorizing] = useState(false);
   const [recategorizeResult, setRecategorizeResult] = useState<string | null>(null);
+  const [regenerating, setRegenerating] = useState(false);
+  const [regenerateResult, setRegenerateResult] = useState<string | null>(null);
+  const regenerateStopRef = useRef({ stop: false });
 
   async function loadComments(pw: string) {
     setLoading(true);
@@ -156,6 +160,51 @@ function AdminPage() {
       return;
     }
     setRecategorizeResult(`Moved ${res.updated} of ${res.total} trends into mental-wellness (${res.skipped} already fine or not stress-related).`);
+  }
+
+  async function regenerateAll(mode: "stale" | "all") {
+    const pw = window.sessionStorage.getItem(SESSION_KEY) ?? password;
+    regenerateStopRef.current.stop = false;
+    setRegenerating(true);
+    setRegenerateResult("Starting…");
+
+    let offset = 0;
+    let totalProcessed = 0;
+    let totalFailed = 0;
+    let total = 0;
+
+    while (true) {
+      if (regenerateStopRef.current.stop) {
+        setRegenerating(false);
+        setRegenerateResult(`Stopped. ${totalProcessed} regenerated (${totalFailed} failed) before stopping.`);
+        return;
+      }
+
+      const res = await adminRegenerateBatch({ data: { password: pw, offset, mode, limit: 3 } });
+      if (!res.ok) {
+        setRegenerating(false);
+        setRegenerateResult(res.error ?? "Couldn't regenerate.");
+        return;
+      }
+
+      totalProcessed += res.processed ?? 0;
+      totalFailed += res.failed ?? 0;
+      total = res.total ?? total;
+
+      setRegenerateResult(
+        `Working… ${totalProcessed} regenerated${totalFailed ? `, ${totalFailed} failed` : ""} (scanned up to ${Math.min(offset + 3, total)} of ${total} total).`,
+      );
+
+      if (res.nextOffset == null) break;
+      offset = res.nextOffset;
+    }
+
+    setRegenerating(false);
+    setRegenerateResult(`Done. ${totalProcessed} regenerated${totalFailed ? `, ${totalFailed} failed` : ""}.`);
+  }
+
+  function stopRegenerate() {
+    regenerateStopRef.current.stop = true;
   }
 
   // Try to resume a session on first render.
@@ -308,6 +357,50 @@ function AdminPage() {
           </button>
           {recategorizeResult && (
             <p className="font-mono mt-3 text-xs text-[var(--muted-ink)]">{recategorizeResult}</p>
+          )}
+        </div>
+
+        <div className="mb-6 rounded-[16px] border border-white/75 bg-white/90 p-5 shadow-[0_8px_24px_rgba(27,52,72,0.04)]">
+          <p className="font-label mb-2 text-xs text-[var(--sage)]">FORCE REGENERATE (AFTER A PIPELINE/PROMPT CHANGE)</p>
+          <p className="mb-3 text-sm leading-6 text-[var(--ink)]">
+            Results are cached now — a search only regenerates if it's never been run, or the cached copy
+            is over 7 days old. After changing a prompt or the pipeline itself, existing cached rows won't
+            pick that up on their own until they naturally expire. This forces it, in small batches (3 at
+            a time) so it doesn't blow through API spend or PubMed's rate limit in one shot — you can stop
+            it between batches any time.
+          </p>
+          <p className="mb-3 text-sm leading-6" style={{ color: "var(--verdict-mixed)" }}>
+            ⚠ "Regenerate all" re-runs the full pipeline (PubMed + Reddit + 2-3 Claude calls) for every
+            trend regardless of age — real API cost, scales with however many trends exist. "Stale only"
+            just catches up rows that would've regenerated on their own anyway (missing the new cache
+            fields, or past the 7-day window) — cheaper, and usually what you actually want.
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={() => regenerateAll("stale")}
+              disabled={regenerating}
+              className="font-label rounded-full bg-[var(--ink)] px-5 py-2.5 text-xs text-white transition hover:translate-y-[-1px] disabled:opacity-40"
+            >
+              {regenerating ? "WORKING…" : "REGENERATE STALE ONLY"}
+            </button>
+            <button
+              onClick={() => regenerateAll("all")}
+              disabled={regenerating}
+              className="font-label rounded-full border border-[var(--verdict-debunked)] px-5 py-2.5 text-xs text-[var(--verdict-debunked)] transition hover:translate-y-[-1px] disabled:opacity-40"
+            >
+              REGENERATE EVERYTHING
+            </button>
+            {regenerating && (
+              <button
+                onClick={stopRegenerate}
+                className="font-label rounded-full border border-[var(--muted-ink)]/30 px-5 py-2.5 text-xs text-[var(--muted-ink)] transition hover:translate-y-[-1px]"
+              >
+                STOP
+              </button>
+            )}
+          </div>
+          {regenerateResult && (
+            <p className="font-mono mt-3 text-xs text-[var(--muted-ink)]">{regenerateResult}</p>
           )}
         </div>
 
