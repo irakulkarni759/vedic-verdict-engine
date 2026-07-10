@@ -1088,6 +1088,14 @@ async function buildResultFromIds(opts: {
       ? communityVerdict
       : `Community sentiment sits at ${sentiment}% positive based on available discussion.`;
 
+  // Same reasoning as templatedResearchGist — communityGist (from Claude)
+  // covers this when available; this only kicks in when that specific part
+  // of the call didn't come back, so a long communityVerdict sentence never
+  // gets shown disguised as a single short bullet.
+  const templatedCommunityGist: string[] =
+    redditQuotes.length > 0 ? [`${sentiment}% positive sentiment`] : ["Limited discussion found"];
+  const finalCommunityGist = communityGist.length > 0 ? communityGist : templatedCommunityGist;
+
   const finalSafetyNote = safetyNote ?? "";
 
   return {
@@ -1095,7 +1103,7 @@ async function buildResultFromIds(opts: {
     safetyNote: finalSafetyNote, studies,
     researchGist: finalResearchGist,
     sentiment, updated,
-    communityGist,
+    communityGist: finalCommunityGist,
     bullets, quotes: redditQuotes, articles: articles.slice(0, 6),
     pubmedSearchUrl, redditSearchUrl, generatedAt,
     ingredientFallback: fallback ? fallback.terms : null,
