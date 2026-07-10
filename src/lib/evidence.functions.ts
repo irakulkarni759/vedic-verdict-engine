@@ -294,7 +294,7 @@ async function generateBulletsAndQuotes(
 4b. "communityGist": 2-4 short phrases, EACH 2-3 WORDS MAX, same skimmable-fragment style as researchGist, capturing what real people actually say in the Reddit comments provided below. Example good: ["Mixed reviews", "Vegan skepticism", "Real results, slow"]. Example bad (too long, don't do this): ["People report real results over time", "Skeptics question if it actually absorbs"]. Order by how often/strongly the community mentions it, most common first. Base every phrase on the real comments below, never invent one. Empty array if there aren't enough real comments to summarize.
 5. "safetyNote": ONE short sentence, max ~90 chars, ONE idea, on the most common real safety consideration for "${query}" — drug interactions, pregnancy/breastfeeding warnings, allergy risk, or who should check with a doctor first. Plain language, based on general medical knowledge, not just this abstract set. If there's genuinely nothing notable for typical healthy-adult use, return an empty string "" — don't invent a caution that doesn't apply.
 6. "bullets": 3-4 key findings from the PUBMED ABSTRACTS ONLY — never from the Reddit comments. Each bullet must specifically evaluate/test/discuss "${query}" ITSELF (the exact ingredient/product/practice) AND the exact OUTCOME/PURPOSE in the query, not just the same broader condition, category, or a different outcome for the same ingredient. Two distinct ways an abstract can fail this: (a) different intervention, same outcome — e.g. if the query is about a specific compound for treating acne scars, a study about microneedling or lasers for acne scars is NOT a valid bullet even though it's on-topic for "acne scars" generally, it doesn't study the actual compound; (b) right ingredient, wrong outcome — e.g. for "Carrot for Clear Skin", an abstract about carotenoids and UV protection/sun damage is NOT a valid bullet even though carotenoids are the right subject, because UV protection is a different outcome than clear skin/acne. Both count as off-topic. Each bullet must have an accurate "index" pointing at which abstract (1-based) it came from. Never summarize, paraphrase, or reference Reddit/community opinion here — that belongs only in "communityVerdict". If FEWER than 3 (or zero) abstracts specifically evaluate BOTH "${query}"'s subject AND its outcome, return that fewer number of bullets — do not pad with abstracts about the broader condition/category or a different outcome just to reach 3-4, and do not borrow from Reddit content. Each bullet has FOUR fields:
-"text" — the plain-English headline shown at first glance. Write it for someone with NO science background: short words, one idea, one clause if at all possible. No jargon, no mechanism names, no chemical/compound names beyond the ingredient itself, no units or dosages unless a normal person would casually say them. Say "helped people fall asleep faster" not "reduced sleep onset latency"; say "reduced redness" not "decreased erythema"; say "worked about as well as a placebo" not "showed no statistically significant difference from control." Prefer everyday comparisons over numbers where it keeps things clear (e.g. "about half the people" over "48.3%"). 1 short sentence, aim for under 100 characters, hard cap 150.
+"text" — the plain-English headline shown at first glance. Write it for someone with NO science background: short words, one idea, one clause if at all possible. No jargon, no mechanism names, no units or dosages unless a normal person would casually say them. Say "helped people fall asleep faster" not "reduced sleep onset latency"; say "reduced redness" not "decreased erythema"; say "worked about as well as a placebo" not "showed no statistically significant difference from control." Prefer everyday comparisons over numbers where it keeps things clear (e.g. "about half the people" over "48.3%"). If the abstract's subject is a long/hard-to-pronounce chemical or INCI name (common with branded-product ingredients, e.g. "Ethylhexylglycerin," "Chlorphenesin," "Carbomer Homopolymer Type B") — do NOT lead the sentence with that name as the subject. Either describe it by its plain-language role instead ("This preservative..." / "A common thickening agent...") or, if naming it really matters, pair it with a short plain clarifier the first time ("Ethylhexylglycerin, a preservative, ..."). Say "A common preservative helps stop bacteria growth" not "Ethylhexylglycerin stops growth of common skin bacteria" — nobody skimming a card wants to parse a chemical name to find out what it does. 1 short sentence, aim for under 100 characters, hard cap 150.
 "detail" — the fuller, technical version of that exact same finding, shown only once someone clicks for more — include the actual mechanism, specific stats/dosage/sample size/effect size from the abstract when available, clinical terminology is fine here, 1-2 sentences, up to ~280 chars.
 "studyType" — the kind of study this abstract describes, in plain terms: "Randomized controlled trial", "Animal study", "Observational study", "Meta-analysis", "In vitro study" (i.e. a lab/petri-dish study, not living subjects), "Case report", "Review", or "Small pilot study". Infer this from the abstract's methodology, don't guess if truly unclear — use "Study" as a last resort.
 "limitations" — ONE short, genuinely useful caveat a normal person would want to know before trusting this finding, e.g. "Animal study — may not apply to humans", "Small study (12 people)", "No control group", "Funded by the ingredient's manufacturer", "Self-reported results". Empty string "" if the abstract doesn't clearly support a specific limitation — never invent one just to fill the field.
@@ -925,8 +925,14 @@ async function buildResultFromIds(opts: {
   pubmedSearchUrl: string;
   redditSearchUrl: string;
   fallback: FallbackTerms | null;
+  /** For branded products, the resolved canonical product name (from a real
+   *  web search) is a much better Reddit search term than the user's raw
+   *  typed query — which might carry a purpose clause, informal phrasing, or
+   *  just not match how the product is actually referred to online. Falls
+   *  back to coreSubjectForReddit(query) when not provided. */
+  redditQuerySubject?: string;
 }): Promise<EvidenceVerdict> {
-  const { ids, query, name, slug, updated, generatedAt, pubmedSearchUrl, redditSearchUrl, fallback } = opts;
+  const { ids, query, name, slug, updated, generatedAt, pubmedSearchUrl, redditSearchUrl, fallback, redditQuerySubject } = opts;
 
   // Kick the community scrape off NOW so its (slow) latency overlaps the PubMed
   // article fetch + XML parse + abstract classification below, instead of
@@ -934,7 +940,7 @@ async function buildResultFromIds(opts: {
   // (which needs the quotes), so by then it's had a head start and usually the
   // real quotes are already in hand. .catch keeps a scrape failure from taking
   // down the whole verdict — it just degrades to no quotes for this search.
-  const quotesPromise = fetchRedditQuotesFast(coreSubjectForReddit(query)).catch(
+  const quotesPromise = fetchRedditQuotesFast(redditQuerySubject ?? coreSubjectForReddit(query)).catch(
     () => [] as RedditQuote[],
   );
 
@@ -1242,6 +1248,7 @@ async function generateFreshEvidenceVerdict(query: string): Promise<EvidenceVerd
                 pubmedSearchUrl: `https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(fallbackTerm)}`,
                 redditSearchUrl,
                 fallback,
+                redditQuerySubject: realIngredients?.productName,
               }),
               fallback.reason === "product"
                 ? buildIngredientBreakdown(realIngredients?.productName ?? name, fallback.terms)
