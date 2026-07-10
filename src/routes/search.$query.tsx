@@ -203,7 +203,16 @@ function SearchPage() {
   ).slice(0, 3);
 
   const isPharma = data.verdict === "PHARMA";
-  const isUnknown = !isPharma && (data.verdict === "UNKNOWN" || data.studies === 0);
+  // A branded product's raw name almost never has direct PubMed hits (that's
+  // the whole reason the ingredient-breakdown fallback exists) — data.studies
+  // === 0 at the top level doesn't mean there's nothing to show, it's the
+  // NORMAL case for products. Treating that as "unknown" was hiding the
+  // entire community/quotes section (and mislabeling the page "NOT YET
+  // INDEXED"/"PENDING REVIEW") even when real ingredient research and real
+  // Reddit discussion were both found — exactly backwards for the most
+  // common branded-product case.
+  const hasIngredientData = (data.ingredientBreakdown?.length ?? 0) > 0;
+  const isUnknown = !isPharma && !hasIngredientData && (data.verdict === "UNKNOWN" || data.studies === 0);
 
   return (
     <main className="min-h-screen bg-[var(--parchment)] px-5 py-8 sm:px-8 sm:py-10">
@@ -219,7 +228,13 @@ function SearchPage() {
         <section className="rounded-[26px] border border-white/70 bg-[linear-gradient(135deg,#fff_0%,#fbf4e8_100%)] p-6 shadow-[0_22px_70px_rgba(27,52,72,0.08)] sm:p-8">
           <div className="mb-5 flex items-start justify-between gap-4">
             <p className="font-label text-xs text-[var(--muted-ink)]">
-              {isPharma ? "OUTSIDE OUR SCOPE" : isUnknown ? "NOT YET INDEXED" : "LIVE ANALYSIS · PUBMED"}
+              {isPharma
+                ? "OUTSIDE OUR SCOPE"
+                : isUnknown
+                  ? "NOT YET INDEXED"
+                  : hasIngredientData && data.verdict === "UNKNOWN"
+                    ? "INGREDIENT ANALYSIS · PUBMED"
+                    : "LIVE ANALYSIS · PUBMED"}
             </p>
 
             <div
@@ -230,7 +245,14 @@ function SearchPage() {
                 backgroundColor: `color-mix(in oklab, ${color} 10%, transparent)`,
               }}
             >
-              • {isPharma ? "MEDICATION" : isUnknown ? "PENDING REVIEW" : data.verdict}
+              •{" "}
+              {isPharma
+                ? "MEDICATION"
+                : isUnknown
+                  ? "PENDING REVIEW"
+                  : hasIngredientData && data.verdict === "UNKNOWN"
+                    ? "SEE INGREDIENTS"
+                    : data.verdict}
             </div>
           </div>
 
