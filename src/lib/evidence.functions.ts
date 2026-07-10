@@ -784,60 +784,36 @@ Base all of this only on what's in the abstracts above — never invent a findin
 }
 
 /**
- * Folds the per-ingredient verdicts into ONE bullet for the main "WHAT THE
- * RESEARCH SAYS" list, instead of a separate Key Ingredients section — same
- * text/detail click-to-expand pattern as every other bullet: "text" is the
- * top-5-names-plus-overall-read headline shown up front, "detail" is the
- * full per-ingredient breakdown shown only once clicked open. The
- * underlying per-ingredient research check (buildIngredientBreakdown) still
- * runs exactly as before — this only changes how it's SURFACED.
+ * Turns the top 3 key ingredients into separate bullet cards, styled and
+ * structured exactly like every other "WHAT THE RESEARCH SAYS" card
+ * (number, study type badge, limitations badge, click-to-expand detail) —
+ * instead of one folded summary line. Ingredients beyond the top 3 still
+ * count toward the studies banner but don't get their own card, to keep
+ * the section from ballooning to 5 cards for a single product.
  */
-function buildIngredientSummaryBullet(
+function buildIngredientBullets(
   ingredientBreakdown: IngredientEvidence[],
   ingredientSource: EvidenceVerdict["ingredientSource"],
-): EvidenceBullet | null {
-  if (ingredientBreakdown.length === 0) return null;
+): EvidenceBullet[] {
+  return ingredientBreakdown.slice(0, 3).map((ing, i) => {
+    const sourceCaveat = !ingredientSource?.verified && i === 0
+      ? "Estimated ingredient list — not a confirmed formulation"
+      : "";
+    const limitations = [sourceCaveat, ing.limitations].filter(Boolean).join("; ");
 
-  const top5 = ingredientBreakdown.slice(0, 5);
-  const names = top5.map((i) => i.ingredient).join(", ");
+    const studyCountNote =
+      ing.studies > 0
+        ? `Based on ${ing.studies} PubMed ${ing.studies === 1 ? "study" : "studies"} specifically on ${ing.ingredient}.`
+        : `No PubMed studies found specifically on ${ing.ingredient}.`;
 
-  const withVerdictData = top5.filter((i) => i.verdict !== "UNKNOWN");
-  const backedShare = withVerdictData.length
-    ? withVerdictData.filter((i) => i.verdict === "BACKED").length / withVerdictData.length
-    : 0;
-  const debunkedShare = withVerdictData.length
-    ? withVerdictData.filter((i) => i.verdict === "DEBUNKED").length / withVerdictData.length
-    : 0;
-  const assessment =
-    withVerdictData.length === 0
-      ? "not much direct research on them individually"
-      : backedShare >= 0.6
-        ? "most are backed by real research"
-        : debunkedShare >= 0.5
-          ? "research doesn't back up most of them"
-          : "the research on them is mixed";
-
-  const text = `Key ingredients: ${names} — ${assessment}.`;
-  // Each ingredient's own study type + limitations folded in here, since
-  // this bullet replaced what used to be separate per-ingredient cards —
-  // clicking it open should still answer "what KIND of study backs this,
-  // and what's the catch," not just a bare one-line verdict per ingredient.
-  const detail = top5
-    .map((i) => {
-      const meta = i.studyType ? ` [${i.studyType}${i.limitations ? ` — ${i.limitations}` : ""}]` : "";
-      return `${i.ingredient} (${i.verdict.toLowerCase()}): ${i.oneLiner}${meta}`;
-    })
-    .join(" ");
-
-  return {
-    text,
-    detail,
-    studyType: "Ingredient Overview",
-    limitations: ingredientSource?.verified
-      ? ""
-      : "Estimated ingredient list — not a confirmed formulation",
-    url: ingredientSource?.url ?? top5[0]?.pubmedSearchUrl ?? "",
-  };
+    return {
+      text: `${ing.ingredient} — ${ing.oneLiner}`,
+      detail: `${studyCountNote} ${ing.oneLiner}`,
+      studyType: ing.studyType || (ing.verdict === "UNKNOWN" ? "No Data" : "Study"),
+      limitations,
+      url: ing.pubmedSearchUrl,
+    };
+  });
 }
 
 
@@ -1305,15 +1281,14 @@ async function generateFreshEvidenceVerdict(query: string): Promise<EvidenceVerd
                 : Promise.resolve(null),
             ]);
 
-            // Folded into ONE bullet in the main list (same text/detail
-            // click-to-expand pattern as every other bullet) rather than a
-            // separate Key Ingredients section — the per-ingredient
-            // research check still runs exactly as before via
+            // Separate cards for the top 3 ingredients (same style as every
+            // other bullet) instead of one folded summary line — the
+            // per-ingredient research check still runs exactly as before via
             // buildIngredientBreakdown above, this just changes how the
             // result is surfaced.
-            const summaryBullet = ingredientBreakdown
-              ? buildIngredientSummaryBullet(ingredientBreakdown, ingredientSource)
-              : null;
+            const ingredientBullets = ingredientBreakdown
+              ? buildIngredientBullets(ingredientBreakdown, ingredientSource)
+              : [];
 
             // The banner shows `studies` as "how much research backs this
             // page" — without this, it only counted the merged product-level
@@ -1328,7 +1303,7 @@ async function generateFreshEvidenceVerdict(query: string): Promise<EvidenceVerd
             const merged: EvidenceVerdict = {
               ...result,
               studies: result.studies + ingredientStudyTotal,
-              bullets: summaryBullet ? [summaryBullet, ...result.bullets] : result.bullets,
+              bullets: [...ingredientBullets, ...result.bullets],
               ingredientBreakdown,
               ingredientSource,
             };
