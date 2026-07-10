@@ -124,7 +124,9 @@ function TrendPage() {
 
           <HeroSummary
             researchVerdict={trend.oneLiner}
+            researchGist={trend.researchGist ?? []}
             communityVerdict={communityVerdict}
+            communityGist={communityVerdict === trend.communityVerdict ? (trend.communityGist ?? []) : []}
             safetyNote={trend.safetyNote}
           />
         </section>
@@ -334,45 +336,36 @@ function CommunityQuotes({
  */
 function HeroSummary({
   researchVerdict,
+  researchGist,
   communityVerdict,
+  communityGist,
   safetyNote,
 }: {
   researchVerdict: string;
+  researchGist: string[];
   communityVerdict: string;
+  communityGist: string[];
   safetyNote: string;
 }) {
-  if (!communityVerdict) {
-    return (
-      <ul className="mt-4 max-w-3xl">
-        <li className="flex gap-3">
-          <span
-            className="mt-[11px] inline-block h-1.5 w-1.5 shrink-0 rounded-full"
-            style={{ backgroundColor: "var(--sage)" }}
-          />
-          <p className="text-base leading-7 text-[var(--ink)] sm:text-lg">{researchVerdict}</p>
-        </li>
-      </ul>
-    );
-  }
+  const researchItems = researchGist.length > 0 ? researchGist : researchVerdict ? [researchVerdict] : [];
+  const communityItems = communityGist.length > 0 ? communityGist : communityVerdict ? [communityVerdict] : [];
 
   return (
     <>
-      <ul className="mt-4 max-w-3xl space-y-3">
-        <li className="flex gap-3">
-          <span
-            className="mt-[11px] inline-block h-1.5 w-1.5 shrink-0 rounded-full"
-            style={{ backgroundColor: "var(--sage)" }}
-          />
-          <p className="text-base leading-7 text-[var(--ink)] sm:text-lg">{researchVerdict}</p>
-        </li>
-        <li className="flex gap-3">
-          <span
-            className="mt-[11px] inline-block h-1.5 w-1.5 shrink-0 rounded-full"
-            style={{ backgroundColor: "var(--terracotta)" }}
-          />
-          <p className="text-base leading-7 text-[var(--ink)] sm:text-lg">{communityVerdict}</p>
-        </li>
-      </ul>
+      <div className="mt-4 max-w-3xl space-y-4">
+        {researchItems.length > 0 && (
+          <div>
+            <p className="font-label text-[10px] text-[var(--sage)]">RESEARCH</p>
+            <GistList items={researchItems} color="var(--sage)" />
+          </div>
+        )}
+        {communityItems.length > 0 && (
+          <div>
+            <p className="font-label text-[10px] text-[var(--terracotta)]">COMMUNITY</p>
+            <GistList items={communityItems} color="var(--terracotta)" />
+          </div>
+        )}
+      </div>
       {safetyNote && (
         <div
           className="mt-3.5 flex max-w-3xl gap-2 rounded-[14px] px-4 py-3"
@@ -386,6 +379,28 @@ function HeroSummary({
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * Renders either a set of short, skimmable gist fragments ("Reduces fine
+ * lines", "Takes 8+ weeks") or, when there's no gist data yet (older cached
+ * rows, curated trends written before this existed), a single full-sentence
+ * bullet as a graceful fallback — same bullet-list look either way.
+ */
+function GistList({ items, color }: { items: string[]; color: string }) {
+  return (
+    <ul className="mt-2 space-y-1.5">
+      {items.map((item, i) => (
+        <li key={i} className="flex gap-2.5">
+          <span
+            className="mt-[9px] inline-block h-1 w-1 shrink-0 rounded-full"
+            style={{ backgroundColor: color }}
+          />
+          <span className="text-base leading-7 text-[var(--ink)] sm:text-lg">{item}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 

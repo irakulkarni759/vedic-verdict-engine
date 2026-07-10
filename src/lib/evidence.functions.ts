@@ -51,7 +51,14 @@ export type EvidenceVerdict = {
   verdict: "BACKED" | "MIXED" | "DEBUNKED" | "UNKNOWN" | "PHARMA";
   confidence: "high" | "moderate" | "low";
   oneLiner: string;
+  /** 2-4 skimmable fragments (2-3 words each, e.g. "Reduces fine lines",
+   *  "Takes 8+ weeks") for the hero's bulleted research summary. Empty
+   *  when Claude didn't return usable gist phrases — callers should fall
+   *  back to showing oneLiner as a single bullet in that case. */
+  researchGist: string[];
   communityVerdict: string;
+  /** Same idea as researchGist, but for community sentiment. */
+  communityGist: string[];
   safetyNote: string;
   studies: number;
   sentiment: number;
@@ -248,7 +255,9 @@ async function generateBulletsAndQuotes(
 ): Promise<{
   displayName: string | null;
   researchVerdict: string | null;
+  researchGist: string[];
   communityVerdict: string | null;
+  communityGist: string[];
   safetyNote: string | null;
   bullets: EvidenceBullet[];
   sentiment: number;
@@ -258,8 +267,8 @@ async function generateBulletsAndQuotes(
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return {
-      displayName: null, researchVerdict: null, communityVerdict: null, safetyNote: null,
-      bullets: [], sentiment: 50, category: guessCategoryFallback(query), verdict: null,
+      displayName: null, researchVerdict: null, researchGist: [], communityVerdict: null, communityGist: [],
+      safetyNote: null, bullets: [], sentiment: 50, category: guessCategoryFallback(query), verdict: null,
     };
   }
 
@@ -280,7 +289,9 @@ async function generateBulletsAndQuotes(
 1. "displayName": a standardized title in the exact form "X for Y", based on the USER'S ORIGINAL SEARCH, which was: "${originalQuery}". X is the thing the user actually searched for, kept in the everyday wording THEY used — if they searched "stomach vacuum", keep "Stomach Vacuum". Do NOT rename it to a clinical/academic term (e.g. do not turn "stomach vacuum" into "Abdominal Drawing-In Maneuver"), even though the abstracts below may use that scientific term for the same thing. Y is the specific outcome or purpose. If "${originalQuery}" already states a purpose, clean it up into this form (title case, no trailing punctuation). If it doesn't state one, infer the single most common/notable purpose people search this for — never leave Y generic like "for Health" or "for Wellness"; be specific (e.g. "for Hair Growth", "for a Smaller Waist"). The abstracts describe the same topic in scientific vocabulary; use them to understand the topic, NOT to rename it away from the user's own words.
 2. "verdict": your overall read of the evidence, one of "BACKED" (the bulk of studies support it working/being beneficial), "MIXED" (evidence is genuinely split, inconclusive, or there's real research on the ingredient but not specifically on this outcome), or "DEBUNKED" (the bulk of studies contradict it or find no effect). Base this ONLY on abstracts that actually address "${query}"'s specific outcome/purpose, not just its general subject — e.g. for "Carrot for Clear Skin", abstracts about carotenoids and UV protection are a different outcome (sun protection, not acne/clear skin) and should NOT be treated as support for this claim even though they're positive findings about carotenoids. If most/all of the abstracts turn out to be about a different outcome than the one in the query, that itself points toward MIXED (real research exists on the ingredient, just not on this specific claim) rather than BACKED. Within on-topic abstracts, base this on your actual understanding of what each found, not just keyword counting — e.g. abstracts describing consistent, specific mechanisms and positive outcomes across most studies should read as BACKED even if few use the literal phrase "significant improvement".
 3. "researchVerdict": ONE short sentence, max ~90 chars, ONE idea only — write it so a 12-year-old would understand it immediately, not explain a study. Avoid clinical/technical jargon and any word most people wouldn't casually use out loud (say "muscle strength" not "phosphocreatine stores"). State only the single most important real-world takeaway. Do NOT stack multiple clauses with commas/dashes/semicolons/"but"+"and" combos (e.g. NOT "X shows promise, but effectiveness depends on Y, and data remain limited" — pick the ONE most important point and cut the rest). If a caveat truly matters more than the headline finding, lead with the caveat instead of appending it. Example good: "Works well when injected, but doesn't absorb through skin." Example bad (too dense, don't do this): "Injected PDRN shows promise for scar healing by stimulating tissue regeneration, but effectiveness depends heavily on delivery method—topical application is unlikely to work, and clinical data remain limited."
+3b. "researchGist": 2-4 short phrases, EACH 2-3 WORDS MAX (not sentences — fragments, like skimmable tags), capturing the key research findings so someone with zero science background and no patience could skim them in two seconds. Plain, common, everyday words only — no jargon, no full sentences, no verbs-with-subjects if a shorter fragment works. Think of these as what you'd highlight if you only had 3 words per point. Example good: ["Reduces fine lines", "Better elasticity", "Takes 8+ weeks", "Modest effect size"]. Example bad (too long/full-sentence, don't do this): ["Oral collagen peptides consistently improved wrinkle depth", "Effects take several weeks to become noticeable"]. Order by importance, most important finding first. Base every phrase on the actual abstracts, never invent one.
 4. "communityVerdict": ONE short sentence, max ~90 chars, ONE idea only, same 12-year-old-plain style, synthesizing the REAL Reddit comments provided below — what people actually notice and talk about most. Do NOT stack multiple clauses together with commas/"but"/"and" (e.g. NOT "People report real results, but skeptics note it's animal-derived and debate whether it delivers" — that's three ideas crammed together; pick the SINGLE most important thing people say and cut the rest). Example good: "Most people say it actually works, though results take a few months." Example bad (too dense, don't do this): "People report real results, but skeptics note collagen is animal-derived and debate whether supplements truly deliver what they promise." Do not invent a quote or a specific claim that isn't supported by the real comments. ${quoteCountNote}
+4b. "communityGist": 2-4 short phrases, EACH 2-3 WORDS MAX, same skimmable-fragment style as researchGist, capturing what real people actually say in the Reddit comments provided below. Example good: ["Mixed reviews", "Vegan skepticism", "Real results, slow"]. Example bad (too long, don't do this): ["People report real results over time", "Skeptics question if it actually absorbs"]. Order by how often/strongly the community mentions it, most common first. Base every phrase on the real comments below, never invent one. Empty array if there aren't enough real comments to summarize.
 5. "safetyNote": ONE short sentence, max ~90 chars, ONE idea, on the most common real safety consideration for "${query}" — drug interactions, pregnancy/breastfeeding warnings, allergy risk, or who should check with a doctor first. Plain language, based on general medical knowledge, not just this abstract set. If there's genuinely nothing notable for typical healthy-adult use, return an empty string "" — don't invent a caution that doesn't apply.
 6. "bullets": 3-4 key findings from the PUBMED ABSTRACTS ONLY — never from the Reddit comments. Each bullet must specifically evaluate/test/discuss "${query}" ITSELF (the exact ingredient/product/practice) AND the exact OUTCOME/PURPOSE in the query, not just the same broader condition, category, or a different outcome for the same ingredient. Two distinct ways an abstract can fail this: (a) different intervention, same outcome — e.g. if the query is about a specific compound for treating acne scars, a study about microneedling or lasers for acne scars is NOT a valid bullet even though it's on-topic for "acne scars" generally, it doesn't study the actual compound; (b) right ingredient, wrong outcome — e.g. for "Carrot for Clear Skin", an abstract about carotenoids and UV protection/sun damage is NOT a valid bullet even though carotenoids are the right subject, because UV protection is a different outcome than clear skin/acne. Both count as off-topic. Each bullet must have an accurate "index" pointing at which abstract (1-based) it came from. Never summarize, paraphrase, or reference Reddit/community opinion here — that belongs only in "communityVerdict". If FEWER than 3 (or zero) abstracts specifically evaluate BOTH "${query}"'s subject AND its outcome, return that fewer number of bullets — do not pad with abstracts about the broader condition/category or a different outcome just to reach 3-4, and do not borrow from Reddit content. Each bullet has FOUR fields:
 "text" — the plain-English headline shown at first glance. Write it for someone with NO science background: short words, one idea, one clause if at all possible. No jargon, no mechanism names, no chemical/compound names beyond the ingredient itself, no units or dosages unless a normal person would casually say them. Say "helped people fall asleep faster" not "reduced sleep onset latency"; say "reduced redness" not "decreased erythema"; say "worked about as well as a placebo" not "showed no statistically significant difference from control." Prefer everyday comparisons over numbers where it keeps things clear (e.g. "about half the people" over "48.3%"). 1 short sentence, aim for under 100 characters, hard cap 150.
@@ -302,7 +313,9 @@ Return ONLY this JSON shape, no other text:
   "displayName": "Rosemary Oil for Hair Growth",
   "verdict": "BACKED",
   "researchVerdict": "...",
+  "researchGist": ["...", "...", "..."],
   "communityVerdict": "...",
+  "communityGist": ["...", "...", "..."],
   "safetyNote": "...",
   "bullets": [{"text": "...", "detail": "...", "studyType": "...", "limitations": "...", "index": 1}, ...],
   "sentiment": 75,
@@ -330,7 +343,9 @@ Return ONLY this JSON shape, no other text:
       displayName?: string;
       verdict?: string;
       researchVerdict?: string;
+      researchGist?: string[];
       communityVerdict?: string;
+      communityGist?: string[];
       safetyNote?: string;
       bullets: { text: string; detail?: string; studyType?: string; limitations?: string; index: number }[];
       sentiment: number;
@@ -369,16 +384,29 @@ Return ONLY this JSON shape, no other text:
       ? parsed.communityVerdict.trim()
       : null;
 
+    // Trim + drop empties; also hard-cap length so a stray full-sentence
+    // gist (model didn't follow the 2-3 word instruction) doesn't blow up
+    // the skimmable-bullet layout — better a slightly-too-long phrase gets
+    // through than the UI breaking on an unexpectedly huge one.
+    const cleanGist = (arr: string[] | undefined): string[] =>
+      (arr ?? [])
+        .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
+        .map((s) => s.trim().slice(0, 40))
+        .slice(0, 4);
+
+    const researchGist = cleanGist(parsed.researchGist);
+    const communityGist = cleanGist(parsed.communityGist);
+
     const safetyNote = typeof parsed.safetyNote === "string" ? parsed.safetyNote.trim() : null;
 
     return {
-      displayName, researchVerdict, communityVerdict, safetyNote,
+      displayName, researchVerdict, researchGist, communityVerdict, communityGist, safetyNote,
       bullets, sentiment: parsed.sentiment ?? 50, category, verdict,
     };
   } catch {
     return {
-      displayName: null, researchVerdict: null, communityVerdict: null, safetyNote: null,
-      bullets: [], sentiment: 50, category: guessCategoryFallback(query), verdict: null,
+      displayName: null, researchVerdict: null, researchGist: [], communityVerdict: null, communityGist: [],
+      safetyNote: null, bullets: [], sentiment: 50, category: guessCategoryFallback(query), verdict: null,
     };
   }
 }
@@ -962,7 +990,7 @@ async function buildResultFromIds(opts: {
   // so the quotes and the summary derived from them are produced together.
   const redditQuotes: RedditQuote[] = await quotesPromise;
 
-  const { displayName, researchVerdict, communityVerdict, safetyNote, bullets, sentiment, category: claudeCategory, verdict: claudeVerdict } =
+  const { displayName, researchVerdict, researchGist, communityVerdict, communityGist, safetyNote, bullets, sentiment, category: claudeCategory, verdict: claudeVerdict } =
     await generateBulletsAndQuotes(searchSubject, query, abstractsForClaude, redditQuotes);
 
   // Claude's own category pick (inside generateBulletsAndQuotes) tends to
@@ -1027,6 +1055,7 @@ async function buildResultFromIds(opts: {
     query, name: finalName, slug, category, verdict, confidence, oneLiner, communityVerdict: communitySummary,
     safetyNote: finalSafetyNote, studies,
     sentiment, updated,
+    researchGist, communityGist,
     bullets, quotes: redditQuotes, articles: articles.slice(0, 6),
     pubmedSearchUrl, redditSearchUrl, generatedAt,
     ingredientFallback: fallback ? fallback.terms : null,
@@ -1060,6 +1089,7 @@ async function persistGeneratedVerdict(result: EvidenceVerdict): Promise<void> {
       pubmedSearchUrl: result.pubmedSearchUrl, redditSearchUrl: result.redditSearchUrl, generatedAt: result.generatedAt,
       ingredientFallback: result.ingredientFallback, ingredientBreakdown: result.ingredientBreakdown,
       ingredientSource: result.ingredientSource,
+      researchGist: result.researchGist, communityGist: result.communityGist,
     },
   });
 }
@@ -1082,7 +1112,7 @@ async function generateFreshEvidenceVerdict(query: string): Promise<EvidenceVerd
 
   const empty = (msg: string): EvidenceVerdict => ({
     query, name, slug, category: guessCategoryFallback(query), verdict: "UNKNOWN", confidence: "low",
-    oneLiner: msg, communityVerdict: "", safetyNote: "", studies: 0, sentiment: 0, updated,
+    oneLiner: msg, researchGist: [], communityVerdict: "", communityGist: [], safetyNote: "", studies: 0, sentiment: 0, updated,
     bullets: [], quotes: [], articles: [],
     pubmedSearchUrl, redditSearchUrl, generatedAt, ingredientFallback: null, ingredientBreakdown: null, ingredientSource: null,
   });
@@ -1096,7 +1126,7 @@ async function generateFreshEvidenceVerdict(query: string): Promise<EvidenceVerd
     return {
       query, name, slug, category: guessCategoryFallback(query), verdict: "PHARMA", confidence: "low",
       oneLiner: `Veda doesn't cover pharmaceutical medicines like ${pharma.name ?? name} — we focus on supplements, wellness practices, and cosmetic ingredients. For questions about medications, talk to a doctor or pharmacist.`,
-      communityVerdict: "", safetyNote: "", studies: 0, sentiment: 0, updated,
+      researchGist: [], communityVerdict: "", communityGist: [], safetyNote: "", studies: 0, sentiment: 0, updated,
       bullets: [], quotes: [], articles: [],
       pubmedSearchUrl, redditSearchUrl, generatedAt, ingredientFallback: null, ingredientBreakdown: null, ingredientSource: null,
     };

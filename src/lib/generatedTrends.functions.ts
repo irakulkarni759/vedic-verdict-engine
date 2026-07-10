@@ -68,6 +68,8 @@ type GeneratedTrendRow = {
   ingredient_fallback: string[] | null;
   ingredient_breakdown: IngredientEvidence[] | null;
   ingredient_source: { url: string | null; verified: boolean } | null;
+  research_gist: string[] | null;
+  community_gist: string[] | null;
 };
 
 export type SaveGeneratedTrendInput = {
@@ -97,6 +99,8 @@ export type SaveGeneratedTrendInput = {
   ingredientFallback?: string[] | null;
   ingredientBreakdown?: IngredientEvidence[] | null;
   ingredientSource?: { url: string | null; verified: boolean } | null;
+  researchGist?: string[];
+  communityGist?: string[];
 };
 
 /** Converts a DB row into the shared `Trend` shape so it can reuse TrendCard / TrendPage. */
@@ -109,7 +113,9 @@ function rowToTrend(row: GeneratedTrendRow): Trend | null {
     category: row.category,
     verdict: row.verdict.toUpperCase() as Verdict,
     oneLiner: row.summary,
+    researchGist: row.research_gist ?? undefined,
     communityVerdict: row.community_verdict ?? "",
+    communityGist: row.community_gist ?? undefined,
     safetyNote: row.safety_note ?? "",
     studies: row.study_count,
     confidence: row.confidence,
@@ -165,6 +171,8 @@ export const saveGeneratedTrend = createServerFn({ method: "POST" })
           ingredient_fallback: data.ingredientFallback ?? null,
           ingredient_breakdown: data.ingredientBreakdown ?? null,
           ingredient_source: data.ingredientSource ?? null,
+          research_gist: data.researchGist ?? null,
+          community_gist: data.communityGist ?? null,
         },
         { onConflict: "id" },
       );
@@ -229,7 +237,9 @@ function rowToEvidenceVerdict(row: GeneratedTrendRow): EvidenceVerdict | null {
     verdict: row.verdict.toUpperCase() as EvidenceVerdict["verdict"],
     confidence: row.confidence,
     oneLiner: row.summary,
+    researchGist: row.research_gist ?? [],
     communityVerdict: row.community_verdict ?? "",
+    communityGist: row.community_gist ?? [],
     safetyNote: row.safety_note ?? "",
     studies: row.study_count,
     sentiment: row.sentiment_score,

@@ -11,7 +11,14 @@ export type Trend = {
   category: string; // matches CATEGORIES slugs
   verdict: Verdict;
   oneLiner: string;
+  /** 2-4 skimmable fragments (2-3 words each) for the hero's bulleted
+   *  research summary. Undefined for curated trends and older generated
+   *  rows written before this existed — callers fall back to oneLiner
+   *  as a single bullet in that case. */
+  researchGist?: string[];
   communityVerdict: string;
+  /** Same idea as researchGist, but for community sentiment. */
+  communityGist?: string[];
   safetyNote: string;
   studies: number;
   confidence: "high" | "moderate" | "low";

@@ -240,7 +240,9 @@ function SearchPage() {
 
           <HeroSummary
             researchVerdict={data.oneLiner}
+            researchGist={data.researchGist}
             communityVerdict={displayCommunityVerdict}
+            communityGist={liveCommunityVerdict == null ? data.communityGist : []}
             safetyNote={data.safetyNote}
           />
         </section>
@@ -456,38 +458,42 @@ function SearchPage() {
 }
 
 /**
- * Two-line hero summary: one line on what the research found, one on
- * community sentiment — instead of a single generic sentence. Falls back
- * to a single line when there's no separate community verdict (e.g.
- * UNKNOWN/PHARMA results with nothing to summarize yet).
+ * Two headed sections — RESEARCH and COMMUNITY — each a short bulleted list
+ * of skimmable gist fragments (2-3 words each) when available, falling back
+ * to the single full-sentence summary as one bullet when there's no gist
+ * data yet (older cached results, or UNKNOWN/PHARMA with nothing to
+ * summarize).
  */
 function HeroSummary({
   researchVerdict,
+  researchGist,
   communityVerdict,
+  communityGist,
   safetyNote,
 }: {
   researchVerdict: string;
+  researchGist: string[];
   communityVerdict: string;
+  communityGist: string[];
   safetyNote: string;
 }) {
-  if (!communityVerdict) {
-    return (
-      <p className="mt-4 max-w-3xl text-base leading-7 text-[var(--ink)] sm:text-lg">
-        {researchVerdict}
-      </p>
-    );
-  }
+  const researchItems = researchGist.length > 0 ? researchGist : researchVerdict ? [researchVerdict] : [];
+  const communityItems = communityGist.length > 0 ? communityGist : communityVerdict ? [communityVerdict] : [];
 
   return (
-    <div className="mt-4 max-w-3xl space-y-3.5">
-      <div>
-        <p className="font-label text-[10px] text-[var(--sage)]">RESEARCH</p>
-        <p className="mt-1 text-base leading-7 text-[var(--ink)] sm:text-lg">{researchVerdict}</p>
-      </div>
-      <div>
-        <p className="font-label text-[10px] text-[var(--sage)]">COMMUNITY</p>
-        <p className="mt-1 text-base leading-7 text-[var(--ink)] sm:text-lg">{communityVerdict}</p>
-      </div>
+    <div className="mt-4 max-w-3xl space-y-4">
+      {researchItems.length > 0 && (
+        <div>
+          <p className="font-label text-[10px] text-[var(--sage)]">RESEARCH</p>
+          <SearchGistList items={researchItems} color="var(--sage)" />
+        </div>
+      )}
+      {communityItems.length > 0 && (
+        <div>
+          <p className="font-label text-[10px] text-[var(--terracotta)]">COMMUNITY</p>
+          <SearchGistList items={communityItems} color="var(--terracotta)" />
+        </div>
+      )}
       {safetyNote && (
         <div className="flex gap-2 rounded-[14px] px-4 py-3" style={{ backgroundColor: "color-mix(in oklab, var(--verdict-mixed) 10%, transparent)" }}>
           <span className="shrink-0" style={{ color: "var(--verdict-mixed)", fontSize: 15, lineHeight: "24px" }}>⚠</span>
@@ -498,6 +504,25 @@ function HeroSummary({
         </div>
       )}
     </div>
+  );
+}
+
+/** Same idea as trend.$slug.tsx's GistList — short skimmable fragments as
+ *  a bulleted list, or a single full-sentence bullet as a fallback. Named
+ *  distinctly (not shared) since these are two independent route files. */
+function SearchGistList({ items, color }: { items: string[]; color: string }) {
+  return (
+    <ul className="mt-2 space-y-1.5">
+      {items.map((item, i) => (
+        <li key={i} className="flex gap-2.5">
+          <span
+            className="mt-[9px] inline-block h-1 w-1 shrink-0 rounded-full"
+            style={{ backgroundColor: color }}
+          />
+          <span className="text-base leading-7 text-[var(--ink)] sm:text-lg">{item}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
