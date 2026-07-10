@@ -228,7 +228,15 @@ export const getGeneratedTrendBySlug = createServerFn({ method: "GET" })
  *  generation instead of serving a broken/empty-looking cached page. */
 function rowToEvidenceVerdict(row: GeneratedTrendRow): EvidenceVerdict | null {
   if (row.verdict === "unmapped") return null; // never serve a "we found nothing" row as a cache hit
-  if (!row.bullets || !row.articles || !row.generated_at) return null; // pre-migration row, no rich data to serve
+  // Pre-migration rows (written before 0007) got backfilled with bullets/
+  // articles = '[]' (NOT null — the migration's own DEFAULT), so `!row.bullets`
+  // alone doesn't catch them: an empty array is truthy in JS. Checking length
+  // instead correctly treats "no bullets" as "no rich data to serve" and
+  // falls through to a real regeneration, regardless of what generated_at
+  // claims (that got backfilled to the migration's run time, making every
+  // old row look artificially fresh — this length check is what actually
+  // keeps that from blocking a real regeneration for a full cache window).
+  if (!row.bullets || row.bullets.length === 0 || !row.articles || !row.generated_at) return null;
   return {
     query: row.query,
     name: row.name,
