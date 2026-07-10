@@ -70,3 +70,20 @@ export function coreSubjectForReddit(query: string): string {
   const core = query.slice(0, idx).trim();
   return core || query.trim();
 }
+
+/**
+ * The complement of coreSubjectForReddit — extracts what comes AFTER " for "
+ * instead of before it. Used to keep a search outcome-aware when a query
+ * gets broken down into its component ingredient/compound names (e.g. for
+ * a branded product's per-ingredient PubMed searches): "ursolic acid"
+ * alone pulls in completely unrelated research (antiparasitic activity,
+ * drug metabolism) that happens to also study ursolic acid, whereas
+ * "ursolic acid hair growth" stays anchored to the actual claim. Returns
+ * null if there's no " for " clause to extract.
+ */
+export function outcomeClause(query: string): string | null {
+  const idx = query.toLowerCase().indexOf(" for ");
+  if (idx <= 0) return null;
+  const outcome = query.slice(idx + 5).trim();
+  return outcome || null;
+}

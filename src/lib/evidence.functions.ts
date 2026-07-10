@@ -6,7 +6,7 @@ import {
   getGeneratedEvidenceBySlug,
   slugify,
 } from "./generatedTrends.functions";
-import { toTitleCase, coreSubjectForReddit } from "./utils";
+import { toTitleCase, coreSubjectForReddit, outcomeClause } from "./utils";
 import { fetchRedditQuotesFast, type RedditQuote } from "./reddit.server";
 import { checkAdminPassword } from "./comments.functions";
 import { getSupabaseServiceClient } from "./supabase.server";
@@ -659,16 +659,24 @@ async function fetchAbstractsForIngredient(
 async function buildIngredientBreakdown(
   productName: string,
   ingredients: string[],
+  outcome: string | null,
 ): Promise<IngredientEvidence[]> {
   const capped = ingredients.slice(0, 4);
   const looked = await Promise.all(
     capped.map(async (ingredient) => {
-      const { studies, abstracts } = await fetchAbstractsForIngredient(ingredient);
+      // Search term stays outcome-anchored ("ursolic acid hair growth"),
+      // while `ingredient` (the clean name) is what's actually displayed —
+      // searching the bare ingredient name alone pulls in whatever that
+      // compound is MOST studied for generally (e.g. ursolic acid's
+      // antiparasitic research), which is very often unrelated to the
+      // actual product claim.
+      const searchTerm = outcome ? `${ingredient} ${outcome}` : ingredient;
+      const { studies, abstracts } = await fetchAbstractsForIngredient(searchTerm);
       return {
         ingredient,
         studies,
         abstracts,
-        pubmedSearchUrl: `https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(ingredient)}`,
+        pubmedSearchUrl: `https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(searchTerm)}`,
       };
     }),
   );
@@ -1242,9 +1250,21 @@ async function generateFreshEvidenceVerdict(query: string): Promise<EvidenceVerd
         // copticum digestive effects" to return zero results even though
         // real papers on Carum copticum/ajwain exist. Unquoted terms let
         // PubMed's own automatic term mapping do its job.
+        //
+        // For the PRODUCT case, fallback.terms are now clean standalone
+        // ingredient names (so they can be shown as "Key ingredients: ..."
+        // without looking like garbled search phrases) — but that means
+        // they no longer carry the query's outcome/purpose on their own.
+        // Searching bare "ursolic acid" pulls in whatever that compound is
+        // MOST studied for (antiparasitic activity, drug metabolism), which
+        // is very often not the actual claim. Re-attaching the outcome here
+        // (search-only, the display name stays clean) keeps the search
+        // anchored to what's actually being asked about.
+        const queryOutcome = outcomeClause(query);
         const fallbackTerm = fallback.terms
           .map((t) => t.replace(/[()"]/g, "").trim())
           .filter(Boolean)
+          .map((t) => (fallback.reason === "product" && queryOutcome ? `(${t} ${queryOutcome})` : t))
           .join(" OR ");
         const fallbackSearch = await fetchPubmed(
           `esearch.fcgi?db=pubmed&retmode=json&retmax=15&sort=relevance&term=${encodeURIComponent(fallbackTerm)}`,
@@ -1277,7 +1297,7 @@ async function generateFreshEvidenceVerdict(query: string): Promise<EvidenceVerd
                 redditQuerySubject: realIngredients?.productName,
               }),
               fallback.reason === "product"
-                ? buildIngredientBreakdown(realIngredients?.productName ?? name, fallback.terms)
+                ? buildIngredientBreakdown(realIngredients?.productName ?? name, fallback.terms, queryOutcome)
                 : Promise.resolve(null),
             ]);
 
