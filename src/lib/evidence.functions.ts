@@ -41,6 +41,12 @@ export type IngredientEvidence = {
   oneLiner: string;
   studies: number;
   pubmedSearchUrl: string;
+  /** Same concept as EvidenceBullet.studyType/limitations, added later than
+   *  the rest of this type so older code paths default it to "" — empty
+   *  string here means "not available" (e.g. UNKNOWN-verdict ingredients
+   *  with zero studies), not "no notable limitation" like on a real bullet. */
+  studyType: string;
+  limitations: string;
 };
 
 export type EvidenceVerdict = {
@@ -670,6 +676,8 @@ async function buildIngredientBreakdown(
     oneLiner: `No PubMed studies found specifically on ${toTitleCase(r.ingredient)}.`,
     studies: r.studies,
     pubmedSearchUrl: r.pubmedSearchUrl,
+    studyType: "",
+    limitations: "",
   }));
 
   if (withStudies.length === 0) return noStudyEntries;
@@ -695,13 +703,20 @@ async function buildIngredientBreakdown(
         oneLiner: `Across ${r.studies} PubMed ${r.studies === 1 ? "study" : "studies"}, findings are ${plain}.`,
         studies: r.studies,
         pubmedSearchUrl: r.pubmedSearchUrl,
+        studyType: "Study",
+        limitations: "",
       };
     });
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return [...keywordFallbackEntries(), ...noStudyEntries];
 
-  const prompt = `"${productName}" is a branded product. Below are PubMed abstracts for ${withStudies.length} of its key ingredients. For EACH ingredient, read ONLY its own abstracts (don't mix findings across ingredients) and give a plain-English, layman verdict — no jargon, 1 short sentence, like you'd explain to a friend (e.g. "Helps with hydration in a few small studies" not "demonstrates humectant properties in RCTs").
+  const prompt = `"${productName}" is a branded product. Below are PubMed abstracts for ${withStudies.length} of its key ingredients. For EACH ingredient, read ONLY its own abstracts (don't mix findings across ingredients) and provide four things:
+
+"oneLiner" — a plain-English, layman verdict, no jargon, 1 short sentence, like you'd explain to a friend (e.g. "Helps with hydration in a few small studies" not "demonstrates humectant properties in RCTs"). If the ingredient name itself is a hard-to-pronounce chemical/INCI name, don't lead with it as the subject — describe its plain-language role instead (e.g. "A common preservative shows no safety concerns" not "Ethylhexylglycerin shows no safety concerns").
+"studyType" — the kind of study these abstracts mostly are, in plain terms: "Randomized controlled trial", "Animal study", "Observational study", "Meta-analysis", "In vitro study", "Case report", "Review", or "Small pilot study". Use "Study" as a last resort if truly unclear.
+"limitations" — ONE short, genuinely useful caveat, e.g. "Animal study — may not apply to humans", "Small study (12 people)", "No control group". Empty string "" if nothing specific applies — never invent one.
+"verdict" — BACKED if the abstracts mostly support it working, DEBUNKED if they mostly don't, MIXED if split or unclear.
 
 ${withStudies
   .map(
@@ -713,9 +728,9 @@ ${withStudies
   .join("\n\n")}
 
 Return ONLY this JSON array, one entry per ingredient IN THE SAME ORDER given above, no other text:
-[{"verdict": "BACKED" | "MIXED" | "DEBUNKED", "oneLiner": "..."}]
+[{"verdict": "BACKED" | "MIXED" | "DEBUNKED", "oneLiner": "...", "studyType": "...", "limitations": "..."}]
 
-"verdict": BACKED if the abstracts mostly support it working, DEBUNKED if they mostly don't, MIXED if split or unclear. Base this only on what's in the abstracts above — never invent a finding that isn't there.`;
+Base all of this only on what's in the abstracts above — never invent a finding, study type, or limitation that isn't there.`;
 
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -734,7 +749,7 @@ Return ONLY this JSON array, one entry per ingredient IN THE SAME ORDER given ab
     const json = (await res.json()) as { content: { text: string }[] };
     const text = json.content?.[0]?.text ?? "[]";
     const parsed = JSON.parse(text.replace(/```json|```/g, "").trim()) as
-      { verdict?: string; oneLiner?: string }[];
+      { verdict?: string; oneLiner?: string; studyType?: string; limitations?: string }[];
 
     const claudeEntries: IngredientEvidence[] = withStudies.map((r, i) => {
       const item = parsed[i];
@@ -751,6 +766,9 @@ Return ONLY this JSON array, one entry per ingredient IN THE SAME ORDER given ab
             : `Across ${r.studies} PubMed studies, findings are mixed.`,
         studies: r.studies,
         pubmedSearchUrl: r.pubmedSearchUrl,
+        studyType:
+          typeof item?.studyType === "string" && item.studyType.trim() ? item.studyType.trim() : "Study",
+        limitations: typeof item?.limitations === "string" ? item.limitations.trim() : "",
       };
     });
     return [...claudeEntries, ...noStudyEntries];
@@ -794,7 +812,16 @@ function buildIngredientSummaryBullet(
           : "the research on them is mixed";
 
   const text = `Key ingredients: ${names} — ${assessment}.`;
-  const detail = top5.map((i) => `${i.ingredient} (${i.verdict.toLowerCase()}): ${i.oneLiner}`).join(" ");
+  // Each ingredient's own study type + limitations folded in here, since
+  // this bullet replaced what used to be separate per-ingredient cards —
+  // clicking it open should still answer "what KIND of study backs this,
+  // and what's the catch," not just a bare one-line verdict per ingredient.
+  const detail = top5
+    .map((i) => {
+      const meta = i.studyType ? ` [${i.studyType}${i.limitations ? ` — ${i.limitations}` : ""}]` : "";
+      return `${i.ingredient} (${i.verdict.toLowerCase()}): ${i.oneLiner}${meta}`;
+    })
+    .join(" ");
 
   return {
     text,
@@ -1265,8 +1292,19 @@ async function generateFreshEvidenceVerdict(query: string): Promise<EvidenceVerd
               ? buildIngredientSummaryBullet(ingredientBreakdown, ingredientSource)
               : null;
 
+            // The banner shows `studies` as "how much research backs this
+            // page" — without this, it only counted the merged product-level
+            // search, so a product with zero direct hits but real,
+            // well-studied ingredients would show "BASED ON 0 PUBMED
+            // STUDIES" directly above a bullet saying the ingredient
+            // research is mixed/backed, a real contradiction. These are
+            // genuinely separate searches (one product-level, one per
+            // ingredient), so the honest total is both added together.
+            const ingredientStudyTotal = (ingredientBreakdown ?? []).reduce((sum, i) => sum + i.studies, 0);
+
             const merged: EvidenceVerdict = {
               ...result,
+              studies: result.studies + ingredientStudyTotal,
               bullets: summaryBullet ? [summaryBullet, ...result.bullets] : result.bullets,
               ingredientBreakdown,
               ingredientSource,
