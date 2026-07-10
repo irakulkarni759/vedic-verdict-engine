@@ -122,6 +122,7 @@ function rowToTrend(row: GeneratedTrendRow): Trend | null {
     sentiment: row.sentiment_score,
     updated: row.last_updated,
     evidence: row.evidence_points ?? [],
+    bullets: row.bullets && row.bullets.length > 0 ? row.bullets : undefined,
     quotes: row.opinions ?? [],
     related: row.related_ids ?? [],
     sourceUrls: row.source_urls ?? [],

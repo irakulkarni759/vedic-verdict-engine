@@ -73,6 +73,21 @@ function TrendPage() {
   // line was written when the trend was first generated with zero quotes.
   const [communityVerdict, setCommunityVerdict] = useState(trend.communityVerdict);
   const [sentiment, setSentiment] = useState(trend.sentiment);
+  // Cards show the plain-English "text" by default; clicking reveals the
+  // fuller "detail". Keyed by index, reset below on slug change for the
+  // same reason communityVerdict/sentiment are — this component doesn't
+  // remount across navigations, so stale expand state from a previously-
+  // viewed trend would otherwise leak into this one.
+  const [expandedBullets, setExpandedBullets] = useState<Set<number>>(new Set());
+
+  function toggleBullet(i: number) {
+    setExpandedBullets((prev) => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
+      return next;
+    });
+  }
 
   // TrendPage doesn't remount across navigations to a different slug (only
   // the loader data changes), so this state needs an explicit resync or a
@@ -80,6 +95,7 @@ function TrendPage() {
   useEffect(() => {
     setCommunityVerdict(trend.communityVerdict);
     setSentiment(trend.sentiment);
+    setExpandedBullets(new Set());
   }, [trend.slug, trend.communityVerdict, trend.sentiment]);
 
   // Stable reference — passed into CommunityQuotes' effect dependency array,
@@ -138,31 +154,133 @@ function TrendPage() {
             href={pubmedUrl(trend.name)}
           />
 
-          <div className="mt-4 space-y-3">
-            {trend.evidence.map((e: string, i: number) => (
-              <article
-                key={e}
-                className="grid gap-4 rounded-[22px] border border-white/75 bg-white/90 p-7 shadow-[0_12px_35px_rgba(27,52,72,0.04)] sm:grid-cols-[48px_1fr] sm:p-8"
+          {trend.bullets && trend.bullets.length > 0 ? (
+            <>
+              {/* Study-count banner — same as search.$query.tsx. */}
+              <div
+                className="mt-3 inline-flex items-center gap-2 rounded-full px-3.5 py-1.5"
+                style={{ backgroundColor: "color-mix(in oklab, var(--sage) 10%, transparent)" }}
               >
-                <div className="font-mono text-sm text-[var(--sage)]">
-                  {String(i + 1).padStart(2, "0")}
-                </div>
+                <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: "var(--sage)" }} />
+                <span className="font-label text-[10px]" style={{ color: "var(--sage)" }}>
+                  BASED ON {trend.studies} PUBMED {trend.studies === 1 ? "STUDY" : "STUDIES"}
+                </span>
+              </div>
 
-                <div>
-                  <p className="text-lg leading-8 text-[var(--ink)]">{e}</p>
+              <div className="mt-4 space-y-3">
+                {trend.bullets.map((b, i) => {
+                  const isOpen = expandedBullets.has(i);
+                  return (
+                    <article
+                      key={i}
+                      onClick={() => toggleBullet(i)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          toggleBullet(i);
+                        }
+                      }}
+                      aria-expanded={isOpen}
+                      className="grid cursor-pointer gap-4 rounded-[22px] border border-white/75 bg-white/90 p-7 shadow-[0_12px_35px_rgba(27,52,72,0.04)] transition hover:border-[var(--terracotta)]/40 sm:grid-cols-[48px_1fr] sm:p-8"
+                    >
+                      <div className="font-mono text-sm text-[var(--sage)]">
+                        {String(i + 1).padStart(2, "0")}
+                      </div>
 
-                  <a
-                    href={trend.sourceUrls[i] ?? pubmedUrl(trend.name)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="font-mono mt-5 inline-block text-xs text-[var(--terracotta)]"
-                  >
-                    view on pubmed ↗
-                  </a>
-                </div>
-              </article>
-            ))}
-          </div>
+                      <div>
+                        <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                          <span
+                            className="font-label rounded-full px-2 py-0.5 text-[9px]"
+                            style={{ color: "var(--muted-ink)", backgroundColor: "color-mix(in oklab, var(--ink) 6%, transparent)" }}
+                          >
+                            {b.studyType.toUpperCase()}
+                          </span>
+                          {b.limitations && (
+                            <span
+                              className="font-label inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px]"
+                              style={{
+                                color: "var(--verdict-mixed)",
+                                backgroundColor: "color-mix(in oklab, var(--verdict-mixed) 10%, transparent)",
+                              }}
+                            >
+                              ⚠ {b.limitations.toUpperCase()}
+                            </span>
+                          )}
+                        </div>
+
+                        <p className="text-lg leading-8 text-[var(--ink)]">{b.text}</p>
+
+                        {isOpen && (
+                          <div className="mt-4 rounded-[14px] bg-[var(--parchment)] px-4 py-3.5">
+                            <p className="font-label mb-1.5 text-[10px] text-[var(--sage)]">
+                              THE RESEARCH DETAIL
+                            </p>
+                            <p className="font-mono text-sm leading-6 text-[var(--muted-ink)]">
+                              {b.detail}
+                            </p>
+                          </div>
+                        )}
+
+                        <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleBullet(i);
+                            }}
+                            className="font-label text-xs text-[var(--sage)] transition hover:opacity-70"
+                          >
+                            {isOpen ? "HIDE DETAIL ↑" : "SHOW RESEARCH DETAIL ↓"}
+                          </button>
+
+                          <a
+                            href={b.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="font-mono inline-block text-xs text-[var(--terracotta)]"
+                          >
+                            view on pubmed ↗
+                          </a>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </>
+          ) : (
+            // Fallback for curated trends and rows generated before rich
+            // bullets existed — plain text, no badges/detail-toggle/banner,
+            // since that data was never captured for these.
+            <div className="mt-4 space-y-3">
+              {trend.evidence.map((e: string, i: number) => (
+                <article
+                  key={e}
+                  className="grid gap-4 rounded-[22px] border border-white/75 bg-white/90 p-7 shadow-[0_12px_35px_rgba(27,52,72,0.04)] sm:grid-cols-[48px_1fr] sm:p-8"
+                >
+                  <div className="font-mono text-sm text-[var(--sage)]">
+                    {String(i + 1).padStart(2, "0")}
+                  </div>
+
+                  <div>
+                    <p className="text-lg leading-8 text-[var(--ink)]">{e}</p>
+
+                    <a
+                      href={trend.sourceUrls[i] ?? pubmedUrl(trend.name)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-mono mt-5 inline-block text-xs text-[var(--terracotta)]"
+                    >
+                      view on pubmed ↗
+                    </a>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
         </section>
 
         <section className="mt-8">

@@ -1,3 +1,6 @@
+// Type-only — erased at compile time, no runtime dependency on evidence.functions.
+import type { EvidenceBullet } from "./evidence.functions";
+
 export type Verdict = "BACKED" | "MIXED" | "DEBUNKED";
 
 export type Trend = {
@@ -25,6 +28,12 @@ export type Trend = {
   sentiment: number; // 0-100
   updated: string; // YYYY-MM-DD
   evidence: string[];
+  /** Rich per-bullet data (study type, limitations, click-to-expand detail)
+   *  — undefined for curated trends and rows generated before this existed,
+   *  callers fall back to rendering `evidence` as plain-text cards in that
+   *  case. When present, this is what should actually be rendered; `evidence`
+   *  stays around for that fallback and for older code paths. */
+  bullets?: EvidenceBullet[];
   quotes: { handle: string; text: string; url: string }[];
   related: string[]; // slugs
   /** Real per-article PubMed links, in the same order as `evidence` where
