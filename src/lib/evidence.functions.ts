@@ -515,7 +515,13 @@ async function findRealIngredients(query: string): Promise<{
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return null;
 
-  const prompt = `Search the web for the REAL, official ingredient list (INCI list) of the specific product "${query}". Check the brand's own product page first, then reputable retailers (Sephora, Ulta, Amazon) or INCIDecoder if the brand site doesn't list ingredients. Do NOT guess or rely on general knowledge of what products like this "typically" contain — only use an ingredient list you actually find on a real page for this exact product.
+  const prompt = `Search the web for the REAL, official ingredient list (INCI list) of the specific product "${query}". Be persistent — try multiple search angles before giving up, this matters more than speed:
+
+1. First, find the brand's own official website (search "[brand name] official website" if it's not obvious) and check the product's own page there — smaller and international/regional brands especially (not just US/Sephora-style ones) very often ONLY list full ingredients on their own site, nowhere else. Don't skip this step just because the brand isn't a major one you already recognize.
+2. If the brand site doesn't have it, check reputable retailers that carry the product (this varies a lot by brand and region — Sephora/Ulta/Amazon for many US brands, but could be Nykaa, iHerb, or any other retailer that actually stocks this specific product) or an ingredient-lookup site like INCIDecoder.
+3. If a first search doesn't surface it, try a differently-worded search (e.g. the brand name plus "ingredients," or plus "INCI," or just the brand's likely domain directly) before concluding it can't be found.
+
+Do NOT guess or rely on general knowledge of what products like this "typically" contain — only use an ingredient list you actually find on a real page for this exact product.
 
 Once you find it (or determine you can't), return ONLY this JSON, no other text before or after it:
 {"found": true, "productName": "...", "sourceUrl": "https://...", "allIngredients": ["...", "..."], "keyIngredients": ["...", "..."]}
@@ -535,7 +541,7 @@ If you search and cannot find a real, verifiable ingredient list for this exact 
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
-        max_tokens: 2000,
+        max_tokens: 3000,
         messages: [{ role: "user", content: prompt }],
         tools: [{ type: "web_search_20250305", name: "web_search" }],
       }),
