@@ -292,27 +292,27 @@ function Hero({
               LOOK IT UP →
             </button>
           </form>
-
-          {searchError ? (
-            <p
-              className="mt-3 text-center"
-              style={{
-                color: "var(--verdict-debunked)",
-                fontSize: "clamp(10.5px, 2.6vw, 12px)",
-                fontWeight: 400,
-              }}
-            >
-              {searchError}
-            </p>
-          ) : (
-            <p
-              className="mt-3 max-w-3xl px-2 text-center whitespace-normal lg:whitespace-nowrap"
-              style={{ color: "var(--ink)", fontSize: "clamp(10.5px, 2.4vw, 13px)", fontWeight: 400, opacity: 0.85 }}
-            >
-              Type a specific claim below, like "rosemary oil for hair growth," not a general question.
-            </p>
-          )}
         </div>
+
+        {searchError ? (
+          <p
+            className="mt-3 text-center"
+            style={{
+              color: "var(--verdict-debunked)",
+              fontSize: "clamp(10.5px, 2.6vw, 12px)",
+              fontWeight: 400,
+            }}
+          >
+            {searchError}
+          </p>
+        ) : (
+          <p
+            className="mt-3 max-w-3xl px-2 text-center whitespace-normal lg:whitespace-nowrap"
+            style={{ color: "var(--ink)", fontSize: "clamp(10.5px, 2.4vw, 13px)", fontWeight: 400, opacity: 0.85 }}
+          >
+            Type a specific claim below, like "rosemary oil for hair growth," not a general question.
+          </p>
+        )}
 
         <div
           className="mt-4 sm:mt-6 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-4 text-center"
