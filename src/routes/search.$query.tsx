@@ -120,8 +120,14 @@ function SearchPage() {
   const [liveSentiment, setLiveSentiment] = useState<number | null>(null);
   // Cards show the plain-English "text" by default; clicking reveals the
   // fuller, more technical "detail" for that same finding. Keyed by index
-  // since bullets don't have a stable id.
-  const [expandedBullets, setExpandedBullets] = useState<Set<number>>(new Set());
+  // since bullets don't have a stable id. Auto-open when there's only ONE
+  // card total — most often a branded product's folded ingredient summary,
+  // where the real substance (per-ingredient study type/limitations) lives
+  // in the detail panel; with a single card, requiring an extra click just
+  // to see any of that made the whole section look thin/empty at a glance.
+  const [expandedBullets, setExpandedBullets] = useState<Set<number>>(
+    data.bullets.length === 1 ? new Set([0]) : new Set(),
+  );
 
   function toggleBullet(i: number) {
     setExpandedBullets((prev) => {

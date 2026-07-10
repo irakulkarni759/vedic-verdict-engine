@@ -77,8 +77,11 @@ function TrendPage() {
   // fuller "detail". Keyed by index, reset below on slug change for the
   // same reason communityVerdict/sentiment are — this component doesn't
   // remount across navigations, so stale expand state from a previously-
-  // viewed trend would otherwise leak into this one.
-  const [expandedBullets, setExpandedBullets] = useState<Set<number>>(new Set());
+  // viewed trend would otherwise leak into this one. Auto-open when
+  // there's only ONE card total — see search.$query.tsx for why.
+  const [expandedBullets, setExpandedBullets] = useState<Set<number>>(
+    trend.bullets?.length === 1 ? new Set([0]) : new Set(),
+  );
 
   function toggleBullet(i: number) {
     setExpandedBullets((prev) => {
@@ -95,7 +98,7 @@ function TrendPage() {
   useEffect(() => {
     setCommunityVerdict(trend.communityVerdict);
     setSentiment(trend.sentiment);
-    setExpandedBullets(new Set());
+    setExpandedBullets(trend.bullets?.length === 1 ? new Set([0]) : new Set());
   }, [trend.slug, trend.communityVerdict, trend.sentiment]);
 
   // Stable reference — passed into CommunityQuotes' effect dependency array,

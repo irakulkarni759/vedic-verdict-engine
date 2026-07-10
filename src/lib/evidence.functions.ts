@@ -1080,6 +1080,22 @@ async function buildResultFromIds(opts: {
   const templatedOneLiner = `${prefix}Across ${studies} PubMed studies, ${verdictClause}.`;
   const oneLiner = researchVerdict ?? templatedOneLiner;
 
+  // Same idea, but short/bulleted — researchGist (from Claude) covers this
+  // when available. This ONLY kicks in when that whole call failed, so the
+  // hero's bullet list never ends up showing templatedOneLiner's full
+  // paragraph disguised as a single "short" bullet — a real regression
+  // that happened for a product whose ingredient-fallback path succeeded
+  // (real study data, real 27-study count) but the gist-writing call itself
+  // failed, so the fallback shown was the long non-gist sentence.
+  const verdictGistWord = verdict === "BACKED" ? "mostly backed" : verdict === "DEBUNKED" ? "mostly unsupported" : "mixed evidence";
+  const templatedResearchGist: string[] =
+    fallback?.reason === "product"
+      ? [`No direct studies on this product`, `Key ingredients: ${verdictGistWord}`]
+      : fallback?.reason === "terminology"
+        ? [`No exact-phrase PubMed results`, `Related research: ${verdictGistWord}`]
+        : [`Based on ${studies} PubMed ${studies === 1 ? "study" : "studies"}`, verdictGistWord];
+  const finalResearchGist = researchGist.length > 0 ? researchGist : templatedResearchGist;
+
   const isGenericNoDiscussionPhrase = (s: string) =>
     /limited (public )?discussion|not much (public )?discussion|no (real )?discussion/i.test(s);
 
@@ -1093,8 +1109,9 @@ async function buildResultFromIds(opts: {
   return {
     query, name: finalName, slug, category, verdict, confidence, oneLiner, communityVerdict: communitySummary,
     safetyNote: finalSafetyNote, studies,
+    researchGist: finalResearchGist,
     sentiment, updated,
-    researchGist, communityGist,
+    communityGist,
     bullets, quotes: redditQuotes, articles: articles.slice(0, 6),
     pubmedSearchUrl, redditSearchUrl, generatedAt,
     ingredientFallback: fallback ? fallback.terms : null,
