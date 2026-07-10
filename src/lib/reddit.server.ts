@@ -51,8 +51,23 @@ function truncateAtWordBoundary(text: string, maxLength: number): string {
     return slice.slice(0, lastSentenceEnd + 1);
   }
 
-  const lastSpace = slice.lastIndexOf(" ");
-  return (lastSpace > 0 ? slice.slice(0, lastSpace) : slice) + "...";
+  // Word-boundary fallback — a valid word boundary can still land right
+  // after a short filler word ("...which seems like a..."), which reads as
+  // an obviously broken dangling clause even though no word got chopped.
+  // Walk back past trailing filler words too, so it ends on something more
+  // substantial before the "...".
+  const FILLER_WORDS = new Set([
+    "a", "an", "the", "of", "to", "in", "on", "and", "or", "but",
+    "is", "at", "as", "for", "with", "that", "this", "be", "so",
+  ]);
+  let cut = slice.lastIndexOf(" ");
+  while (cut > 0) {
+    const priorSpace = slice.lastIndexOf(" ", cut - 1);
+    const word = slice.slice(priorSpace + 1, cut).toLowerCase().replace(/[^a-z]/g, "");
+    if (!FILLER_WORDS.has(word)) break;
+    cut = priorSpace;
+  }
+  return (cut > 0 ? slice.slice(0, cut) : slice) + "...";
 }
 
 async function fetchOnce(query: string, timeoutMs: number): Promise<Response | null> {
