@@ -368,7 +368,7 @@ function HeroSummary({
       </div>
       {safetyNote && (
         <div
-          className="mt-3.5 flex max-w-4xl gap-2 rounded-[14px] px-4 py-3"
+          className="mt-3.5 inline-flex w-fit max-w-[92vw] lg:max-w-none gap-2 rounded-[14px] px-4 py-3"
           style={{ backgroundColor: "color-mix(in oklab, var(--verdict-mixed) 10%, transparent)" }}
         >
           <span className="shrink-0" style={{ color: "var(--verdict-mixed)", fontSize: 15, lineHeight: "24px" }}>⚠</span>
