@@ -487,7 +487,8 @@ or
     if (terms.length === 0) return null;
 
     return { reason: parsed.reason, terms };
-  } catch {
+  } catch (e) {
+    console.error("[identifyFallbackTerms] failed for", JSON.stringify(query), ":", e);
     return null;
   }
 }
@@ -578,7 +579,8 @@ If you search and cannot find a real, verifiable ingredient list for this exact 
       allIngredients: (parsed.allIngredients ?? []).filter(Boolean).slice(0, 40),
       keyIngredients,
     };
-  } catch {
+  } catch (e) {
+    console.error("[findRealIngredients] failed for", JSON.stringify(query), ":", e);
     return null;
   }
 }
@@ -861,28 +863,46 @@ Return ONLY this JSON, no other text:
 or
 {"is_product": false}`;
 
-  try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 50,
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
+  // This one call decides whether the ENTIRE ingredient-breakdown pipeline
+  // even gets attempted — a transient failure here (rate limit, network
+  // blip) used to silently default to "not a product," which for an
+  // obviously branded product query meant the whole pipeline never ran and
+  // the page came back essentially empty, with no error anywhere to explain
+  // why. Retries once before giving up, and logs on both failures so a
+  // still-broken case is actually diagnosable instead of a silent false.
+  const attempt = async (): Promise<boolean | null> => {
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 50,
+          messages: [{ role: "user", content: prompt }],
+        }),
+      });
+      const json = (await res.json()) as { content: { text: string }[] };
+      const text = json.content?.[0]?.text ?? "{}";
+      const parsed = JSON.parse(text.replace(/```json|```/g, "").trim()) as { is_product?: boolean };
+      return parsed.is_product === true;
+    } catch (e) {
+      console.error("[checkIsBrandedProduct] attempt failed for", JSON.stringify(query), ":", e);
+      return null;
+    }
+  };
 
-    const json = (await res.json()) as { content: { text: string }[] };
-    const text = json.content?.[0]?.text ?? "{}";
-    const parsed = JSON.parse(text.replace(/```json|```/g, "").trim()) as { is_product?: boolean };
-    return parsed.is_product === true;
-  } catch {
-    return false;
-  }
+  const first = await attempt();
+  if (first !== null) return first;
+
+  const second = await attempt();
+  if (second !== null) return second;
+
+  console.error("[checkIsBrandedProduct] both attempts failed for", JSON.stringify(query), "— defaulting to false");
+  return false;
 }
 
 async function checkIsPharmaceutical(query: string): Promise<{ isMedicine: boolean; name?: string }> {
