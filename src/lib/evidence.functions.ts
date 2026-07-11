@@ -1213,7 +1213,7 @@ async function generateFreshEvidenceVerdict(query: string): Promise<EvidenceVerd
     const isWeakCount = ids.length < WEAK_RESULT_THRESHOLD;
     const isIrrelevant = !isWeakCount && !isKnownProduct && !(await checkPubmedRelevance(ids, query));
     if (isWeakCount || isIrrelevant || isKnownProduct) {
-      const fallback = await identifyFallbackTerms(query);
+      let fallback = await identifyFallbackTerms(query);
 
       // checkIsBrandedProduct (run earlier, dedicated to exactly this
       // question) is the single source of truth for "is this a branded
@@ -1224,21 +1224,31 @@ async function generateFreshEvidenceVerdict(query: string): Promise<EvidenceVerd
       // judgment and incorrectly trigger the Key Ingredients section for
       // something that was never actually a product — the exact same kind
       // of inconsistency this whole change was meant to fix, just coming
-      // from the other classifier instead. If identifyFallbackTerms came
-      // back null (no usable terms at all), leave it null either way — no
-      // classification fixes a total lack of terms.
+      // from the other classifier instead.
       if (fallback) fallback.reason = isKnownProduct ? "product" : "terminology";
 
       // For branded products specifically, try to replace Claude's guessed
-      // ingredients with the REAL, sourced list from an actual web search
-      // before doing anything else with `fallback.terms` — this affects
-      // both the merged PubMed search below and buildIngredientBreakdown
-      // later, so a verified formulation flows through the whole pipeline
-      // instead of just the guess.
+      // ingredients with the REAL, sourced list from an actual web search —
+      // keyed off isKnownProduct directly, NOT off identifyFallbackTerms
+      // having already succeeded. identifyFallbackTerms is deliberately
+      // conservative now (told to give up and return null rather than
+      // invent garbled ingredient names when it can't identify real ones),
+      // and findRealIngredients is a genuinely independent, often more
+      // reliable lookup — gating it behind the guesser succeeding first
+      // meant a known product could get NO ingredient breakdown at all
+      // whenever the guesser gave up, even though the real web search
+      // would have worked fine on its own.
       let realIngredients: Awaited<ReturnType<typeof findRealIngredients>> = null;
-      if (fallback?.reason === "product") {
+      if (isKnownProduct) {
         realIngredients = await findRealIngredients(query);
-        if (realIngredients) fallback.terms = realIngredients.keyIngredients;
+        if (realIngredients) {
+          // Synthesize a fallback object if identifyFallbackTerms gave up
+          // entirely — the real search succeeding is enough on its own to
+          // proceed with the ingredient pipeline below.
+          fallback = fallback ?? { reason: "product", terms: [] };
+          fallback.reason = "product";
+          fallback.terms = realIngredients.keyIngredients;
+        }
       }
       const ingredientSource: EvidenceVerdict["ingredientSource"] = realIngredients
         ? { url: realIngredients.sourceUrl, verified: true }
