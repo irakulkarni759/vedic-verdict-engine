@@ -170,6 +170,14 @@ function TrendPage() {
                 </span>
               </div>
 
+              {trend.bullets.some((b) => b.isIngredient) && (
+                <p className="mt-2 font-mono text-xs" style={{ color: "var(--muted-ink)" }}>
+                  Cards marked "FROM INGREDIENT LIST" below are separate PubMed searches on {trend.name}'s
+                  individual key ingredients, not the product itself — PubMed rarely indexes research on a
+                  specific commercial product by name.
+                </p>
+              )}
+
               <div className="mt-4 space-y-3">
                 {trend.bullets.map((b, i) => {
                   const isOpen = expandedBullets.has(i);
@@ -194,6 +202,14 @@ function TrendPage() {
 
                       <div>
                         <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                          {b.isIngredient && (
+                            <span
+                              className="font-label rounded-full px-2 py-0.5 text-[9px]"
+                              style={{ color: "var(--sage)", backgroundColor: "color-mix(in oklab, var(--sage) 10%, transparent)" }}
+                            >
+                              FROM INGREDIENT LIST
+                            </span>
+                          )}
                           <span
                             className="font-label rounded-full px-2 py-0.5 text-[9px]"
                             style={{ color: "var(--muted-ink)", backgroundColor: "color-mix(in oklab, var(--ink) 6%, transparent)" }}

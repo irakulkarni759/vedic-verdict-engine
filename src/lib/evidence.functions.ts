@@ -33,6 +33,11 @@ export type EvidenceBullet = {
    *  string when the abstract doesn't surface a notable limitation. */
   limitations: string;
   url: string;
+  /** True for a bullet built from a single KEY INGREDIENT's own PubMed
+   *  search (buildIngredientBullets) rather than the product/query's own
+   *  search — the UI badges these distinctly so it's clear the finding is
+   *  about one ingredient in isolation, not the product/outcome itself. */
+  isIngredient?: boolean;
 };
 
 export type IngredientEvidence = {
@@ -815,36 +820,39 @@ Base all of this only on what's in the abstracts above — never invent a findin
 }
 
 /**
- * Turns the top 3 key ingredients into separate bullet cards, styled and
- * structured exactly like every other "WHAT THE RESEARCH SAYS" card
- * (number, study type badge, limitations badge, click-to-expand detail) —
- * instead of one folded summary line. Ingredients beyond the top 3 still
- * count toward the studies banner but don't get their own card, to keep
- * the section from ballooning to 5 cards for a single product.
+ * Turns the top 3 key ingredients WITH REAL DATA into separate bullet
+ * cards, styled and structured exactly like every other "WHAT THE RESEARCH
+ * SAYS" card (number, study type badge, limitations badge, click-to-expand
+ * detail) — instead of one folded summary line. Ingredients with zero
+ * PubMed hits (verdict "UNKNOWN") are dropped entirely rather than shown as
+ * an empty "NO DATA" card — a card with nothing on it isn't evidence, it's
+ * just noise padding out the section. They still count toward the overall
+ * studies banner via ingredientStudyTotal (see caller). Ingredients beyond
+ * the top 3 (with data) still count toward that banner but don't get their
+ * own card, to keep the section from ballooning for a single product.
  */
 function buildIngredientBullets(
   ingredientBreakdown: IngredientEvidence[],
   ingredientSource: EvidenceVerdict["ingredientSource"],
 ): EvidenceBullet[] {
-  return ingredientBreakdown.slice(0, 3).map((ing, i) => {
-    const sourceCaveat = !ingredientSource?.verified && i === 0
-      ? "Estimated ingredient list — not a confirmed formulation"
-      : "";
-    const limitations = [sourceCaveat, ing.limitations].filter(Boolean).join("; ");
+  return ingredientBreakdown
+    .filter((ing) => ing.verdict !== "UNKNOWN")
+    .slice(0, 3)
+    .map((ing, i) => {
+      const sourceCaveat = !ingredientSource?.verified && i === 0
+        ? "Estimated ingredient list — not a confirmed formulation"
+        : "";
+      const limitations = [sourceCaveat, ing.limitations].filter(Boolean).join("; ");
 
-    const studyCountNote =
-      ing.studies > 0
-        ? `Based on ${ing.studies} PubMed ${ing.studies === 1 ? "study" : "studies"} specifically on ${ing.ingredient}.`
-        : `No PubMed studies found specifically on ${ing.ingredient}.`;
-
-    return {
-      text: `${ing.ingredient} — ${ing.oneLiner}`,
-      detail: `${studyCountNote} ${ing.oneLiner}`,
-      studyType: ing.studyType || (ing.verdict === "UNKNOWN" ? "No Data" : "Study"),
-      limitations,
-      url: ing.pubmedSearchUrl,
-    };
-  });
+      return {
+        text: `${ing.ingredient} — ${ing.oneLiner}`,
+        detail: `Based on ${ing.studies} PubMed ${ing.studies === 1 ? "study" : "studies"} specifically on ${ing.ingredient}. ${ing.oneLiner}`,
+        studyType: ing.studyType || "Study",
+        limitations,
+        url: ing.pubmedSearchUrl,
+        isIngredient: true,
+      };
+    });
 }
 
 
@@ -1381,6 +1389,14 @@ async function generateFreshEvidenceVerdict(query: string): Promise<EvidenceVerd
 
             const merged: EvidenceVerdict = {
               ...result,
+              // The verified real product name always wins over Claude's
+              // own "X for Y" reconstruction of the raw search query — that
+              // reconstruction is built from the user's literal wording and
+              // has no idea a real product was actually identified, so it
+              // silently discarded it. Without this, the page could show an
+              // ingredient breakdown for a specific verified bottle while
+              // titling itself with whatever the user happened to type.
+              name: realIngredients?.productName ?? result.name,
               studies: result.studies + ingredientStudyTotal,
               bullets: [...ingredientBullets, ...result.bullets],
               ingredientBreakdown,
