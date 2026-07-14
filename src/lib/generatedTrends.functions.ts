@@ -335,7 +335,16 @@ export const persistTrendQuotes = createServerFn({ method: "POST" })
 
       const supabase = getSupabaseServiceClient();
       const update: Record<string, unknown> = { opinions: data.quotes };
-      if (communityVerdict) update.community_verdict = communityVerdict;
+      // This only ever runs when the page had zero quotes on hand (guarded by
+      // callers), so any community_gist already on the row necessarily
+      // predates these quotes and is now stale — clear it so cache hits fall
+      // back to the fresh, quote-based community_verdict sentence instead of
+      // re-surfacing the old generic placeholder over it (see HeroSummary's
+      // gist-takes-precedence-over-verdict fallback order).
+      if (communityVerdict) {
+        update.community_verdict = communityVerdict;
+        update.community_gist = null;
+      }
       if (typeof sentiment === "number") update.sentiment_score = sentiment;
 
       const { error } = await supabase.from("generated_trends").update(update).eq("id", data.slug);
@@ -831,6 +840,10 @@ export const adminRefreshRedditQuotes = createServerFn({ method: "POST" })
               opinions: realQuotes,
               community_verdict: communityVerdict ?? "",
               sentiment_score: sentiment ?? row.sentiment_score,
+              // Same reasoning as persistTrendQuotes: real quotes just came
+              // in, so any community_gist already on the row predates them
+              // and would otherwise keep shadowing this fresh verdict.
+              ...(realQuotes.length > 0 ? { community_gist: null } : {}),
             })
             .eq("id", row.id);
           if (updateError) continue;
