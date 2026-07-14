@@ -126,7 +126,7 @@ function TrendPage() {
             </p>
 
             <div
-              className="font-label rounded-full border px-4 py-2 text-xs"
+              className="font-label rounded-full border px-5 py-2.5 text-base"
               style={{
                 color: verdictColor(trend.verdict),
                 borderColor: "color-mix(in oklab, currentColor 45%, transparent)",

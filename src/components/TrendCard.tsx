@@ -25,16 +25,16 @@ export function TrendCard({ trend, compact = false }: { trend: Trend; compact?: 
           {trend.category.replace("-", " ").toUpperCase()}
         </p>
         <span
-          className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-label"
+          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-label"
           style={{
-            fontSize: 9,
+            fontSize: 12,
             color: verdictColor(trend.verdict),
             backgroundColor: "color-mix(in oklab, " + verdictColor(trend.verdict) + " 12%, transparent)",
           }}
         >
           <span
             className="inline-block rounded-full"
-            style={{ width: 4, height: 4, backgroundColor: verdictColor(trend.verdict) }}
+            style={{ width: 5, height: 5, backgroundColor: verdictColor(trend.verdict) }}
           />
           {trend.verdict}
         </span>
