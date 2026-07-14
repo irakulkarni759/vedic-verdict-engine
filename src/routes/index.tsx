@@ -140,9 +140,6 @@ function Nav() {
             <span className="font-display text-[34px] leading-none" style={{ color: "var(--ink)" }}>
               veda
             </span>
-            <span style={{ color: "var(--muted-ink)", fontFamily: "var(--font-display)", fontSize: 26, lineHeight: 1, display: "inline-flex", alignItems: "center", height: "34px", position: "relative", top: "4px" }}>
-              वेदा
-            </span>
           </Link>
           <div className="hidden md:flex items-center gap-3 font-label" style={{ fontSize: 10, color: "var(--ink)" }}>
             {CATEGORIES.map((c, i) => (
