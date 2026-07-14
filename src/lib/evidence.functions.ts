@@ -994,8 +994,10 @@ async function buildResultFromIds(opts: {
   /** For branded products, the resolved canonical product name (from a real
    *  web search) is a much better Reddit search term than the user's raw
    *  typed query — which might carry a purpose clause, informal phrasing, or
-   *  just not match how the product is actually referred to online. Falls
-   *  back to coreSubjectForReddit(query) when not provided. */
+   *  just not match how the product is actually referred to online. Still
+   *  run through coreSubjectForReddit before use (see below) since the
+   *  canonical name itself can carry a "for X (variant, size)"-style clause.
+   *  Falls back to the raw query when not provided. */
   redditQuerySubject?: string;
 }): Promise<EvidenceVerdict> {
   const { ids, query, name, slug, updated, generatedAt, pubmedSearchUrl, redditSearchUrl, fallback, redditQuerySubject } = opts;
@@ -1006,7 +1008,14 @@ async function buildResultFromIds(opts: {
   // (which needs the quotes), so by then it's had a head start and usually the
   // real quotes are already in hand. .catch keeps a scrape failure from taking
   // down the whole verdict — it just degrades to no quotes for this search.
-  const quotesPromise = fetchRedditQuotesFast(redditQuerySubject ?? coreSubjectForReddit(query)).catch(
+  // coreSubjectForReddit's "for X" stripping must apply here too, even for
+  // the resolved real product name — that name can carry the same "for
+  // Digestion (Berry Melon, 50 ct)"-style purpose/variant clause a raw
+  // query would, and real Reddit comments never phrase it that way. Passing
+  // redditQuerySubject straight through used to skip this cleanup entirely,
+  // sending an unnaturally verbose search term that a genuinely relevant,
+  // findable thread wouldn't match.
+  const quotesPromise = fetchRedditQuotesFast(coreSubjectForReddit(redditQuerySubject ?? query)).catch(
     () => [] as RedditQuote[],
   );
 
