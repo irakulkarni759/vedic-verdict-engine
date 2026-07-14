@@ -643,6 +643,24 @@ async function fetchAbstractsForIngredient(
 }
 
 /**
+ * Real ingredient lists carry display-worthy detail — concentrations
+ * ("Niacinamide (4%)") and dual INCI/common names joined by a slash
+ * ("Butyrospermum Parkii Butter/Shea Butter") — that make terrible literal
+ * PubMed search terms. esearch ANDs every token in an unquoted query, so
+ * the percentage and the second name are just extra required tokens on
+ * top of the outcome anchor, and can zero out results for ingredients
+ * that are otherwise heavily studied (shea butter, niacinamide, etc).
+ * This strips the percentage and keeps only the last "/"-separated
+ * segment (the common name, by INCI-list convention) for SEARCHING ONLY —
+ * the original, unmodified ingredient string is still what's displayed.
+ */
+function pubmedTermForIngredient(ingredient: string): string {
+  const withoutPercent = ingredient.replace(/\(\s*[\d.]+\s*%\s*\)/g, " ");
+  const segments = withoutPercent.split("/").map((s) => s.trim()).filter(Boolean);
+  return (segments[segments.length - 1] || withoutPercent).replace(/\s+/g, " ").trim();
+}
+
+/**
  * For a branded product like "Chanel Lotion" — where PubMed has nothing on
  * the product itself but identifyFallbackTerms found its likely key
  * ingredients — this looks up each ingredient SEPARATELY and returns an
@@ -671,8 +689,11 @@ async function buildIngredientBreakdown(
       // searching the bare ingredient name alone pulls in whatever that
       // compound is MOST studied for generally (e.g. ursolic acid's
       // antiparasitic research), which is very often unrelated to the
-      // actual product claim.
-      const searchTerm = outcome ? `${ingredient} ${outcome}` : ingredient;
+      // actual product claim. The name fed into the search itself is
+      // cleaned of concentration/dual-naming noise first — see
+      // pubmedTermForIngredient.
+      const cleanIngredient = pubmedTermForIngredient(ingredient);
+      const searchTerm = outcome ? `${cleanIngredient} ${outcome}` : cleanIngredient;
       const { studies, abstracts } = await fetchAbstractsForIngredient(searchTerm);
       return {
         ingredient,
