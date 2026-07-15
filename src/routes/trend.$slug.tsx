@@ -72,7 +72,11 @@ function TrendPage() {
   // finds real quotes — otherwise this text stays frozen at whatever generic
   // line was written when the trend was first generated with zero quotes.
   const [communityVerdict, setCommunityVerdict] = useState(trend.communityVerdict);
+  const [communityGist, setCommunityGist] = useState<string[] | null>(null);
   const [sentiment, setSentiment] = useState(trend.sentiment);
+  // Whether any real quotes are on screen — the sentiment % is only shown
+  // when this is true, since a % with zero discussion behind it is invented.
+  const [hasQuotes, setHasQuotes] = useState((trend.quotes?.length ?? 0) > 0);
   // Cards show the plain-English "text" by default; clicking reveals the
   // fuller "detail". Keyed by index, reset below on slug change for the
   // same reason communityVerdict/sentiment are — this component doesn't
@@ -97,17 +101,22 @@ function TrendPage() {
   // stale value from a previously-viewed trend would leak into this one.
   useEffect(() => {
     setCommunityVerdict(trend.communityVerdict);
+    setCommunityGist(null);
     setSentiment(trend.sentiment);
+    setHasQuotes((trend.quotes?.length ?? 0) > 0);
     setExpandedBullets(trend.bullets?.length === 1 ? new Set([0]) : new Set());
-  }, [trend.slug, trend.communityVerdict, trend.sentiment]);
+  }, [trend.slug, trend.communityVerdict, trend.sentiment, trend.quotes?.length]);
 
   // Stable reference — passed into CommunityQuotes' effect dependency array,
   // so an inline arrow here would re-fire that effect (and re-fetch) every
   // time this callback runs and re-renders the parent.
-  const handleVerdictUpdate = useCallback((cv: string, s: number) => {
+  const handleVerdictUpdate = useCallback((cv: string, s: number, gist: string[] | null) => {
     setCommunityVerdict(cv);
+    setCommunityGist(gist);
     setSentiment(s);
   }, []);
+
+  const handleQuotesFound = useCallback(() => setHasQuotes(true), []);
 
   return (
     <main className="min-h-screen bg-[var(--parchment)] px-5 py-8 sm:px-8 sm:py-10">
@@ -145,7 +154,16 @@ function TrendPage() {
             researchVerdict={trend.oneLiner}
             researchGist={trend.researchGist ?? []}
             communityVerdict={communityVerdict}
-            communityGist={communityVerdict === trend.communityVerdict ? (trend.communityGist ?? []) : []}
+            communityGist={
+              communityGist ??
+              (communityVerdict === trend.communityVerdict
+                ? // Drop a stale "Limited discussion found" gist once real
+                  // quotes are on screen — it's provably wrong at that point.
+                  (trend.communityGist ?? []).filter(
+                    (g) => !hasQuotes || !/limited (public )?discussion|no (real )?discussion/i.test(g),
+                  )
+                : [])
+            }
             safetyNote={trend.safetyNote}
           />
         </section>
@@ -315,17 +333,27 @@ function TrendPage() {
                 COMMUNITY SENTIMENT
               </p>
 
-              <p className="font-mono text-sm text-[var(--verdict-mixed)]">
-                {sentiment}% positive
-              </p>
+              {/* Only claim a % when real quotes back it up — a bar with no
+                  discussion behind it was pure invention. */}
+              {hasQuotes ? (
+                <p className="font-mono text-sm text-[var(--verdict-mixed)]">
+                  {sentiment}% positive
+                </p>
+              ) : (
+                <p className="font-mono text-sm text-[var(--muted-ink)]">
+                  gathering data…
+                </p>
+              )}
             </div>
 
-            <div className="h-2 overflow-hidden rounded-full bg-[var(--parchment-deep)]">
-              <div
-                className="h-full rounded-full bg-[var(--verdict-mixed)]"
-                style={{ width: `${sentiment}%` }}
-              />
-            </div>
+            {hasQuotes && (
+              <div className="h-2 overflow-hidden rounded-full bg-[var(--parchment-deep)]">
+                <div
+                  className="h-full rounded-full bg-[var(--verdict-mixed)]"
+                  style={{ width: `${sentiment}%` }}
+                />
+              </div>
+            )}
 
             <CommunityQuotes
               key={trend.slug}
@@ -336,6 +364,7 @@ function TrendPage() {
               researchSummary={trend.oneLiner}
               existingSentiment={trend.sentiment}
               onVerdictUpdate={handleVerdictUpdate}
+              onQuotesFound={handleQuotesFound}
             />
           </article>
         </section>
@@ -375,6 +404,7 @@ function CommunityQuotes({
   researchSummary,
   existingSentiment,
   onVerdictUpdate,
+  onQuotesFound,
 }: {
   slug: string;
   searchQuery: string;
@@ -382,7 +412,8 @@ function CommunityQuotes({
   name: string;
   researchSummary: string;
   existingSentiment: number;
-  onVerdictUpdate: (communityVerdict: string, sentiment: number) => void;
+  onVerdictUpdate: (communityVerdict: string, sentiment: number, gist: string[] | null) => void;
+  onQuotesFound: () => void;
 }) {
   const [quotes, setQuotes] = useState<Quote[]>(initialQuotes);
   const [loading, setLoading] = useState(false);
@@ -417,16 +448,24 @@ function CommunityQuotes({
       if (final.status !== "done" || final.quotes.length === 0) return;
 
       setQuotes(final.quotes);
+      onQuotesFound();
       // Persist AND recompute the community verdict/sentiment from these
       // specific quotes — saving the quotes alone left the summary text
       // frozen at whatever generic line was written when generation first
       // ran with zero quotes.
       persistTrendQuotes({
-        data: { slug, name, summary: researchSummary, existingSentiment, quotes: final.quotes },
+        data: {
+          slug,
+          name,
+          summary: researchSummary,
+          existingSentiment,
+          quotes: final.quotes,
+          backendSentiment: final.sentiment.score,
+        },
       })
         .then((res) => {
           if (!cancelled && res.ok && res.communityVerdict && typeof res.sentiment === "number") {
-            onVerdictUpdate(res.communityVerdict, res.sentiment);
+            onVerdictUpdate(res.communityVerdict, res.sentiment, res.communityGist ?? null);
           }
         })
         .catch(() => {});
@@ -435,7 +474,7 @@ function CommunityQuotes({
     return () => {
       cancelled = true;
     };
-  }, [slug, searchQuery, initialQuotes.length, quotes.length, name, researchSummary, existingSentiment, onVerdictUpdate]);
+  }, [slug, searchQuery, initialQuotes.length, quotes.length, name, researchSummary, existingSentiment, onVerdictUpdate, onQuotesFound]);
 
   if (quotes.length === 0) {
     return (

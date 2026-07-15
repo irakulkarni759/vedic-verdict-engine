@@ -20,6 +20,27 @@ export type RedditQuote = {
   url: string; // real permalink
 };
 
+/**
+ * The backend computes sentiment from the FULL scraped comment pool (up to
+ * 150 comments run through the summarizer), which is a far more meaningful
+ * signal than anything derivable from the 3 quotes shown on the page.
+ * score is 0-100 (converted from the API's 0-1 float), null when the
+ * backend judged the discussion insufficient to score. commentCount is how
+ * many comments that judgment was based on.
+ */
+export type CommunitySentiment = {
+  score: number | null;
+  label: "positive" | "mixed" | "negative" | "insufficient_data" | null;
+  commentCount: number | null;
+};
+
+export type CommunityResult = {
+  quotes: RedditQuote[];
+  sentiment: CommunitySentiment;
+};
+
+const EMPTY_SENTIMENT: CommunitySentiment = { score: null, label: null, commentCount: null };
+
 const SENTIMENT_API_URL =
   process.env.VEDA_SENTIMENT_API_URL ??
   "https://veda-sentiment-backend-production.up.railway.app";
@@ -34,7 +55,30 @@ type SentimentApiTopQuote = {
 
 type SentimentApiResponse = {
   top_quotes: SentimentApiTopQuote[];
+  sentiment?: string | null;
+  sentiment_score?: number | null;
+  comment_count?: number | null;
 };
+
+function parseSentimentFields(data: {
+  sentiment?: string | null;
+  sentiment_score?: number | null;
+  comment_count?: number | null;
+}): CommunitySentiment {
+  const label =
+    data.sentiment === "positive" || data.sentiment === "mixed" ||
+    data.sentiment === "negative" || data.sentiment === "insufficient_data"
+      ? data.sentiment
+      : null;
+  return {
+    score:
+      typeof data.sentiment_score === "number"
+        ? Math.round(Math.min(1, Math.max(0, data.sentiment_score)) * 100)
+        : null,
+    label,
+    commentCount: typeof data.comment_count === "number" ? data.comment_count : null,
+  };
+}
 
 /** Truncate at the last full sentence within maxLength, falling back to the
  *  last word boundary — never a mid-word/mid-sentence chop like "...aft". */
@@ -123,9 +167,9 @@ export const warmSentimentBackend = createServerFn({ method: "GET" }).handler(
  *  hanging the request. Keeping Railway warm (prewarm ping) is what makes the
  *  scrape land inside this budget on the first search instead of only on a
  *  warm re-search. */
-export async function fetchRedditQuotesFast(query: string, limit = 3): Promise<RedditQuote[]> {
+export async function fetchCommunityFast(query: string, limit = 3): Promise<CommunityResult> {
   const res = await fetchOnce(query, 20000);
-  return parseQuotesResponse(res, limit);
+  return parseCommunityResponse(res, limit);
 }
 
 /** Slow path: 5s try, then a 20s retry. Used only for the client-triggered
@@ -137,19 +181,22 @@ export async function fetchRedditQuotes(query: string, limit = 3): Promise<Reddi
     if (!res || !res.ok) {
       res = await fetchOnce(query, 20000);
     }
-    return await parseQuotesResponse(res, limit);
+    return (await parseCommunityResponse(res, limit)).quotes;
   } catch {
     return [];
   }
 }
 
-async function parseQuotesResponse(res: Response | null, limit: number): Promise<RedditQuote[]> {
+async function parseCommunityResponse(res: Response | null, limit: number): Promise<CommunityResult> {
   try {
-    if (!res || !res.ok) return [];
+    if (!res || !res.ok) return { quotes: [], sentiment: EMPTY_SENTIMENT };
     const data: SentimentApiResponse = await res.json();
-    return topQuotesToRedditQuotes(data.top_quotes, limit);
+    return {
+      quotes: topQuotesToRedditQuotes(data.top_quotes, limit),
+      sentiment: parseSentimentFields(data),
+    };
   } catch {
-    return [];
+    return { quotes: [], sentiment: EMPTY_SENTIMENT };
   }
 }
 
@@ -188,14 +235,23 @@ export const getRedditQuotes = createServerFn({ method: "GET" })
  * out — "keep trying" instead of "give up and say nothing found."
  */
 export type ClaimJobStartResult =
-  | { status: "done"; quotes: RedditQuote[] }
+  | { status: "done"; quotes: RedditQuote[]; sentiment: CommunitySentiment }
   | { status: "pending"; jobId: string }
   | { status: "error" };
 
 export type ClaimJobPollResult =
-  | { status: "done"; quotes: RedditQuote[] }
+  | { status: "done"; quotes: RedditQuote[]; sentiment: CommunitySentiment }
   | { status: "pending" }
   | { status: "error" };
+
+type ClaimJobPayload = {
+  status?: string;
+  job_id?: string;
+  top_quotes?: SentimentApiTopQuote[];
+  sentiment?: string | null;
+  sentiment_score?: number | null;
+  comment_count?: number | null;
+};
 
 async function startClaimJob(query: string, limit: number): Promise<ClaimJobStartResult> {
   try {
@@ -203,8 +259,13 @@ async function startClaimJob(query: string, limit: number): Promise<ClaimJobStar
       method: "POST",
     });
     if (!res.ok) return { status: "error" };
-    const json = (await res.json()) as { status?: string; job_id?: string; top_quotes?: SentimentApiTopQuote[] };
-    if (json.status === "done") return { status: "done", quotes: topQuotesToRedditQuotes(json.top_quotes, limit) };
+    const json = (await res.json()) as ClaimJobPayload;
+    if (json.status === "done")
+      return {
+        status: "done",
+        quotes: topQuotesToRedditQuotes(json.top_quotes, limit),
+        sentiment: parseSentimentFields(json),
+      };
     if (json.status === "pending" && json.job_id) return { status: "pending", jobId: json.job_id };
     return { status: "error" };
   } catch {
@@ -216,8 +277,13 @@ async function pollClaimJob(jobId: string, limit: number): Promise<ClaimJobPollR
   try {
     const res = await fetch(`${SENTIMENT_API_URL}/api/claim/status?job_id=${encodeURIComponent(jobId)}`);
     if (!res.ok) return { status: "error" };
-    const json = (await res.json()) as { status?: string; top_quotes?: SentimentApiTopQuote[] };
-    if (json.status === "done") return { status: "done", quotes: topQuotesToRedditQuotes(json.top_quotes, limit) };
+    const json = (await res.json()) as ClaimJobPayload;
+    if (json.status === "done")
+      return {
+        status: "done",
+        quotes: topQuotesToRedditQuotes(json.top_quotes, limit),
+        sentiment: parseSentimentFields(json),
+      };
     if (json.status === "pending") return { status: "pending" };
     return { status: "error" };
   } catch {

@@ -117,6 +117,7 @@ function SearchPage() {
   // the guard below returns immediately and nothing extra runs.
   const [liveQuotes, setLiveQuotes] = useState<RedditQuote[] | null>(null);
   const [liveCommunityVerdict, setLiveCommunityVerdict] = useState<string | null>(null);
+  const [liveCommunityGist, setLiveCommunityGist] = useState<string[] | null>(null);
   const [liveSentiment, setLiveSentiment] = useState<number | null>(null);
   // Cards show the plain-English "text" by default; clicking reveals the
   // fuller, more technical "detail" for that same finding. Keyed by index
@@ -141,6 +142,7 @@ function SearchPage() {
   useEffect(() => {
     setLiveQuotes(null);
     setLiveCommunityVerdict(null);
+    setLiveCommunityGist(null);
     setLiveSentiment(null);
 
     const noVerdict =
@@ -168,6 +170,9 @@ function SearchPage() {
 
       if (cancelled || final.status !== "done" || final.quotes.length === 0) return;
       setLiveQuotes(final.quotes);
+      // The job payload carries the backend's full-pool sentiment score —
+      // surface it immediately rather than waiting on the persist round-trip.
+      if (typeof final.sentiment.score === "number") setLiveSentiment(final.sentiment.score);
 
       // Recompute the summary from these specific quotes and persist, so the
       // stored row + this page both catch up from the generic first-pass line.
@@ -178,11 +183,13 @@ function SearchPage() {
           summary: data.oneLiner,
           existingSentiment: data.sentiment,
           quotes: final.quotes,
+          backendSentiment: final.sentiment.score,
         },
       }).catch(() => null);
 
       if (!cancelled && res?.ok && res.communityVerdict && typeof res.sentiment === "number") {
         setLiveCommunityVerdict(res.communityVerdict);
+        setLiveCommunityGist(res.communityGist ?? null);
         setLiveSentiment(res.sentiment);
       }
     })();
@@ -195,6 +202,14 @@ function SearchPage() {
   const displayQuotes = data.quotes.length > 0 ? data.quotes : liveQuotes ?? [];
   const displayCommunityVerdict = liveCommunityVerdict ?? data.communityVerdict;
   const displaySentiment = liveSentiment ?? data.sentiment;
+
+  // Never let a stale "Limited discussion found" gist (cached when the
+  // first scrape missed its window) sit above real quotes that have since
+  // loaded — if quotes are on screen, that phrase is provably wrong.
+  const staleNoDiscussion = (s: string) => /limited (public )?discussion|no (real )?discussion/i.test(s);
+  const baseCommunityGist =
+    displayQuotes.length > 0 ? data.communityGist.filter((g) => !staleNoDiscussion(g)) : data.communityGist;
+  const displayCommunityGist = liveCommunityGist ?? (liveCommunityVerdict == null ? baseCommunityGist : []);
 
   const tokens = q
     .toLowerCase()
@@ -270,7 +285,7 @@ function SearchPage() {
             researchVerdict={data.oneLiner}
             researchGist={data.researchGist}
             communityVerdict={displayCommunityVerdict}
-            communityGist={liveCommunityVerdict == null ? data.communityGist : []}
+            communityGist={displayCommunityGist}
             safetyNote={data.safetyNote}
           />
         </section>
@@ -422,17 +437,27 @@ function SearchPage() {
                 <p className="font-label text-xs text-[var(--muted-ink)]">
                   COMMUNITY SENTIMENT
                 </p>
-                <p className="font-mono text-sm" style={{ color }}>
-                  {displaySentiment}% positive
-                </p>
+                {/* Only claim a % when real quotes back it — a bar with no
+                    discussion behind it was pure invention (defaulted 50). */}
+                {displayQuotes.length > 0 ? (
+                  <p className="font-mono text-sm" style={{ color }}>
+                    {displaySentiment}% positive
+                  </p>
+                ) : (
+                  <p className="font-mono text-sm text-[var(--muted-ink)]">
+                    gathering data…
+                  </p>
+                )}
               </div>
 
-              <div className="h-2 overflow-hidden rounded-full bg-[var(--parchment-deep)]">
-                <div
-                  className="h-full rounded-full"
-                  style={{ width: `${displaySentiment}%`, backgroundColor: color }}
-                />
-              </div>
+              {displayQuotes.length > 0 && (
+                <div className="h-2 overflow-hidden rounded-full bg-[var(--parchment-deep)]">
+                  <div
+                    className="h-full rounded-full"
+                    style={{ width: `${displaySentiment}%`, backgroundColor: color }}
+                  />
+                </div>
+              )}
 
               <div className="mt-8 space-y-8">
                 {displayQuotes.length > 0 ? (
@@ -462,7 +487,7 @@ function SearchPage() {
                   <div>
                     <p className="text-lg leading-8 text-[var(--ink)]">
                       {displayCommunityVerdict ||
-                        `Community sentiment sits at ${displaySentiment}% positive based on available discussion.`}
+                        "Community reactions are still being gathered for this one."}
                     </p>
 
                     <a
