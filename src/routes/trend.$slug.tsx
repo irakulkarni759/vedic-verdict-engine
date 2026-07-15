@@ -34,6 +34,9 @@ export const Route = createFileRoute("/trend/$slug")({
           { name: "description", content: loaderData.trend.oneLiner },
           { property: "og:title", content: `${loaderData.trend.name} — ${loaderData.trend.verdict}` },
           { property: "og:description", content: loaderData.trend.oneLiner },
+          { name: "twitter:card", content: "summary" },
+          { name: "twitter:title", content: `${loaderData.trend.name} — ${loaderData.trend.verdict}` },
+          { name: "twitter:description", content: loaderData.trend.oneLiner },
         ]
       : [],
   }),
@@ -175,6 +178,10 @@ function TrendPage() {
             }
             safetyNote={trend.safetyNote}
           />
+
+          <div>
+            <ShareButton title={`${trend.name} — ${trend.verdict} on Veda`} text={trend.oneLiner} />
+          </div>
         </section>
 
         <section className="mt-8">
@@ -403,6 +410,67 @@ function TrendPage() {
         )}
       </div>
     </main>
+  );
+}
+
+/**
+ * Share this verdict card: native share sheet where the browser supports
+ * it, clipboard-copy fallback everywhere else. The link unfurls with the
+ * verdict + one-liner via the route's og/twitter meta. Duplicated in
+ * search.$query.tsx — these route files intentionally don't share
+ * presentational components.
+ */
+function ShareButton({ title, text }: { title: string; text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function share() {
+    const url = window.location.href;
+    if (typeof navigator.share === "function") {
+      try {
+        await navigator.share({ title, text, url });
+        return;
+      } catch {
+        // user dismissed the sheet, or share failed — fall through to copy
+      }
+    }
+    let ok = false;
+    try {
+      await navigator.clipboard.writeText(url);
+      ok = true;
+    } catch {
+      // Clipboard API blocked (permissions/iframe) — legacy fallback.
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = url;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        ok = document.execCommand("copy");
+        ta.remove();
+      } catch {
+        ok = false;
+      }
+    }
+    if (ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={share}
+      className="font-label mt-6 inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs transition hover:opacity-70"
+      style={{
+        color: "var(--terracotta)",
+        borderColor: "color-mix(in oklab, var(--terracotta) 45%, transparent)",
+        backgroundColor: "color-mix(in oklab, var(--terracotta) 8%, transparent)",
+      }}
+    >
+      {copied ? "LINK COPIED ✓" : "SHARE THIS VERDICT ↗"}
+    </button>
   );
 }
 

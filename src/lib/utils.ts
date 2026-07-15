@@ -58,6 +58,21 @@ export async function pollUntil<T>(
 }
 
 /**
+ * Caps a hero gist fragment's length WITHOUT chopping mid-word — the old
+ * hard slice(0, 40) turned an overlong model fragment into visibly broken
+ * text like "Whey protein builds muscle with resistan". Cuts back to the
+ * last word boundary instead; if that would throw away more than half the
+ * budget (one giant word), falls back to the hard cap.
+ */
+export function trimGistFragment(s: string, max = 44): string {
+  const t = s.trim();
+  if (t.length <= max) return t;
+  const cut = t.slice(0, max + 1);
+  const lastSpace = cut.lastIndexOf(" ");
+  return (lastSpace > max / 2 ? cut.slice(0, lastSpace) : t.slice(0, max)).trim();
+}
+
+/**
  * Strips a trailing " for <purpose>" clause before searching Reddit — people
  * discuss "stomach vacuum," not "stomach vacuum for shrinking waist," so the
  * purpose clause only dilutes the search and can cost real matches. Leaves

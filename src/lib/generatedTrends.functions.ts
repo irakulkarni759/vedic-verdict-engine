@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { getSupabaseServiceClient } from "./supabase.server";
 import { CATEGORIES, type Trend, type Verdict } from "./trends";
 import { checkAdminPassword } from "./comments.functions";
-import { toTitleCase, coreSubjectForReddit } from "./utils";
+import { toTitleCase, coreSubjectForReddit, trimGistFragment } from "./utils";
 import { fetchRedditQuotes } from "./reddit.server";
 // Type-only — erased at compile time, so this doesn't create a runtime
 // circular dependency even though evidence.functions.ts imports
@@ -782,10 +782,11 @@ Return ONLY this JSON, no other text:
       communityGist?: string[];
     };
     // Same trim/cap treatment as generateBulletsAndQuotes' cleanGist — a
-    // stray full-sentence "fragment" shouldn't blow up the hero layout.
+    // stray full-sentence "fragment" shouldn't blow up the hero layout,
+    // and the cap is word-boundary-safe (no mid-word chops).
     const communityGist = (parsed.communityGist ?? [])
       .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
-      .map((s) => s.trim().slice(0, 40))
+      .map((s) => trimGistFragment(s))
       .slice(0, 4);
     return {
       communityVerdict: typeof parsed.communityVerdict === "string" ? parsed.communityVerdict.trim() || null : null,

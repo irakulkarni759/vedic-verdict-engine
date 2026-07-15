@@ -200,14 +200,38 @@ async function parseCommunityResponse(res: Response | null, limit: number): Prom
   }
 }
 
+/**
+ * A quote card should read like a person talking, not a resource dump. A
+ * comment that's essentially a list of links (recommendation roundups,
+ * "here are 5 studies" replies) is useless as a displayed quote even when
+ * it's technically on-topic — filter those out here so they're caught for
+ * ALREADY-CACHED backend rows too, not just newly-scraped ones. Markdown
+ * links get flattened to their label text first ("[this study](url)" ->
+ * "this study"); a comment is only dropped when links dominate it.
+ */
+function cleanQuoteBody(body: string): string | null {
+  // Flatten markdown links to their visible label.
+  let text = body.replace(/\[([^\]]+)\]\((?:https?|www)[^)]*\)/gi, "$1");
+  const urls = text.match(/https?:\/\/\S+|www\.\S+\.\S+/gi) ?? [];
+  const urlChars = urls.reduce((sum, u) => sum + u.length, 0);
+  // 2+ bare URLs, or a single URL that IS most of the comment -> junk.
+  if (urls.length >= 2 || (urls.length === 1 && urlChars / text.length > 0.3)) return null;
+  // One incidental URL inside a real comment: strip it, keep the words.
+  text = text.replace(/https?:\/\/\S+|www\.\S+\.\S+/gi, "").replace(/\s{2,}/g, " ").trim();
+  // Whatever's left has to still be a substantive comment.
+  return text.length >= 30 ? text : null;
+}
+
 function topQuotesToRedditQuotes(topQuotes: SentimentApiTopQuote[] | undefined, limit: number): RedditQuote[] {
   if (!topQuotes || topQuotes.length === 0) return [];
   const quotes: RedditQuote[] = [];
   for (const c of topQuotes) {
     if (!c.body || !c.url) continue;
+    const cleaned = cleanQuoteBody(c.body);
+    if (!cleaned) continue;
     quotes.push({
       handle: c.author ? `u/${c.author}` : `r/${c.subreddit ?? "reddit"}`,
-      text: truncateAtWordBoundary(c.body, 600),
+      text: truncateAtWordBoundary(cleaned, 600),
       url: c.url,
     });
     if (quotes.length >= limit) break;

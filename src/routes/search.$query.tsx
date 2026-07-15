@@ -22,6 +22,21 @@ export const Route = createFileRoute("/search/$query")({
     generateEvidenceVerdict({
       data: { query: decodeURIComponent(params.query) },
     }),
+  // Social preview meta — without these a shared search link unfurled with
+  // nothing, which undercuts the whole share button below.
+  head: ({ loaderData }) => ({
+    meta: loaderData
+      ? [
+          { title: `${loaderData.name} — ${loaderData.verdict} — Veda` },
+          { name: "description", content: loaderData.oneLiner },
+          { property: "og:title", content: `${loaderData.name} — ${loaderData.verdict}` },
+          { property: "og:description", content: loaderData.oneLiner },
+          { name: "twitter:card", content: "summary" },
+          { name: "twitter:title", content: `${loaderData.name} — ${loaderData.verdict}` },
+          { name: "twitter:description", content: loaderData.oneLiner },
+        ]
+      : [],
+  }),
   pendingComponent: PendingPage,
   errorComponent: ({ error }) => (
     <div
@@ -298,6 +313,12 @@ function SearchPage() {
             communityGist={displayCommunityGist}
             safetyNote={data.safetyNote}
           />
+
+          {!isPharma && !isUnknown && (
+            <div>
+              <ShareButton title={`${data.name} — ${data.verdict} on Veda`} text={data.oneLiner} />
+            </div>
+          )}
         </section>
 
         {/* ── EVIDENCE BULLETS ──
@@ -591,6 +612,67 @@ function HeroSummary({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Share this verdict card: native share sheet where the browser supports it
+ * (mobile Safari/Chrome, macOS Safari/Chrome), clipboard-copy fallback
+ * everywhere else. The link unfurls with the verdict + one-liner via the
+ * route's og/twitter meta. Same component duplicated in trend.$slug.tsx —
+ * these route files intentionally don't share presentational components.
+ */
+function ShareButton({ title, text }: { title: string; text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function share() {
+    const url = window.location.href;
+    if (typeof navigator.share === "function") {
+      try {
+        await navigator.share({ title, text, url });
+        return;
+      } catch {
+        // user dismissed the sheet, or share failed — fall through to copy
+      }
+    }
+    let ok = false;
+    try {
+      await navigator.clipboard.writeText(url);
+      ok = true;
+    } catch {
+      // Clipboard API blocked (permissions/iframe) — legacy fallback.
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = url;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        ok = document.execCommand("copy");
+        ta.remove();
+      } catch {
+        ok = false;
+      }
+    }
+    if (ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={share}
+      className="font-label mt-6 inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs transition hover:opacity-70"
+      style={{
+        color: "var(--terracotta)",
+        borderColor: "color-mix(in oklab, var(--terracotta) 45%, transparent)",
+        backgroundColor: "color-mix(in oklab, var(--terracotta) 8%, transparent)",
+      }}
+    >
+      {copied ? "LINK COPIED ✓" : "SHARE THIS VERDICT ↗"}
+    </button>
   );
 }
 

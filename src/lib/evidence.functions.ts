@@ -6,7 +6,7 @@ import {
   getGeneratedEvidenceBySlug,
   slugify,
 } from "./generatedTrends.functions";
-import { toTitleCase, coreSubjectForReddit, outcomeClause } from "./utils";
+import { toTitleCase, coreSubjectForReddit, outcomeClause, trimGistFragment } from "./utils";
 import { fetchCommunityFast, type RedditQuote, type CommunityResult } from "./reddit.server";
 import { checkAdminPassword } from "./comments.functions";
 import { getSupabaseServiceClient } from "./supabase.server";
@@ -395,14 +395,14 @@ Return ONLY this JSON shape, no other text:
       ? parsed.communityVerdict.trim()
       : null;
 
-    // Trim + drop empties; also hard-cap length so a stray full-sentence
-    // gist (model didn't follow the 2-3 word instruction) doesn't blow up
-    // the skimmable-bullet layout — better a slightly-too-long phrase gets
-    // through than the UI breaking on an unexpectedly huge one.
+    // Trim + drop empties; also cap length so a stray full-sentence gist
+    // (model didn't follow the 2-3 word instruction) doesn't blow up the
+    // skimmable-bullet layout. Word-boundary cap — the old hard slice
+    // visibly chopped words in half ("...builds muscle with resistan").
     const cleanGist = (arr: string[] | undefined): string[] =>
       (arr ?? [])
         .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
-        .map((s) => s.trim().slice(0, 40))
+        .map((s) => trimGistFragment(s))
         .slice(0, 4);
 
     const researchGist = cleanGist(parsed.researchGist);
