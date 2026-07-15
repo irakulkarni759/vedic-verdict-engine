@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { TRENDS } from "@/lib/trends";
+import { TRENDS, SITE_URL } from "@/lib/trends";
 import { TrendCard } from "@/components/TrendCard";
 import { Comments } from "@/components/Comments";
 import { toTitleCase, coreSubjectForReddit, pollUntil } from "@/lib/utils";
@@ -23,20 +23,28 @@ export const Route = createFileRoute("/search/$query")({
       data: { query: decodeURIComponent(params.query) },
     }),
   // Social preview meta — without these a shared search link unfurled with
-  // nothing, which undercuts the whole share button below.
-  head: ({ loaderData }) => ({
-    meta: loaderData
-      ? [
-          { title: `${loaderData.name} — ${loaderData.verdict} — Veda` },
-          { name: "description", content: loaderData.oneLiner },
-          { property: "og:title", content: `${loaderData.name} — ${loaderData.verdict}` },
-          { property: "og:description", content: loaderData.oneLiner },
-          { name: "twitter:card", content: "summary" },
-          { name: "twitter:title", content: `${loaderData.name} — ${loaderData.verdict}` },
-          { name: "twitter:description", content: loaderData.oneLiner },
-        ]
-      : [],
-  }),
+  // nothing, which undercuts the whole share button below. The og:image points
+  // at the /og/$slug.png renderer so the unfurl shows the actual verdict card.
+  head: ({ loaderData, params }) => {
+    if (!loaderData) return { meta: [] };
+    const title = `${loaderData.name} — ${loaderData.verdict}`;
+    const ogImage = `${SITE_URL}/og/${loaderData.slug}`;
+    return {
+      meta: [
+        { title: `${title} — Veda` },
+        { name: "description", content: loaderData.oneLiner },
+        { property: "og:title", content: title },
+        { property: "og:description", content: loaderData.oneLiner },
+        { property: "og:type", content: "article" },
+        { property: "og:url", content: `${SITE_URL}/search/${params.query}` },
+        { property: "og:image", content: ogImage },
+        { name: "twitter:card", content: "summary_large_image" },
+        { name: "twitter:title", content: title },
+        { name: "twitter:description", content: loaderData.oneLiner },
+        { name: "twitter:image", content: ogImage },
+      ],
+    };
+  },
   pendingComponent: PendingPage,
   errorComponent: ({ error }) => (
     <div

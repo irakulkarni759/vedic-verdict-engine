@@ -3,6 +3,11 @@ import type { EvidenceBullet, EvidenceArticle } from "./evidence.functions";
 
 export type Verdict = "BACKED" | "MIXED" | "DEBUNKED";
 
+/** Canonical public origin, used to build absolute URLs for og:image / og:url
+ *  and the sitemap. Social crawlers reject relative image paths, so these must
+ *  be absolute. Keep in sync with the deployed domain. */
+export const SITE_URL = "https://vedic-verdict-engine.lovable.app";
+
 export type Trend = {
   slug: string;
   name: string;

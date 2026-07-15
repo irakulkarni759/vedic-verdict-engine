@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import type {} from "@tanstack/react-start";
-import { CATEGORIES, TRENDS } from "@/lib/trends";
+import { CATEGORIES, TRENDS, SITE_URL } from "@/lib/trends";
 import { getSupabaseServiceClient } from "@/lib/supabase.server";
 
-const BASE_URL = "https://vedic-verdict-engine.lovable.app";
+const BASE_URL = SITE_URL;
 
 interface SitemapEntry {
   path: string;

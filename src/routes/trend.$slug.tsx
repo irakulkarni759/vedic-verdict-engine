@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
-import { trendBySlug, type Trend, type Verdict } from "@/lib/trends";
+import { trendBySlug, SITE_URL, type Trend, type Verdict } from "@/lib/trends";
 import { getGeneratedTrendBySlug, persistTrendQuotes } from "@/lib/generatedTrends.functions";
 import { startRedditQuoteJob, pollRedditQuoteJob, type ClaimJobPollResult } from "@/lib/reddit.server";
 import { coreSubjectForReddit, pollUntil } from "@/lib/utils";
@@ -27,19 +27,29 @@ export const Route = createFileRoute("/trend/$slug")({
     return { trend, related };
   },
 
-  head: ({ loaderData }) => ({
-    meta: loaderData
-      ? [
-          { title: `${loaderData.trend.name} — ${loaderData.trend.verdict} — Veda` },
-          { name: "description", content: loaderData.trend.oneLiner },
-          { property: "og:title", content: `${loaderData.trend.name} — ${loaderData.trend.verdict}` },
-          { property: "og:description", content: loaderData.trend.oneLiner },
-          { name: "twitter:card", content: "summary" },
-          { name: "twitter:title", content: `${loaderData.trend.name} — ${loaderData.trend.verdict}` },
-          { name: "twitter:description", content: loaderData.trend.oneLiner },
-        ]
-      : [],
-  }),
+  head: ({ loaderData }) => {
+    if (!loaderData) return { meta: [] };
+    const { trend } = loaderData;
+    const title = `${trend.name} — ${trend.verdict}`;
+    const ogImage = `${SITE_URL}/og/${trend.slug}`;
+    return {
+      meta: [
+        { title: `${title} — Veda` },
+        { name: "description", content: trend.oneLiner },
+        { property: "og:title", content: title },
+        { property: "og:description", content: trend.oneLiner },
+        { property: "og:type", content: "article" },
+        { property: "og:url", content: `${SITE_URL}/trend/${trend.slug}` },
+        { property: "og:image", content: ogImage },
+        // summary_large_image is what upgrades the unfurl from a small square
+        // with a favicon to a full-width render of the verdict card.
+        { name: "twitter:card", content: "summary_large_image" },
+        { name: "twitter:title", content: title },
+        { name: "twitter:description", content: trend.oneLiner },
+        { name: "twitter:image", content: ogImage },
+      ],
+    };
+  },
 
   notFoundComponent: () => (
     <main className="min-h-screen px-6 py-10">
