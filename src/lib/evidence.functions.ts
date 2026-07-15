@@ -1041,7 +1041,20 @@ async function buildResultFromIds(opts: {
   // not "polydeoxyribonucleotide" or "whole body vibration training." Reddit
   // search uses the original colloquial query; PubMed/Claude context below
   // still uses searchSubject.
-  const searchSubject = fallback ? fallback.terms.join(" ") : query;
+  //
+  // The outcome clause is deliberately KEPT on the subject Claude analyzes
+  // against: the analysis prompt's every relevance rule anchors on this
+  // string, so passing bare fallback terms ("oleic acid linoleic acid")
+  // made Claude judge abstracts against the ingredients with NO outcome —
+  // which is how a hair-growth page got muscle-repair bullets. With the
+  // outcome retained ("oleic acid, linoleic acid for hair growth"), the
+  // wrong-outcome exclusion rules actually engage.
+  const subjectOutcome = outcomeClause(query);
+  const searchSubject = fallback
+    ? subjectOutcome
+      ? `${fallback.terms.join(", ")} for ${subjectOutcome}`
+      : fallback.terms.join(" ")
+    : query;
 
   // The community scrape was kicked off at the top of this function so it could
   // run while PubMed was being fetched and parsed; collect it now. Claude then
@@ -1339,10 +1352,18 @@ async function generateFreshEvidenceVerdict(rawQuery: string): Promise<EvidenceV
         // compound is most-studied for generally, which is a top source of
         // junk bullets on branded-product pages.
         const queryOutcome = outcomeClause(query) ?? classification?.impliedOutcome ?? null;
+        // Outcome anchoring applies to BOTH fallback reasons, not just
+        // products. identifyFallbackTerms is told to keep terminology terms
+        // outcome-targeted, but it doesn't always comply — "batana oil for
+        // hair growth" came back as bare fatty-acid names, whose UNANCHORED
+        // search surfaced muscle-injury studies that became the page's
+        // bullets. Re-attaching the outcome here makes that impossible; a
+        // term that already contains the outcome just repeats a token,
+        // which is harmless to PubMed's AND semantics.
         const fallbackTerm = fallback.terms
           .map((t) => t.replace(/[()"]/g, "").trim())
           .filter(Boolean)
-          .map((t) => (fallback.reason === "product" && queryOutcome ? `(${t} ${queryOutcome})` : t))
+          .map((t) => (queryOutcome ? `(${t} ${queryOutcome})` : t))
           .join(" OR ");
         const fallbackSearch = await fetchPubmed(
           `esearch.fcgi?db=pubmed&retmode=json&retmax=15&sort=relevance&term=${encodeURIComponent(fallbackTerm)}`,
