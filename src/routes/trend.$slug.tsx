@@ -118,6 +118,15 @@ function TrendPage() {
 
   const handleQuotesFound = useCallback(() => setHasQuotes(true), []);
 
+  // Publication year per bullet, looked up by the bullet's article url —
+  // available for generated trends whose articles list was cached;
+  // curated trends (no articles) simply show no year chip.
+  const yearByUrl = new Map((trend.articles ?? []).map((a) => [a.url, a.year]));
+  const articleYear = (url: string): string | null => {
+    const y = yearByUrl.get(url);
+    return y && /^\d{4}$/.test(y) ? y : null;
+  };
+
   return (
     <main className="min-h-screen bg-[var(--parchment)] px-5 py-8 sm:px-8 sm:py-10">
       <div className="mx-auto max-w-[1120px]">
@@ -234,6 +243,14 @@ function TrendPage() {
                           >
                             {b.studyType.toUpperCase()}
                           </span>
+                          {articleYear(b.url) && (
+                            <span
+                              className="font-label rounded-full px-2 py-0.5 text-[9px]"
+                              style={{ color: "var(--muted-ink)", backgroundColor: "color-mix(in oklab, var(--ink) 6%, transparent)" }}
+                            >
+                              PUBLISHED {articleYear(b.url)}
+                            </span>
+                          )}
                           {b.limitations && (
                             <span
                               className="font-label inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px]"

@@ -223,6 +223,16 @@ function SearchPage() {
     ),
   ).slice(0, 3);
 
+  // Publication year per bullet, looked up by the bullet's article url —
+  // bullets themselves don't carry a date, but the cached articles list
+  // does. Ingredient bullets link to a PubMed *search* (no single article),
+  // so they simply get no year chip.
+  const yearByUrl = new Map(data.articles.map((a) => [a.url, a.year]));
+  const articleYear = (url: string): string | null => {
+    const y = yearByUrl.get(url);
+    return y && /^\d{4}$/.test(y) ? y : null;
+  };
+
   const isPharma = data.verdict === "PHARMA";
   // A branded product's raw name almost never has direct PubMed hits (that's
   // the whole reason the ingredient-breakdown fallback exists) — data.studies
@@ -365,6 +375,14 @@ function SearchPage() {
                         >
                           {b.studyType.toUpperCase()}
                         </span>
+                        {articleYear(b.url) && (
+                          <span
+                            className="font-label rounded-full px-2 py-0.5 text-[9px]"
+                            style={{ color: "var(--muted-ink)", backgroundColor: "color-mix(in oklab, var(--ink) 6%, transparent)" }}
+                          >
+                            PUBLISHED {articleYear(b.url)}
+                          </span>
+                        )}
                         {b.limitations && (
                           <span
                             className="font-label inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px]"

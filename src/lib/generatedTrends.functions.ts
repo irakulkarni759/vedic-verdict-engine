@@ -126,6 +126,7 @@ function rowToTrend(row: GeneratedTrendRow): Trend | null {
     quotes: row.opinions ?? [],
     related: row.related_ids ?? [],
     sourceUrls: row.source_urls ?? [],
+    articles: row.articles && row.articles.length > 0 ? row.articles : undefined,
   };
 }
 

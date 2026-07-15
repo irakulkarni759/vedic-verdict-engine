@@ -141,9 +141,11 @@ function Nav() {
               veda
             </span>
           </Link>
-          <div className="hidden md:flex items-center gap-3 font-label" style={{ fontSize: 10, color: "var(--ink)" }}>
+          {/* 13px reads comfortably on a laptop — the old 10px was squint
+              territory once the viewport left mobile sizes. */}
+          <div className="hidden md:flex items-center gap-4 font-label" style={{ fontSize: 13, color: "var(--ink)" }}>
             {CATEGORIES.map((c, i) => (
-              <span key={c.slug} className="flex items-center gap-3">
+              <span key={c.slug} className="flex items-center gap-4">
                 <Link
                   to="/category/$slug"
                   params={{ slug: c.slug }}
@@ -311,15 +313,18 @@ function Hero({
           </p>
         )}
 
+        {/* items-baseline (not center): the small uppercase TRENDING label
+            and the larger lowercase trend names share a text baseline, so
+            the label no longer floats above the row it introduces. */}
         <div
-          className="mt-4 sm:mt-6 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-4 text-center"
+          className="mt-4 sm:mt-6 flex flex-wrap items-baseline justify-center gap-x-3 gap-y-1 px-4 text-center"
           style={{ animation: "fade-up 1.2s ease-out 1.4s both" }}
         >
           <span className="font-label" style={{ color: "var(--terracotta)", fontSize: 10 }}>
             TRENDING
           </span>
           {trending.map((t, i) => (
-            <span key={t.slug} className="flex items-center gap-3">
+            <span key={t.slug} className="flex items-baseline gap-3">
               <Link
                 to="/trend/$slug"
                 params={{ slug: t.slug }}
@@ -404,9 +409,17 @@ function Stats() {
               borderLeft: i > 0 ? "0.5px solid color-mix(in oklab, var(--parchment) 25%, transparent)" : undefined,
             }}
           >
+            {/* Fixed shared height + bottom alignment: the $9M figure renders
+                smaller than the other two (longer string), which used to leave
+                it floating higher — all three numbers now sit on the same
+                baseline regardless of their font size. */}
             <div
-              className="font-display leading-none"
-              style={{ color: "var(--parchment)", fontSize: `clamp(20px, 7vw, ${s.size}px)` }}
+              className="font-display leading-none flex items-end justify-center"
+              style={{
+                color: "var(--parchment)",
+                fontSize: `clamp(20px, 7vw, ${s.size}px)`,
+                height: "clamp(28px, 7vw, 88px)",
+              }}
             >
               <StatCountUp text={s.num} />
             </div>

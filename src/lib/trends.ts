@@ -1,5 +1,5 @@
 // Type-only — erased at compile time, no runtime dependency on evidence.functions.
-import type { EvidenceBullet } from "./evidence.functions";
+import type { EvidenceBullet, EvidenceArticle } from "./evidence.functions";
 
 export type Verdict = "BACKED" | "MIXED" | "DEBUNKED";
 
@@ -40,6 +40,11 @@ export type Trend = {
    *  available. Empty for curated trends (no article was ever fetched for
    *  them) — falls back to a plain name search in that case. */
   sourceUrls: string[];
+  /** Full article metadata (title, journal, year, url) for generated
+   *  trends — used to show each bullet's publication year by matching on
+   *  url. Undefined for curated trends and rows generated before articles
+   *  were cached. */
+  articles?: EvidenceArticle[];
 };
 
 export const CATEGORIES = [
