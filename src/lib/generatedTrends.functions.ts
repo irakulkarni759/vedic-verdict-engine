@@ -320,39 +320,56 @@ export const persistTrendQuotes = createServerFn({ method: "POST" })
       summary: string;
       existingSentiment: number;
       quotes: { handle: string; text: string; url: string }[];
+      /** Sentiment score (0-100) computed by the Reddit backend from the
+       *  FULL scraped comment pool — when present it beats the Haiku guess
+       *  from the 3 displayed quotes. Passed through from the claim job's
+       *  payload by the pages that trigger the late re-fetch. */
+      backendSentiment?: number | null;
     }) => d,
   )
-  .handler(async ({ data }): Promise<{ ok: boolean; communityVerdict?: string; sentiment?: number }> => {
-    try {
-      if (!data.quotes || data.quotes.length === 0) return { ok: false };
+  .handler(
+    async ({
+      data,
+    }): Promise<{ ok: boolean; communityVerdict?: string; communityGist?: string[]; sentiment?: number }> => {
+      try {
+        if (!data.quotes || data.quotes.length === 0) return { ok: false };
 
-      const { communityVerdict, sentiment } = await inferSentimentFromQuotes({
-        name: data.name,
-        summary: data.summary,
-        quotes: data.quotes,
-        existingSentiment: data.existingSentiment,
-      });
+        const { communityVerdict, communityGist, sentiment: inferredSentiment } = await inferSentimentFromQuotes({
+          name: data.name,
+          summary: data.summary,
+          quotes: data.quotes,
+          existingSentiment: data.existingSentiment,
+        });
 
-      const supabase = getSupabaseServiceClient();
-      const update: Record<string, unknown> = { opinions: data.quotes };
-      // This only ever runs when the page had zero quotes on hand (guarded by
-      // callers), so any community_gist already on the row necessarily
-      // predates these quotes and is now stale — clear it so cache hits fall
-      // back to the fresh, quote-based community_verdict sentence instead of
-      // re-surfacing the old generic placeholder over it (see HeroSummary's
-      // gist-takes-precedence-over-verdict fallback order).
-      if (communityVerdict) {
-        update.community_verdict = communityVerdict;
-        update.community_gist = null;
+        const sentiment =
+          typeof data.backendSentiment === "number" ? data.backendSentiment : inferredSentiment;
+
+        const supabase = getSupabaseServiceClient();
+        const update: Record<string, unknown> = { opinions: data.quotes };
+        // This only ever runs when the page had zero quotes on hand (guarded
+        // by callers), so any community_gist already on the row necessarily
+        // predates these quotes and is now stale ("Limited discussion
+        // found"). Replace it with the fresh quote-based gist so the hero
+        // stays a skimmable bulleted list — nulling it (the old behavior)
+        // demoted the section to one long sentence forever.
+        if (communityVerdict) {
+          update.community_verdict = communityVerdict;
+          update.community_gist = communityGist.length > 0 ? communityGist : null;
+        }
+        if (typeof sentiment === "number") update.sentiment_score = sentiment;
+
+        const { error } = await supabase.from("generated_trends").update(update).eq("id", data.slug);
+        return {
+          ok: !error,
+          communityVerdict: communityVerdict ?? undefined,
+          communityGist: communityGist.length > 0 ? communityGist : undefined,
+          sentiment: sentiment ?? undefined,
+        };
+      } catch {
+        return { ok: false };
       }
-      if (typeof sentiment === "number") update.sentiment_score = sentiment;
-
-      const { error } = await supabase.from("generated_trends").update(update).eq("id", data.slug);
-      return { ok: !error, communityVerdict: communityVerdict ?? undefined, sentiment: sentiment ?? undefined };
-    } catch {
-      return { ok: false };
-    }
-  });
+    },
+  );
 
 /**
  * Top searched-more-than-once queries, for the homepage "trying now" row.
@@ -720,9 +737,9 @@ async function inferSentimentFromQuotes(row: {
   summary: string;
   quotes: { handle: string; text: string }[];
   existingSentiment: number;
-}): Promise<{ communityVerdict: string | null; sentiment: number | null }> {
+}): Promise<{ communityVerdict: string | null; communityGist: string[]; sentiment: number | null }> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return { communityVerdict: null, sentiment: null };
+  if (!apiKey) return { communityVerdict: null, communityGist: [], sentiment: null };
 
   const quotesText = row.quotes.length
     ? row.quotes.map((q) => `${q.handle}: "${q.text}"`).join("\n")
@@ -733,12 +750,13 @@ async function inferSentimentFromQuotes(row: {
 Real community quotes just fetched for it:
 ${quotesText}
 
-Return a JSON object with two fields:
+Return a JSON object with three fields:
 1. "sentiment": a number 0-100 for how positive community sentiment is, based ONLY on the real quotes above (if any) — not invented. If there are no real quotes, use your general knowledge of typical reception for this kind of product/practice instead.
 2. "communityVerdict": ONE sentence (max ~140 chars), plain conversational language, synthesizing the real quotes above. Do not invent a specific claim the real quotes don't support. If there are no real quotes, write a general, honest line like "Limited public discussion found — the research above gives a reasonable starting expectation" rather than fabricating specifics.
+3. "communityGist": 2-4 short phrases, EACH 2-3 WORDS MAX (skimmable fragments, not sentences — e.g. ["Mixed reviews", "Real results, slow", "Purging first weeks"]), capturing what the real quotes above actually say, ordered by how strongly/often they say it. Plain everyday words, no jargon. Base every phrase on the real quotes — never invent one. Empty array [] if there are no real quotes to summarize.
 
 Return ONLY this JSON, no other text:
-{"sentiment": 70, "communityVerdict": "..."}`;
+{"sentiment": 70, "communityVerdict": "...", "communityGist": ["...", "..."]}`;
 
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -750,23 +768,31 @@ Return ONLY this JSON, no other text:
       },
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
-        max_tokens: 250,
+        max_tokens: 350,
         messages: [{ role: "user", content: prompt }],
       }),
     });
-    if (!res.ok) return { communityVerdict: null, sentiment: null };
+    if (!res.ok) return { communityVerdict: null, communityGist: [], sentiment: null };
     const json = (await res.json()) as { content: { text: string }[] };
     const text = json.content?.[0]?.text ?? "{}";
     const parsed = JSON.parse(text.replace(/```json|```/g, "").trim()) as {
       sentiment?: number;
       communityVerdict?: string;
+      communityGist?: string[];
     };
+    // Same trim/cap treatment as generateBulletsAndQuotes' cleanGist — a
+    // stray full-sentence "fragment" shouldn't blow up the hero layout.
+    const communityGist = (parsed.communityGist ?? [])
+      .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
+      .map((s) => s.trim().slice(0, 40))
+      .slice(0, 4);
     return {
       communityVerdict: typeof parsed.communityVerdict === "string" ? parsed.communityVerdict.trim() || null : null,
+      communityGist,
       sentiment: typeof parsed.sentiment === "number" ? parsed.sentiment : null,
     };
   } catch {
-    return { communityVerdict: null, sentiment: null };
+    return { communityVerdict: null, communityGist: [], sentiment: null };
   }
 }
 
@@ -827,7 +853,7 @@ export const adminRefreshRedditQuotes = createServerFn({ method: "POST" })
           }
           processed++;
 
-          const { communityVerdict, sentiment } = await inferSentimentFromQuotes({
+          const { communityVerdict, communityGist, sentiment } = await inferSentimentFromQuotes({
             name: row.name,
             summary: row.summary,
             quotes: realQuotes,
@@ -841,9 +867,12 @@ export const adminRefreshRedditQuotes = createServerFn({ method: "POST" })
               community_verdict: communityVerdict ?? "",
               sentiment_score: sentiment ?? row.sentiment_score,
               // Same reasoning as persistTrendQuotes: real quotes just came
-              // in, so any community_gist already on the row predates them
-              // and would otherwise keep shadowing this fresh verdict.
-              ...(realQuotes.length > 0 ? { community_gist: null } : {}),
+              // in, so any community_gist already on the row predates them —
+              // replace it with the fresh quote-based gist (or clear it if
+              // none came back) so it never shadows the new verdict.
+              ...(realQuotes.length > 0
+                ? { community_gist: communityGist.length > 0 ? communityGist : null }
+                : {}),
             })
             .eq("id", row.id);
           if (updateError) continue;

@@ -7,7 +7,7 @@ import {
   slugify,
 } from "./generatedTrends.functions";
 import { toTitleCase, coreSubjectForReddit, outcomeClause } from "./utils";
-import { fetchRedditQuotesFast, type RedditQuote } from "./reddit.server";
+import { fetchCommunityFast, type RedditQuote, type CommunityResult } from "./reddit.server";
 import { checkAdminPassword } from "./comments.functions";
 import { getSupabaseServiceClient } from "./supabase.server";
 
@@ -856,50 +856,57 @@ function buildIngredientBullets(
 }
 
 
+type QueryClassification = {
+  /** The query with obvious typos fixed (especially brand/ingredient names,
+   *  e.g. "the ordinaty" -> "the ordinary") — the rest of the pipeline runs
+   *  on this. Identical to the raw query when nothing needed fixing. */
+  correctedQuery: string;
+  isProduct: boolean;
+  isMedicine: boolean;
+  medicineName: string | null;
+  /** For product queries with no explicit "for Y" clause: the single main
+   *  outcome people buy this product for ("acne", "hair growth"), used to
+   *  anchor the per-ingredient PubMed searches so they don't drift into
+   *  whatever each compound is most-studied for generally. Null otherwise. */
+  impliedOutcome: string | null;
+};
+
 /**
- * Veda covers supplements, wellness practices, and cosmetic ingredients —
- * not pharmaceutical medicines. Prescription and OTC drugs need a doctor
- * or pharmacist, not a BACKED/MIXED/DEBUNKED verdict, so this runs before
- * the PubMed pipeline and short-circuits with a clear "not covered" message.
- * Fails open (returns not-a-medicine) on any error so an API hiccup never
- * blocks a legitimate search.
+ * ONE early Haiku call that answers everything the pipeline needs to know
+ * about the query before searching — replaces what used to be two separate
+ * serial calls (checkIsPharmaceutical, checkIsBrandedProduct) and adds typo
+ * correction, so a misspelled brand name ("the ordinaty niacinamide") stops
+ * dead-ending at "No PubMed results" when the intended product is obvious.
+ *
+ * This one call gates the entire pipeline — a transient failure (rate
+ * limit, network blip) silently defaulting to "not a product / no fix"
+ * means an obviously-branded or obviously-misspelled query produces an
+ * essentially empty page with no error anywhere. Retries once, logs both
+ * failures, and fails open to "use the query as typed."
  */
-/**
- * Dedicated, EARLY check for "is this query a specific branded/commercial
- * product" (e.g. "Chanel Lotion", "The Ordinary Niacinamide 10%"). This is
- * deliberately separate from — and runs before — the isWeakCount/isIrrelevant
- * PubMed heuristic that used to be the ONLY trigger for the whole
- * ingredient-breakdown pipeline. That heuristic is a proxy for "is the raw
- * query poorly covered by PubMed," which is a DIFFERENT question from "is
- * this a product" — a product's name can coincidentally pull in enough
- * loosely-related PubMed hits (or hits checkPubmedRelevance judges 'relevant
- * enough') to skip the fallback path entirely, even though it's obviously a
- * branded product, which is exactly why the Key Ingredients section used to
- * show up inconsistently for what should behave the same way every time.
- */
-async function checkIsBrandedProduct(query: string): Promise<boolean> {
+async function classifyQuery(query: string): Promise<QueryClassification> {
+  const failOpen: QueryClassification = {
+    correctedQuery: query, isProduct: false, isMedicine: false, medicineName: null, impliedOutcome: null,
+  };
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return false;
+  if (!apiKey) return failOpen;
 
-  const prompt = `Is "${query}" a specific branded/commercial PRODUCT — something with a brand name you'd find on a store shelf or product page (e.g. "Chanel Lotion", "CeraVe Moisturizing Cream", "The Ordinary Niacinamide 10%", "Neutrogena Hydro Boost")? PubMed indexes research on INGREDIENTS and ACTIVE COMPOUNDS, never on a specific commercial product by its brand name, so a product query needs its ingredients looked up separately rather than searched directly.
+  const prompt = `A user searched a wellness fact-checking site for: "${query}"
 
-Answer "no" for a plain ingredient, compound, supplement, or practice on its own, even a well-known specific one (e.g. "niacinamide", "salicylic acid", "ashwagandha", "collagen peptides", "cold plunges") — these ARE directly searchable on PubMed by name, they don't need this.
+Answer FOUR things about this query, as one JSON object:
 
-Answer "yes" ONLY when the query names or clearly implies a specific commercial product (a brand, a product line, or "brand + product type" like "Ordinary serum" or "CeraVe cream"), not just an ingredient category.
+1. "corrected_query": the query with obvious spelling/typo mistakes fixed — especially misspelled brand names, product names, and ingredient names (e.g. "the ordinaty niacinamide" -> "the ordinary niacinamide", "ashwaganda" -> "ashwagandha", "rosemarry oil" -> "rosemary oil"). Fix ONLY clear typos; never rewrite intent, never add or remove words, never expand or rephrase, and keep any "for <purpose>" clause exactly as the user wrote it. If nothing is misspelled, return the query EXACTLY as given.
+
+2. "is_product": is this a specific branded/commercial PRODUCT — something with a brand name you'd find on a store shelf or product page (e.g. "Chanel Lotion", "CeraVe Moisturizing Cream", "The Ordinary Niacinamide 10%", "Neutrogena Hydro Boost")? Answer false for a plain ingredient, compound, supplement, or practice on its own, even a well-known one ("niacinamide", "salicylic acid", "ashwagandha", "collagen peptides", "cold plunges") — those are directly searchable on PubMed by name. Answer true ONLY when the query names or clearly implies a specific commercial product (a brand, a product line, or "brand + product type" like "Ordinary serum" or "CeraVe cream").
+
+3. "is_medicine": is this a SYSTEMIC medicine — a prescription drug or oral/injectable OTC medicine for a diagnosed condition (ibuprofen, metformin, Ozempic, amoxicillin, Prozac, insulin, Tylenol, antihistamines)? Answer false for supplements, vitamins, herbs, foods, wellness practices ("melatonin", "creatine", "electrolytes", "collagen" are NOT medicines here), and false for TOPICAL skincare/haircare actives even when FDA-regulated ("benzoyl peroxide", "salicylic acid", "retinol", "adapalene", "minoxidil", "azelaic acid", sunscreen filters) — those are exactly what this site exists to cover. If true, also set "medicine_name" to the medicine's common name; otherwise "medicine_name" is null.
+
+4. "implied_outcome": ONLY when is_product is true AND the query does NOT already state a purpose (no "for <purpose>" clause): the single main outcome people buy this product for, in 1-4 plain lowercase words suitable as a research search anchor (e.g. "acne", "hair growth", "skin hydration", "wrinkles"). Null in every other case.
 
 Return ONLY this JSON, no other text:
-{"is_product": true}
-or
-{"is_product": false}`;
+{"corrected_query": "...", "is_product": false, "is_medicine": false, "medicine_name": null, "implied_outcome": null}`;
 
-  // This one call decides whether the ENTIRE ingredient-breakdown pipeline
-  // even gets attempted — a transient failure here (rate limit, network
-  // blip) used to silently default to "not a product," which for an
-  // obviously branded product query meant the whole pipeline never ran and
-  // the page came back essentially empty, with no error anywhere to explain
-  // why. Retries once before giving up, and logs on both failures so a
-  // still-broken case is actually diagnosable instead of a silent false.
-  const attempt = async (): Promise<boolean | null> => {
+  const attempt = async (): Promise<QueryClassification | null> => {
     try {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -910,75 +917,46 @@ or
         },
         body: JSON.stringify({
           model: "claude-haiku-4-5-20251001",
-          max_tokens: 50,
+          max_tokens: 150,
           messages: [{ role: "user", content: prompt }],
         }),
       });
       const json = (await res.json()) as { content: { text: string }[] };
       const text = json.content?.[0]?.text ?? "{}";
-      const parsed = JSON.parse(text.replace(/```json|```/g, "").trim()) as { is_product?: boolean };
-      return parsed.is_product === true;
+      const parsed = JSON.parse(text.replace(/```json|```/g, "").trim()) as {
+        corrected_query?: string;
+        is_product?: boolean;
+        is_medicine?: boolean;
+        medicine_name?: string | null;
+        implied_outcome?: string | null;
+      };
+      const corrected =
+        typeof parsed.corrected_query === "string" && parsed.corrected_query.trim()
+          ? parsed.corrected_query.trim()
+          : query;
+      return {
+        correctedQuery: corrected,
+        isProduct: parsed.is_product === true,
+        isMedicine: parsed.is_medicine === true,
+        medicineName: typeof parsed.medicine_name === "string" && parsed.medicine_name.trim() ? parsed.medicine_name.trim() : null,
+        impliedOutcome:
+          typeof parsed.implied_outcome === "string" && parsed.implied_outcome.trim()
+            ? parsed.implied_outcome.trim()
+            : null,
+      };
     } catch (e) {
-      console.error("[checkIsBrandedProduct] attempt failed for", JSON.stringify(query), ":", e);
+      console.error("[classifyQuery] attempt failed for", JSON.stringify(query), ":", e);
       return null;
     }
   };
 
   const first = await attempt();
   if (first !== null) return first;
-
   const second = await attempt();
   if (second !== null) return second;
 
-  console.error("[checkIsBrandedProduct] both attempts failed for", JSON.stringify(query), "— defaulting to false");
-  return false;
-}
-
-async function checkIsPharmaceutical(query: string): Promise<{ isMedicine: boolean; name?: string }> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return { isMedicine: false };
-
-  const prompt = `Is "${query}" a SYSTEMIC medicine — a prescription drug or an oral/injectable over-the-counter medicine taken to treat or manage a diagnosed medical condition (examples: ibuprofen, metformin, Ozempic, amoxicillin, Prozac, insulin, Tylenol, Pepto-Bismol, antihistamines like Benadryl/Claritin)?
-
-Answer "no" for:
-- Supplements, vitamins, herbs, foods, and general wellness practices — even ones that sound clinical (e.g. "melatonin", "creatine", "electrolytes", "collagen" are NOT medicines for this purpose).
-- TOPICAL skincare/haircare active ingredients, even ones that happen to be regulated as OTC drug monographs — e.g. "benzoyl peroxide", "salicylic acid", "retinol", "adapalene", "hydroquinone", "minoxidil", "azelaic acid", zinc oxide/titanium dioxide sunscreens. These are exactly the kind of ingredient Veda exists to cover (people research them constantly for skincare), and being FDA-regulated doesn't make them "a medicine" the way an oral/injectable drug is — answer "no" for these regardless of their regulatory status.
-
-Answer "yes" ONLY for actual systemic medicines/drugs used to treat or manage a diagnosed condition.
-
-Return ONLY this JSON, no other text:
-{"is_medicine": true, "name": "common name of the medicine"}
-or
-{"is_medicine": false}`;
-
-  try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 100,
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
-
-    const json = (await res.json()) as { content: { text: string }[] };
-    const text = json.content?.[0]?.text ?? "{}";
-    const parsed = JSON.parse(text.replace(/```json|```/g, "").trim()) as {
-      is_medicine?: boolean;
-      name?: string;
-    };
-
-    return parsed.is_medicine === true
-      ? { isMedicine: true, name: parsed.name }
-      : { isMedicine: false };
-  } catch {
-    return { isMedicine: false };
-  }
+  console.error("[classifyQuery] both attempts failed for", JSON.stringify(query), "— using query as typed");
+  return failOpen;
 }
 
 async function buildResultFromIds(opts: {
@@ -1015,9 +993,9 @@ async function buildResultFromIds(opts: {
   // redditQuerySubject straight through used to skip this cleanup entirely,
   // sending an unnaturally verbose search term that a genuinely relevant,
   // findable thread wouldn't match.
-  const quotesPromise = fetchRedditQuotesFast(coreSubjectForReddit(redditQuerySubject ?? query)).catch(
-    () => [] as RedditQuote[],
-  );
+  const communityPromise: Promise<CommunityResult> = fetchCommunityFast(
+    coreSubjectForReddit(redditQuerySubject ?? query),
+  ).catch(() => ({ quotes: [], sentiment: { score: null, label: null, commentCount: null } }));
 
   const efetch = await fetchPubmed(`efetch.fcgi?db=pubmed&retmode=xml&id=${ids.join(",")}`);
   const xml = efetch ? await efetch.text() : "";
@@ -1069,10 +1047,17 @@ async function buildResultFromIds(opts: {
   // run while PubMed was being fetched and parsed; collect it now. Claude then
   // cleans/picks the quotes and reads sentiment from them in generateBulletsAndQuotes,
   // so the quotes and the summary derived from them are produced together.
-  const redditQuotes: RedditQuote[] = await quotesPromise;
+  const community: CommunityResult = await communityPromise;
+  const redditQuotes: RedditQuote[] = community.quotes;
 
-  const { displayName, researchVerdict, researchGist, communityVerdict, communityGist, safetyNote, bullets, sentiment, category: claudeCategory, verdict: claudeVerdict } =
+  const { displayName, researchVerdict, researchGist, communityVerdict, communityGist, safetyNote, bullets, sentiment: claudeSentiment, category: claudeCategory, verdict: claudeVerdict } =
     await generateBulletsAndQuotes(searchSubject, query, abstractsForClaude, redditQuotes);
+
+  // The backend's sentiment score is computed from the FULL scraped comment
+  // pool (up to 150 comments), so it always beats Claude's guess from the
+  // <=3 displayed quotes. Claude's number is only a fallback for when the
+  // backend didn't return a score (insufficient discussion, older cache).
+  const sentiment = community.sentiment.score ?? claudeSentiment;
 
   // Claude's own category pick (inside generateBulletsAndQuotes) tends to
   // follow the INGREDIENT's usual bucket rather than the OUTCOME being
@@ -1141,10 +1126,16 @@ async function buildResultFromIds(opts: {
   const isGenericNoDiscussionPhrase = (s: string) =>
     /limited (public )?discussion|not much (public )?discussion|no (real )?discussion/i.test(s);
 
+  // With zero quotes on hand there is no real signal — never manufacture a
+  // "% positive" sentence out of a defaulted number. The client-side
+  // re-fetch (search/trend pages) replaces this line once the slow scrape
+  // actually lands.
   const communitySummary =
     communityVerdict && !(redditQuotes.length > 0 && isGenericNoDiscussionPhrase(communityVerdict))
       ? communityVerdict
-      : `Community sentiment sits at ${sentiment}% positive based on available discussion.`;
+      : redditQuotes.length > 0
+        ? `Community sentiment sits at ${sentiment}% positive based on available discussion.`
+        : "Community reactions are still being gathered for this one.";
 
   // Same reasoning as templatedResearchGist — communityGist (from Claude)
   // covers this when available; this only kicks in when that specific part
@@ -1208,7 +1199,17 @@ async function persistGeneratedVerdict(result: EvidenceVerdict): Promise<void> {
  * calls this directly, on purpose, to force a real regeneration of rows
  * that predate a pipeline/prompt change).
  */
-async function generateFreshEvidenceVerdict(query: string): Promise<EvidenceVerdict> {
+async function generateFreshEvidenceVerdict(rawQuery: string): Promise<EvidenceVerdict> {
+  // Classify BEFORE anything else — the corrected query (typo fixes, esp.
+  // misspelled brand names) is what the whole pipeline runs on. A misspelled
+  // "the ordinaty" used to get zero PubMed hits, fail the product check, and
+  // dead-end at "No PubMed results" — now it flows through as the product
+  // the user obviously meant. This is also where the (former) separate
+  // pharma + branded-product checks got merged into one call, so the serial
+  // pre-search latency is one Haiku round-trip, not two.
+  const classification = rawQuery ? await classifyQuery(rawQuery) : null;
+  const query = classification?.correctedQuery ?? rawQuery;
+
   const name = toTitleCase(query);
   const slug = slugify(query);
   const pubmedSearchUrl = `https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(query)}`;
@@ -1225,13 +1226,12 @@ async function generateFreshEvidenceVerdict(query: string): Promise<EvidenceVerd
 
   if (!query) return empty("Enter a search to generate a verdict.");
 
-  const pharma = await checkIsPharmaceutical(query);
-  if (pharma.isMedicine) {
+  if (classification?.isMedicine) {
     // Intentionally not saved to Supabase — pharma queries shouldn't count
     // toward "trends verified" or ever surface as a card anywhere.
     return {
       query, name, slug, category: guessCategoryFallback(query), verdict: "PHARMA", confidence: "low",
-      oneLiner: `Veda doesn't cover pharmaceutical medicines like ${pharma.name ?? name} — we focus on supplements, wellness practices, and cosmetic ingredients. For questions about medications, talk to a doctor or pharmacist.`,
+      oneLiner: `Veda doesn't cover pharmaceutical medicines like ${classification.medicineName ?? name} — we focus on supplements, wellness practices, and cosmetic ingredients. For questions about medications, talk to a doctor or pharmacist.`,
       researchGist: [], communityVerdict: "", communityGist: [], safetyNote: "", studies: 0, sentiment: 0, updated,
       bullets: [], quotes: [], articles: [],
       pubmedSearchUrl, redditSearchUrl, generatedAt, ingredientFallback: null, ingredientBreakdown: null, ingredientSource: null,
@@ -1239,13 +1239,10 @@ async function generateFreshEvidenceVerdict(query: string): Promise<EvidenceVerd
   }
 
   try {
-    // Runs alongside the PubMed search below, not after it — dedicated
-    // product detection shouldn't cost extra latency on top of the search
-    // it's independent from.
-    const [esearch, isKnownProduct] = await Promise.all([
-      fetchPubmed(`esearch.fcgi?db=pubmed&retmode=json&retmax=15&sort=relevance&term=${encodeURIComponent(query)}`),
-      checkIsBrandedProduct(query),
-    ]);
+    const isKnownProduct = classification?.isProduct ?? false;
+    const esearch = await fetchPubmed(
+      `esearch.fcgi?db=pubmed&retmode=json&retmax=15&sort=relevance&term=${encodeURIComponent(query)}`,
+    );
     if (!esearch || !esearch.ok) return empty("Couldn't reach PubMed right now. Try again in a moment.");
 
     const sj = (await esearch.json()) as { esearchresult?: { idlist?: string[] } };
@@ -1336,7 +1333,12 @@ async function generateFreshEvidenceVerdict(query: string): Promise<EvidenceVerd
         // is very often not the actual claim. Re-attaching the outcome here
         // (search-only, the display name stays clean) keeps the search
         // anchored to what's actually being asked about.
-        const queryOutcome = outcomeClause(query);
+        // For products with no explicit "for Y" clause, fall back to the
+        // classifier's implied outcome ("acne" for an acne serum) — a bare
+        // ingredient search with no outcome anchor drifts into whatever the
+        // compound is most-studied for generally, which is a top source of
+        // junk bullets on branded-product pages.
+        const queryOutcome = outcomeClause(query) ?? classification?.impliedOutcome ?? null;
         const fallbackTerm = fallback.terms
           .map((t) => t.replace(/[()"]/g, "").trim())
           .filter(Boolean)
@@ -1356,7 +1358,16 @@ async function generateFreshEvidenceVerdict(query: string): Promise<EvidenceVerd
             // when the original set is already a full page (15) of
             // loosely-matched hits, which is exactly the case that made
             // this an "irrelevant" trigger in the first place.
-            const mergedIds = Array.from(new Set([...fallbackIds, ...ids])).slice(0, 15);
+            //
+            // For a KNOWN PRODUCT, the raw-name search's ids are excluded
+            // entirely: PubMed never indexes a commercial product by name,
+            // so whatever that search returned matched on incidental shared
+            // words ("ordinary", "hydro", "boost") — feeding those abstracts
+            // to the bullet-writer alongside the real ingredient research is
+            // where most branded-product junk bullets came from.
+            const mergedIds = isKnownProduct
+              ? fallbackIds.slice(0, 15)
+              : Array.from(new Set([...fallbackIds, ...ids])).slice(0, 15);
 
             // Runs alongside buildResultFromIds (not after it) since they
             // don't depend on each other — this is the extra per-ingredient

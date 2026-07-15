@@ -114,7 +114,10 @@ function AdminPage() {
     let batchTotal = 0;
 
     while (cursor !== null) {
-      const res = await adminRefreshRedditQuotes({ data: { password: pw, force, cursor } });
+      // Explicit annotation breaks a circular inference (res -> cursor ->
+      // res) that otherwise makes `res` an implicit any (TS7022).
+      const res: Awaited<ReturnType<typeof adminRefreshRedditQuotes>> =
+        await adminRefreshRedditQuotes({ data: { password: pw, force, cursor } });
       if (!res.ok) {
         setRefreshingQuotes(false);
         setRefreshQuotesResult(res.error ?? "Couldn't refresh quotes.");
