@@ -11,6 +11,7 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { AuthSync } from "../components/AuthSync";
 
 function NotFoundComponent() {
   return (
@@ -79,7 +80,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { name: "google-site-verification", content: "74w-7yYESxxcfVD5P0fvbpUQhhZMm2KaiJcPaozaHvU" },
       { title: "Veda — Is it actually worth it?" },
-      { name: "description", content: "Veda is a wellness evidence engine. Search any ingredient, product, or ritual and get a verdict backed by PubMed research and community sentiment." },
+      {
+        name: "description",
+        content:
+          "Veda is a wellness evidence engine. Search any ingredient, product, or ritual and get a verdict backed by PubMed research and community sentiment.",
+      },
       { name: "author", content: "Veda" },
       { property: "og:site_name", content: "Veda" },
       { property: "og:type", content: "website" },
@@ -142,8 +147,8 @@ function Disclaimer() {
         className="font-label mx-auto max-w-[1400px] text-left text-[9px] leading-snug"
         style={{ color: "var(--muted-ink)", opacity: 0.7 }}
       >
-        Veda is not a doctor, pharmacist, or medical provider. Nothing here is
-        medical advice — talk to a professional about your health.
+        Veda is not a doctor, pharmacist, or medical provider. Nothing here is medical advice — talk
+        to a professional about your health.
       </p>
     </div>
   );
@@ -154,6 +159,9 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      {/* Syncs a signed-in user's saved profile into localStorage across
+          devices. Renders nothing; no-op when auth isn't configured. */}
+      <AuthSync />
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
       <Disclaimer />

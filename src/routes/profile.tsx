@@ -8,10 +8,18 @@ import {
   sanitizeProfile,
   type Profile,
 } from "@/lib/profile";
+import {
+  useAuth,
+  signInWithEmail,
+  signOut,
+  saveAccountProfile,
+  PROFILE_SYNCED_EVENT,
+} from "@/lib/auth";
 
 // The ~10-question wellness profile behind the "FOR YOU" line on verdict
-// pages. Answers save to localStorage only — no account, nothing stored
-// server-side — so this page is entirely client-state.
+// pages. Answers live in localStorage (the runtime source of truth every
+// verdict page reads). Signing in with an email magic link additionally saves
+// them to the user's account so they follow them across devices.
 
 export const Route = createFileRoute("/profile")({
   // ?from=/trend/xyz sends the visitor back to the verdict they came from
@@ -38,18 +46,26 @@ export const Route = createFileRoute("/profile")({
 function ProfilePage() {
   const { from } = Route.useSearch();
   const navigate = useNavigate();
+  const { user, configured } = useAuth();
 
   const [answers, setAnswers] = useState<Profile>({});
   const [hadProfile, setHadProfile] = useState(false);
   const [saved, setSaved] = useState(false);
 
   // localStorage isn't available during SSR — hydrate answers after mount.
+  // Also re-hydrate whenever AuthSync pulls the account profile down after a
+  // cross-device sign-in, so the questionnaire reflects the synced answers.
   useEffect(() => {
-    const existing = loadProfile();
-    if (existing) {
-      setAnswers(existing);
-      setHadProfile(true);
+    function hydrate() {
+      const existing = loadProfile();
+      if (existing) {
+        setAnswers(existing);
+        setHadProfile(true);
+      }
     }
+    hydrate();
+    window.addEventListener(PROFILE_SYNCED_EVENT, hydrate);
+    return () => window.removeEventListener(PROFILE_SYNCED_EVENT, hydrate);
   }, []);
 
   const answeredCount = Object.keys(sanitizeProfile(answers)).length;
@@ -93,6 +109,12 @@ function ProfilePage() {
     saveProfile(answers);
     setSaved(true);
     setHadProfile(true);
+    // Signed in → also persist to the account so it syncs across devices.
+    // Fire-and-forget: localStorage already has it, so the redirect below
+    // shouldn't wait on the network.
+    if (user) {
+      void saveAccountProfile(user.id, answers);
+    }
     if (from) {
       navigate({ to: from });
     }
@@ -128,9 +150,13 @@ function ProfilePage() {
           </p>
 
           <p className="font-mono mt-3 text-xs text-[var(--muted-ink)]">
-            Answers stay on this device only — they're never stored on our servers.
+            {user
+              ? `Signed in as ${user.email ?? "your account"} — your profile syncs across your devices.`
+              : "Answers stay on this device unless you sign in below to sync them across devices."}
           </p>
         </section>
+
+        {configured && <AccountCard email={user?.email ?? null} signedIn={!!user} />}
 
         <div className="mt-6 space-y-4">
           {PROFILE_QUESTIONS.map((q, qi) => {
@@ -230,5 +256,100 @@ function ProfilePage() {
         </p>
       </div>
     </main>
+  );
+}
+
+/**
+ * Account strip: signed-out shows an email field that sends a magic login
+ * link; signed-in shows who you are and a sign-out. Only rendered when auth
+ * is configured for this environment. Saving your profile while signed in
+ * (the main Save button) is what writes it to the account — this card just
+ * handles the session.
+ */
+function AccountCard({ email, signedIn }: { email: string | null; signedIn: boolean }) {
+  const [value, setValue] = useState("");
+  const [state, setState] = useState<"idle" | "sending" | "sent">("idle");
+  const [error, setError] = useState<string | null>(null);
+
+  async function sendLink() {
+    setError(null);
+    setState("sending");
+    const res = await signInWithEmail(value);
+    if (res.ok) {
+      setState("sent");
+    } else {
+      setState("idle");
+      setError(res.error ?? "Couldn't send the link. Try again.");
+    }
+  }
+
+  if (signedIn) {
+    return (
+      <section className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-[22px] border border-white/75 bg-white/90 p-5 shadow-[0_12px_35px_rgba(27,52,72,0.04)]">
+        <p className="text-sm text-[var(--ink)]">
+          <span className="font-label mr-2 text-[10px] text-[var(--sage)]">SIGNED IN</span>
+          {email ?? "your account"}
+        </p>
+        <button
+          type="button"
+          onClick={() => void signOut()}
+          className="font-label text-xs text-[var(--muted-ink)] underline transition hover:text-[var(--verdict-debunked)]"
+        >
+          SIGN OUT
+        </button>
+      </section>
+    );
+  }
+
+  return (
+    <section className="mt-4 rounded-[22px] border border-white/75 bg-white/90 p-6 shadow-[0_12px_35px_rgba(27,52,72,0.04)]">
+      <p className="font-label text-[10px] text-[var(--sage)]">SAVE ACROSS DEVICES</p>
+      <p className="mt-1.5 text-sm leading-6 text-[var(--ink)]">
+        Sign in with your email and your profile follows you to any device — no password.
+      </p>
+
+      {state === "sent" ? (
+        <p className="font-mono mt-3 text-xs text-[var(--sage)]">
+          ✓ Check your inbox for a login link at {value}.
+        </p>
+      ) : (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <input
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            placeholder="you@email.com"
+            value={value}
+            onChange={(e) => {
+              setValue(e.target.value);
+              setError(null);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && value.trim()) sendLink();
+            }}
+            className="font-mono min-w-[220px] flex-1 rounded-full border px-4 py-2.5 text-sm text-[var(--ink)] outline-none"
+            style={{
+              borderColor: "color-mix(in oklab, var(--ink) 15%, transparent)",
+              backgroundColor: "var(--parchment)",
+            }}
+          />
+          <button
+            type="button"
+            onClick={sendLink}
+            disabled={state === "sending" || !value.trim()}
+            className="font-label rounded-full border px-5 py-2.5 text-xs transition hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-40"
+            style={{
+              color: "var(--parchment)",
+              backgroundColor: "var(--sage)",
+              borderColor: "var(--sage)",
+            }}
+          >
+            {state === "sending" ? "SENDING…" : "EMAIL ME A LINK"}
+          </button>
+        </div>
+      )}
+
+      {error && <p className="font-mono mt-2 text-xs text-[var(--verdict-debunked)]">{error}</p>}
+    </section>
   );
 }
