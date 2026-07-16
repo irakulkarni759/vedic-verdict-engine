@@ -70,7 +70,7 @@ function redditUrl(q: string) {
 }
 
 function TrendPage() {
-  const { trend, related } = Route.useLoaderData();
+  const { trend, related } = Route.useLoaderData() as { trend: Trend; related: Trend[] };
   // Lifted so CommunityQuotes can push a freshly-recomputed value up once it
   // finds real quotes — otherwise this text stays frozen at whatever generic
   // line was written when the trend was first generated with zero quotes.
