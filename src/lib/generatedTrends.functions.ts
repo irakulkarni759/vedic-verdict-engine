@@ -2,12 +2,17 @@ import { createServerFn } from "@tanstack/react-start";
 import { getSupabaseServiceClient } from "./supabase.server";
 import { CATEGORIES, type Trend, type Verdict } from "./trends";
 import { checkAdminPassword } from "./comments.functions";
-import { toTitleCase, coreSubjectForReddit, trimGistFragment } from "./utils";
+import { toTitleCase, trimGistFragment } from "./utils";
 import { fetchRedditQuotes } from "./reddit.server";
 // Type-only — erased at compile time, so this doesn't create a runtime
 // circular dependency even though evidence.functions.ts imports
 // saveGeneratedTrend (a value) from this file.
-import type { EvidenceBullet, EvidenceArticle, EvidenceVerdict, IngredientEvidence } from "./evidence.functions";
+import type {
+  EvidenceBullet,
+  EvidenceArticle,
+  EvidenceVerdict,
+  IngredientEvidence,
+} from "./evidence.functions";
 
 export const CATEGORY_SLUGS = CATEGORIES.map((c) => c.slug);
 
@@ -198,9 +203,7 @@ export const getGeneratedTrendsByCategory = createServerFn({ method: "GET" })
         .order("created_at", { ascending: false })
         .limit(60);
       if (error || !rows) return [];
-      return (rows as GeneratedTrendRow[])
-        .map(rowToTrend)
-        .filter((t): t is Trend => t !== null);
+      return (rows as GeneratedTrendRow[]).map(rowToTrend).filter((t): t is Trend => t !== null);
     } catch {
       return [];
     }
@@ -257,8 +260,11 @@ function rowToEvidenceVerdict(row: GeneratedTrendRow): EvidenceVerdict | null {
     bullets: row.bullets,
     quotes: row.opinions ?? [],
     articles: row.articles,
-    pubmedSearchUrl: row.pubmed_search_url || `https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(row.query)}`,
-    redditSearchUrl: row.reddit_search_url || `https://www.reddit.com/search/?q=${encodeURIComponent(row.query)}`,
+    pubmedSearchUrl:
+      row.pubmed_search_url ||
+      `https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(row.query)}`,
+    redditSearchUrl:
+      row.reddit_search_url || `https://www.reddit.com/search/?q=${encodeURIComponent(row.query)}`,
     generatedAt: row.generated_at,
     ingredientFallback: row.ingredient_fallback ?? null,
     ingredientBreakdown: row.ingredient_breakdown ?? null,
@@ -331,11 +337,20 @@ export const persistTrendQuotes = createServerFn({ method: "POST" })
   .handler(
     async ({
       data,
-    }): Promise<{ ok: boolean; communityVerdict?: string; communityGist?: string[]; sentiment?: number }> => {
+    }): Promise<{
+      ok: boolean;
+      communityVerdict?: string;
+      communityGist?: string[];
+      sentiment?: number;
+    }> => {
       try {
         if (!data.quotes || data.quotes.length === 0) return { ok: false };
 
-        const { communityVerdict, communityGist, sentiment: inferredSentiment } = await inferSentimentFromQuotes({
+        const {
+          communityVerdict,
+          communityGist,
+          sentiment: inferredSentiment,
+        } = await inferSentimentFromQuotes({
           name: data.name,
           summary: data.summary,
           quotes: data.quotes,
@@ -359,7 +374,10 @@ export const persistTrendQuotes = createServerFn({ method: "POST" })
         }
         if (typeof sentiment === "number") update.sentiment_score = sentiment;
 
-        const { error } = await supabase.from("generated_trends").update(update).eq("id", data.slug);
+        const { error } = await supabase
+          .from("generated_trends")
+          .update(update)
+          .eq("id", data.slug);
         return {
           ok: !error,
           communityVerdict: communityVerdict ?? undefined,
@@ -479,7 +497,15 @@ Return ONLY the new title text, nothing else — no quotes, no JSON, no explanat
 export const adminStandardizeTrendNames = createServerFn({ method: "POST" })
   .inputValidator((d: { password: string }) => d)
   .handler(
-    async ({ data }): Promise<{ ok: boolean; updated?: number; skipped?: number; total?: number; error?: string }> => {
+    async ({
+      data,
+    }): Promise<{
+      ok: boolean;
+      updated?: number;
+      skipped?: number;
+      total?: number;
+      error?: string;
+    }> => {
       if (!checkAdminPassword(data.password)) return { ok: false, error: "Wrong password." };
 
       try {
@@ -538,7 +564,15 @@ const STRESS_CATEGORY_PATTERN = /stress|anxiety|adaptogen|cortisol|calming|relax
 export const adminRecategorizeStressTrends = createServerFn({ method: "POST" })
   .inputValidator((d: { password: string }) => d)
   .handler(
-    async ({ data }): Promise<{ ok: boolean; updated?: number; skipped?: number; total?: number; error?: string }> => {
+    async ({
+      data,
+    }): Promise<{
+      ok: boolean;
+      updated?: number;
+      skipped?: number;
+      total?: number;
+      error?: string;
+    }> => {
       if (!checkAdminPassword(data.password)) return { ok: false, error: "Wrong password." };
 
       try {
@@ -554,7 +588,8 @@ export const adminRecategorizeStressTrends = createServerFn({ method: "POST" })
         let skipped = 0;
 
         for (const row of rows as { id: string; query: string; name: string; category: string }[]) {
-          const isStressRelated = STRESS_CATEGORY_PATTERN.test(row.query) || STRESS_CATEGORY_PATTERN.test(row.name);
+          const isStressRelated =
+            STRESS_CATEGORY_PATTERN.test(row.query) || STRESS_CATEGORY_PATTERN.test(row.name);
           if (!isStressRelated || row.category === "mental-wellness") {
             skipped++;
             continue;
@@ -577,7 +612,6 @@ export const adminRecategorizeStressTrends = createServerFn({ method: "POST" })
     },
   );
 
-
 /**
  * One-off Claude call per row to rewrite the templated summary sentence
  * ("Across N PubMed studies, the bulk of findings support X.") into an
@@ -591,7 +625,11 @@ async function inferVerdictSummaries(row: {
   evidencePoints: string[];
   opinions: { handle: string; text: string; url: string }[];
   sentiment: number;
-}): Promise<{ researchVerdict: string | null; communityVerdict: string | null; safetyNote: string | null }> {
+}): Promise<{
+  researchVerdict: string | null;
+  communityVerdict: string | null;
+  safetyNote: string | null;
+}> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return { researchVerdict: null, communityVerdict: null, safetyNote: null };
 
@@ -640,8 +678,10 @@ Return ONLY this JSON, no other text:
       safetyNote?: string;
     };
     return {
-      researchVerdict: typeof parsed.researchVerdict === "string" ? parsed.researchVerdict.trim() || null : null,
-      communityVerdict: typeof parsed.communityVerdict === "string" ? parsed.communityVerdict.trim() || null : null,
+      researchVerdict:
+        typeof parsed.researchVerdict === "string" ? parsed.researchVerdict.trim() || null : null,
+      communityVerdict:
+        typeof parsed.communityVerdict === "string" ? parsed.communityVerdict.trim() || null : null,
       safetyNote: typeof parsed.safetyNote === "string" ? parsed.safetyNote.trim() : null,
     };
   } catch {
@@ -660,14 +700,24 @@ Return ONLY this JSON, no other text:
 export const adminBackfillVerdictSummaries = createServerFn({ method: "POST" })
   .inputValidator((d: { password: string; force?: boolean }) => d)
   .handler(
-    async ({ data }): Promise<{ ok: boolean; updated?: number; skipped?: number; total?: number; error?: string }> => {
+    async ({
+      data,
+    }): Promise<{
+      ok: boolean;
+      updated?: number;
+      skipped?: number;
+      total?: number;
+      error?: string;
+    }> => {
       if (!checkAdminPassword(data.password)) return { ok: false, error: "Wrong password." };
 
       try {
         const supabase = getSupabaseServiceClient();
         const { data: rows, error } = await supabase
           .from("generated_trends")
-          .select("id, name, summary, community_verdict, evidence_points, opinions, sentiment_score")
+          .select(
+            "id, name, summary, community_verdict, evidence_points, opinions, sentiment_score",
+          )
           .neq("verdict", "unmapped")
           .limit(500);
         if (error || !rows) return { ok: false, error: "Couldn't load trends." };
@@ -676,8 +726,13 @@ export const adminBackfillVerdictSummaries = createServerFn({ method: "POST" })
         let skipped = 0;
 
         for (const row of rows as {
-          id: string; name: string; summary: string; community_verdict: string;
-          evidence_points: string[]; opinions: { handle: string; text: string; url: string }[]; sentiment_score: number;
+          id: string;
+          name: string;
+          summary: string;
+          community_verdict: string;
+          evidence_points: string[];
+          opinions: { handle: string; text: string; url: string }[];
+          sentiment_score: number;
         }[]) {
           if (!data.force && row.community_verdict && row.community_verdict.trim()) {
             skipped++;
@@ -738,7 +793,11 @@ async function inferSentimentFromQuotes(row: {
   summary: string;
   quotes: { handle: string; text: string }[];
   existingSentiment: number;
-}): Promise<{ communityVerdict: string | null; communityGist: string[]; sentiment: number | null }> {
+}): Promise<{
+  communityVerdict: string | null;
+  communityGist: string[];
+  sentiment: number | null;
+}> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return { communityVerdict: null, communityGist: [], sentiment: null };
 
@@ -789,7 +848,8 @@ Return ONLY this JSON, no other text:
       .map((s) => trimGistFragment(s))
       .slice(0, 4);
     return {
-      communityVerdict: typeof parsed.communityVerdict === "string" ? parsed.communityVerdict.trim() || null : null,
+      communityVerdict:
+        typeof parsed.communityVerdict === "string" ? parsed.communityVerdict.trim() || null : null,
       communityGist,
       sentiment: typeof parsed.sentiment === "number" ? parsed.sentiment : null,
     };
@@ -833,7 +893,14 @@ export const adminRefreshRedditQuotes = createServerFn({ method: "POST" })
         // re-walking rows it already handled, and without one request ever
         // having to process everything in a single long-running loop.
         const targetRows = (
-          rows as { id: string; query: string; name: string; summary: string; sentiment_score: number; opinions: unknown[] | null }[]
+          rows as {
+            id: string;
+            query: string;
+            name: string;
+            summary: string;
+            sentiment_score: number;
+            opinions: unknown[] | null;
+          }[]
         ).filter((row) => data.force || !(Array.isArray(row.opinions) && row.opinions.length > 0));
 
         const cursor = data.cursor ?? 0;
@@ -842,12 +909,15 @@ export const adminRefreshRedditQuotes = createServerFn({ method: "POST" })
         let updated = 0;
         let emptied = 0;
         let processed = 0;
-        let quotaHit = false;
+        const quotaHit = false;
 
         for (const row of batch) {
           let realQuotes: { handle: string; text: string; url: string }[];
           try {
-            realQuotes = await fetchRedditQuotes(coreSubjectForReddit(row.query));
+            // Full query, not core subject — the backend needs the "for
+            // <purpose>" clause to rank on-topic threads (it broadens itself
+            // when the specific phrasing is dry). See evidence.functions.ts.
+            realQuotes = await fetchRedditQuotes(row.query);
           } catch {
             // fetchRedditQuotes already catches its own errors internally
             // and returns []; this is just a safety net.

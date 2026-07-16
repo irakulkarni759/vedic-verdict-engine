@@ -2,8 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { trendBySlug, type Trend, type Verdict } from "@/lib/trends";
 import { getGeneratedTrendBySlug, persistTrendQuotes } from "@/lib/generatedTrends.functions";
-import { startRedditQuoteJob, pollRedditQuoteJob, type ClaimJobPollResult } from "@/lib/reddit.server";
-import { coreSubjectForReddit, pollUntil } from "@/lib/utils";
+import {
+  startRedditQuoteJob,
+  pollRedditQuoteJob,
+  type ClaimJobPollResult,
+} from "@/lib/reddit.server";
+import { pollUntil } from "@/lib/utils";
 import { TrendCard } from "@/components/TrendCard";
 import { Comments } from "@/components/Comments";
 import { PersonalizeCard } from "@/components/PersonalizeCard";
@@ -12,7 +16,8 @@ type Quote = { handle: string; text: string; url: string };
 
 export const Route = createFileRoute("/trend/$slug")({
   loader: async ({ params }) => {
-    const trend = trendBySlug(params.slug) ?? (await getGeneratedTrendBySlug({ data: { slug: params.slug } }));
+    const trend =
+      trendBySlug(params.slug) ?? (await getGeneratedTrendBySlug({ data: { slug: params.slug } }));
     if (!trend) throw notFound();
 
     // Quotes are NOT fetched here anymore. The Reddit backend is slow to wake
@@ -33,12 +38,18 @@ export const Route = createFileRoute("/trend/$slug")({
       ? [
           { title: `${loaderData.trend.name} — ${loaderData.trend.verdict} — Veda` },
           { name: "description", content: loaderData.trend.oneLiner },
-          { property: "og:title", content: `${loaderData.trend.name} — ${loaderData.trend.verdict}` },
+          {
+            property: "og:title",
+            content: `${loaderData.trend.name} — ${loaderData.trend.verdict}`,
+          },
           { property: "og:description", content: loaderData.trend.oneLiner },
           { property: "og:type", content: "article" },
           { property: "og:url", content: `https://askveda.app/trend/${params.slug}` },
           { name: "twitter:card", content: "summary" },
-          { name: "twitter:title", content: `${loaderData.trend.name} — ${loaderData.trend.verdict}` },
+          {
+            name: "twitter:title",
+            content: `${loaderData.trend.name} — ${loaderData.trend.verdict}`,
+          },
           { name: "twitter:description", content: loaderData.trend.oneLiner },
         ]
       : [],
@@ -192,7 +203,8 @@ function TrendPage() {
                 ? // Drop a stale "Limited discussion found" gist once real
                   // quotes are on screen — it's provably wrong at that point.
                   (trend.communityGist ?? []).filter(
-                    (g) => !hasQuotes || !/limited (public )?discussion|no (real )?discussion/i.test(g),
+                    (g) =>
+                      !hasQuotes || !/limited (public )?discussion|no (real )?discussion/i.test(g),
                   )
                 : [])
             }
@@ -231,7 +243,10 @@ function TrendPage() {
                 className="mt-3 inline-flex items-center gap-2 rounded-full px-3.5 py-1.5"
                 style={{ backgroundColor: "color-mix(in oklab, var(--sage) 10%, transparent)" }}
               >
-                <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: "var(--sage)" }} />
+                <span
+                  className="inline-block h-1.5 w-1.5 rounded-full"
+                  style={{ backgroundColor: "var(--sage)" }}
+                />
                 <span className="font-label text-[10px]" style={{ color: "var(--sage)" }}>
                   BASED ON {trend.studies} PUBMED {trend.studies === 1 ? "STUDY" : "STUDIES"}
                 </span>
@@ -239,9 +254,9 @@ function TrendPage() {
 
               {trend.bullets.some((b) => b.isIngredient) && (
                 <p className="mt-2 font-mono text-xs" style={{ color: "var(--muted-ink)" }}>
-                  Cards marked "FROM INGREDIENT LIST" below are separate PubMed searches on {trend.name}'s
-                  individual key ingredients, not the product itself — PubMed rarely indexes research on a
-                  specific commercial product by name.
+                  Cards marked "FROM INGREDIENT LIST" below are separate PubMed searches on{" "}
+                  {trend.name}'s individual key ingredients, not the product itself — PubMed rarely
+                  indexes research on a specific commercial product by name.
                 </p>
               )}
 
@@ -272,21 +287,31 @@ function TrendPage() {
                           {b.isIngredient && (
                             <span
                               className="font-label rounded-full px-2 py-0.5 text-[9px]"
-                              style={{ color: "var(--sage)", backgroundColor: "color-mix(in oklab, var(--sage) 10%, transparent)" }}
+                              style={{
+                                color: "var(--sage)",
+                                backgroundColor:
+                                  "color-mix(in oklab, var(--sage) 10%, transparent)",
+                              }}
                             >
                               FROM INGREDIENT LIST
                             </span>
                           )}
                           <span
                             className="font-label rounded-full px-2 py-0.5 text-[9px]"
-                            style={{ color: "var(--muted-ink)", backgroundColor: "color-mix(in oklab, var(--ink) 6%, transparent)" }}
+                            style={{
+                              color: "var(--muted-ink)",
+                              backgroundColor: "color-mix(in oklab, var(--ink) 6%, transparent)",
+                            }}
                           >
                             {b.studyType.toUpperCase()}
                           </span>
                           {articleYear(b.url) && (
                             <span
                               className="font-label rounded-full px-2 py-0.5 text-[9px]"
-                              style={{ color: "var(--muted-ink)", backgroundColor: "color-mix(in oklab, var(--ink) 6%, transparent)" }}
+                              style={{
+                                color: "var(--muted-ink)",
+                                backgroundColor: "color-mix(in oklab, var(--ink) 6%, transparent)",
+                              }}
                             >
                               PUBLISHED {articleYear(b.url)}
                             </span>
@@ -296,7 +321,8 @@ function TrendPage() {
                               className="font-label inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px]"
                               style={{
                                 color: "var(--verdict-mixed)",
-                                backgroundColor: "color-mix(in oklab, var(--verdict-mixed) 10%, transparent)",
+                                backgroundColor:
+                                  "color-mix(in oklab, var(--verdict-mixed) 10%, transparent)",
                               }}
                             >
                               ⚠ {b.limitations.toUpperCase()}
@@ -386,9 +412,7 @@ function TrendPage() {
 
           <article className="mt-4 rounded-[22px] border border-white/75 bg-white/90 p-8 shadow-[0_12px_35px_rgba(27,52,72,0.04)]">
             <div className="mb-5 flex items-center justify-between gap-4">
-              <p className="font-label text-xs text-[var(--muted-ink)]">
-                COMMUNITY SENTIMENT
-              </p>
+              <p className="font-label text-xs text-[var(--muted-ink)]">COMMUNITY SENTIMENT</p>
 
               {/* Only claim a % when real quotes back it up — a bar with no
                   discussion behind it was pure invention. */}
@@ -397,9 +421,7 @@ function TrendPage() {
                   {sentiment}% positive
                 </p>
               ) : (
-                <p className="font-mono text-sm text-[var(--muted-ink)]">
-                  gathering data…
-                </p>
+                <p className="font-mono text-sm text-[var(--muted-ink)]">gathering data…</p>
               )}
             </div>
 
@@ -430,9 +452,7 @@ function TrendPage() {
 
         {related.length > 0 && (
           <section className="mt-14">
-            <h2 className="font-label mb-4 text-xs text-[var(--sage)]">
-              RELATED TRENDS
-            </h2>
+            <h2 className="font-label mb-4 text-xs text-[var(--sage)]">RELATED TRENDS</h2>
 
             <div className="grid gap-4 md:grid-cols-3">
               {related.map((r: Trend) => (
@@ -545,7 +565,11 @@ function CommunityQuotes({
     setLoading(true);
 
     (async () => {
-      const start = await startRedditQuoteJob({ data: { query: coreSubjectForReddit(searchQuery) } });
+      // Full query, not the core subject: the backend uses the "for <purpose>"
+      // clause to rank/filter which threads are on-topic, then broadens itself
+      // if the specific phrasing is dry. Pre-stripping it here was why generic
+      // "Coconut Oil" threads (skin, lube) surfaced under a hair-growth verdict.
+      const start = await startRedditQuoteJob({ data: { query: searchQuery } });
       if (cancelled) return;
 
       // A cache hit resolves instantly ("done"). Otherwise poll a cheap
@@ -592,12 +616,24 @@ function CommunityQuotes({
     return () => {
       cancelled = true;
     };
-  }, [slug, searchQuery, initialQuotes.length, quotes.length, name, researchSummary, existingSentiment, onVerdictUpdate, onQuotesFound]);
+  }, [
+    slug,
+    searchQuery,
+    initialQuotes.length,
+    quotes.length,
+    name,
+    researchSummary,
+    existingSentiment,
+    onVerdictUpdate,
+    onQuotesFound,
+  ]);
 
   if (quotes.length === 0) {
     return (
       <p className="font-mono mt-8 text-xs text-[var(--muted-ink)]">
-        {loading ? "Gathering community reactions…" : "No community reactions found for this one yet."}
+        {loading
+          ? "Gathering community reactions…"
+          : "No community reactions found for this one yet."}
       </p>
     );
   }
@@ -641,8 +677,10 @@ function HeroSummary({
   communityGist: string[];
   safetyNote: string;
 }) {
-  const researchItems = researchGist.length > 0 ? researchGist : researchVerdict ? [researchVerdict] : [];
-  const communityItems = communityGist.length > 0 ? communityGist : communityVerdict ? [communityVerdict] : [];
+  const researchItems =
+    researchGist.length > 0 ? researchGist : researchVerdict ? [researchVerdict] : [];
+  const communityItems =
+    communityGist.length > 0 ? communityGist : communityVerdict ? [communityVerdict] : [];
 
   return (
     <>
@@ -665,9 +703,22 @@ function HeroSummary({
           className="mt-3.5 inline-flex w-fit max-w-[92vw] lg:max-w-none gap-2 rounded-[14px] px-4 py-3"
           style={{ backgroundColor: "color-mix(in oklab, var(--verdict-mixed) 10%, transparent)" }}
         >
-          <span className="shrink-0" style={{ color: "var(--verdict-mixed)", fontSize: 15, lineHeight: "24px" }}>⚠</span>
-          <p className="text-sm leading-6 whitespace-normal lg:whitespace-nowrap" style={{ color: "var(--ink)" }}>
-            <span className="font-label mr-1.5 text-[10px]" style={{ color: "var(--verdict-mixed)" }}>SAFETY</span>
+          <span
+            className="shrink-0"
+            style={{ color: "var(--verdict-mixed)", fontSize: 15, lineHeight: "24px" }}
+          >
+            ⚠
+          </span>
+          <p
+            className="text-sm leading-6 whitespace-normal lg:whitespace-nowrap"
+            style={{ color: "var(--ink)" }}
+          >
+            <span
+              className="font-label mr-1.5 text-[10px]"
+              style={{ color: "var(--verdict-mixed)" }}
+            >
+              SAFETY
+            </span>
             {safetyNote}
           </p>
         </div>
@@ -698,15 +749,7 @@ function GistList({ items, color }: { items: string[]; color: string }) {
   );
 }
 
-function SectionHeader({
-  left,
-  right,
-  href,
-}: {
-  left: string;
-  right: string;
-  href: string;
-}) {
+function SectionHeader({ left, right, href }: { left: string; right: string; href: string }) {
   return (
     <div className="flex items-center justify-between gap-4">
       <h2 className="font-label text-xs text-[var(--sage)]">{left}</h2>

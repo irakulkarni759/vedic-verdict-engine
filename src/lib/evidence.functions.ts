@@ -168,16 +168,32 @@ function applyOutcomeCategoryOverride(query: string, category: string): string {
 function classifyAbstract(text: string): "pos" | "neg" | "neutral" {
   const t = text.toLowerCase();
   const pos = [
-    "significant improvement", "significantly improved", "effective",
-    "efficacy", "beneficial", "reduced", "reduction in", "improved",
-    "supports", "associated with improvement", "positive effect",
+    "significant improvement",
+    "significantly improved",
+    "effective",
+    "efficacy",
+    "beneficial",
+    "reduced",
+    "reduction in",
+    "improved",
+    "supports",
+    "associated with improvement",
+    "positive effect",
   ];
   const neg = [
-    "no significant", "not effective", "no evidence", "no benefit",
-    "ineffective", "did not improve", "no difference",
-    "insufficient evidence", "lack of evidence", "no effect",
+    "no significant",
+    "not effective",
+    "no evidence",
+    "no benefit",
+    "ineffective",
+    "did not improve",
+    "no difference",
+    "insufficient evidence",
+    "lack of evidence",
+    "no effect",
   ];
-  let p = 0, n = 0;
+  let p = 0,
+    n = 0;
   for (const k of pos) if (t.includes(k)) p++;
   for (const k of neg) if (t.includes(k)) n++;
   if (p > n) return "pos";
@@ -195,9 +211,32 @@ function decodeEntities(s: string): string {
 }
 
 const PUBMED_STOPWORDS = new Set([
-  "for", "the", "a", "an", "and", "or", "with", "to", "of", "in", "on",
-  "is", "are", "does", "do", "vs", "how", "what", "best", "good", "help",
-  "my", "your", "it", "that", "this",
+  "for",
+  "the",
+  "a",
+  "an",
+  "and",
+  "or",
+  "with",
+  "to",
+  "of",
+  "in",
+  "on",
+  "is",
+  "are",
+  "does",
+  "do",
+  "vs",
+  "how",
+  "what",
+  "best",
+  "good",
+  "help",
+  "my",
+  "your",
+  "it",
+  "that",
+  "this",
 ]);
 
 function extractQueryKeywords(query: string): string[] {
@@ -278,8 +317,16 @@ async function generateBulletsAndQuotes(
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return {
-      displayName: null, researchVerdict: null, researchGist: [], communityVerdict: null, communityGist: [],
-      safetyNote: null, bullets: [], sentiment: 50, category: guessCategoryFallback(query), verdict: null,
+      displayName: null,
+      researchVerdict: null,
+      researchGist: [],
+      communityVerdict: null,
+      communityGist: [],
+      safetyNote: null,
+      bullets: [],
+      sentiment: 50,
+      category: guessCategoryFallback(query),
+      verdict: null,
     };
   }
 
@@ -348,7 +395,7 @@ Return ONLY this JSON shape, no other text:
       }),
     });
 
-    const json = await res.json() as { content: { text: string }[] };
+    const json = (await res.json()) as { content: { text: string }[] };
     const text = json.content?.[0]?.text ?? "{}";
     const parsed = JSON.parse(text.replace(/```json|```/g, "").trim()) as {
       displayName?: string;
@@ -358,7 +405,13 @@ Return ONLY this JSON shape, no other text:
       communityVerdict?: string;
       communityGist?: string[];
       safetyNote?: string;
-      bullets: { text: string; detail?: string; studyType?: string; limitations?: string; index: number }[];
+      bullets: {
+        text: string;
+        detail?: string;
+        studyType?: string;
+        limitations?: string;
+        index: number;
+      }[];
       sentiment: number;
       category?: string;
     };
@@ -367,15 +420,20 @@ Return ONLY this JSON shape, no other text:
       text: item.text,
       // Fall back to the plain text if Claude ever omits detail, so the
       // click-to-expand never reveals a blank/undefined card.
-      detail: typeof item.detail === "string" && item.detail.trim() ? item.detail.trim() : item.text,
-      studyType: typeof item.studyType === "string" && item.studyType.trim() ? item.studyType.trim() : "Study",
+      detail:
+        typeof item.detail === "string" && item.detail.trim() ? item.detail.trim() : item.text,
+      studyType:
+        typeof item.studyType === "string" && item.studyType.trim()
+          ? item.studyType.trim()
+          : "Study",
       limitations: typeof item.limitations === "string" ? item.limitations.trim() : "",
       url: abstracts[item.index - 1]?.url ?? abstracts[0]?.url,
     }));
 
-    const category = parsed.category && CATEGORY_SLUGS.includes(parsed.category)
-      ? parsed.category
-      : guessCategoryFallback(query);
+    const category =
+      parsed.category && CATEGORY_SLUGS.includes(parsed.category)
+        ? parsed.category
+        : guessCategoryFallback(query);
 
     const verdict =
       parsed.verdict === "BACKED" || parsed.verdict === "MIXED" || parsed.verdict === "DEBUNKED"
@@ -387,13 +445,15 @@ Return ONLY this JSON shape, no other text:
         ? toTitleCase(parsed.displayName)
         : null;
 
-    const researchVerdict = typeof parsed.researchVerdict === "string" && parsed.researchVerdict.trim()
-      ? parsed.researchVerdict.trim()
-      : null;
+    const researchVerdict =
+      typeof parsed.researchVerdict === "string" && parsed.researchVerdict.trim()
+        ? parsed.researchVerdict.trim()
+        : null;
 
-    const communityVerdict = typeof parsed.communityVerdict === "string" && parsed.communityVerdict.trim()
-      ? parsed.communityVerdict.trim()
-      : null;
+    const communityVerdict =
+      typeof parsed.communityVerdict === "string" && parsed.communityVerdict.trim()
+        ? parsed.communityVerdict.trim()
+        : null;
 
     // Trim + drop empties; also cap length so a stray full-sentence gist
     // (model didn't follow the 2-3 word instruction) doesn't blow up the
@@ -411,13 +471,29 @@ Return ONLY this JSON shape, no other text:
     const safetyNote = typeof parsed.safetyNote === "string" ? parsed.safetyNote.trim() : null;
 
     return {
-      displayName, researchVerdict, researchGist, communityVerdict, communityGist, safetyNote,
-      bullets, sentiment: parsed.sentiment ?? 50, category, verdict,
+      displayName,
+      researchVerdict,
+      researchGist,
+      communityVerdict,
+      communityGist,
+      safetyNote,
+      bullets,
+      sentiment: parsed.sentiment ?? 50,
+      category,
+      verdict,
     };
   } catch {
     return {
-      displayName: null, researchVerdict: null, researchGist: [], communityVerdict: null, communityGist: [],
-      safetyNote: null, bullets: [], sentiment: 50, category: guessCategoryFallback(query), verdict: null,
+      displayName: null,
+      researchVerdict: null,
+      researchGist: [],
+      communityVerdict: null,
+      communityGist: [],
+      safetyNote: null,
+      bullets: [],
+      sentiment: 50,
+      category: guessCategoryFallback(query),
+      verdict: null,
     };
   }
 }
@@ -579,8 +655,14 @@ If you search and cannot find a real, verifiable ingredient list for this exact 
     if (keyIngredients.length === 0) return null;
 
     return {
-      productName: typeof parsed.productName === "string" && parsed.productName.trim() ? parsed.productName.trim() : query,
-      sourceUrl: typeof parsed.sourceUrl === "string" && parsed.sourceUrl.trim() ? parsed.sourceUrl.trim() : null,
+      productName:
+        typeof parsed.productName === "string" && parsed.productName.trim()
+          ? parsed.productName.trim()
+          : query,
+      sourceUrl:
+        typeof parsed.sourceUrl === "string" && parsed.sourceUrl.trim()
+          ? parsed.sourceUrl.trim()
+          : null,
       allIngredients: (parsed.allIngredients ?? []).filter(Boolean).slice(0, 40),
       keyIngredients,
     };
@@ -589,7 +671,6 @@ If you search and cannot find a real, verifiable ingredient list for this exact 
     return null;
   }
 }
-
 
 /**
  * Real ingredient names (from a verified source) usually already arrive
@@ -638,7 +719,10 @@ async function fetchAbstractsForIngredient(
       const pmid = pickTag(block, "PMID") ?? "";
       const abstract = pickAll(block, "AbstractText").join(" ");
       if (pmid && abstract) {
-        abstracts.push({ abstract: abstract.slice(0, 600), url: `https://pubmed.ncbi.nlm.nih.gov/${pmid}/` });
+        abstracts.push({
+          abstract: abstract.slice(0, 600),
+          url: `https://pubmed.ncbi.nlm.nih.gov/${pmid}/`,
+        });
       }
     }
     return { studies: ids.length, abstracts: abstracts.slice(0, 4) };
@@ -661,7 +745,10 @@ async function fetchAbstractsForIngredient(
  */
 function pubmedTermForIngredient(ingredient: string): string {
   const withoutPercent = ingredient.replace(/\(\s*[\d.]+\s*%\s*\)/g, " ");
-  const segments = withoutPercent.split("/").map((s) => s.trim()).filter(Boolean);
+  const segments = withoutPercent
+    .split("/")
+    .map((s) => s.trim())
+    .filter(Boolean);
   return (segments[segments.length - 1] || withoutPercent).replace(/\s+/g, " ").trim();
 }
 
@@ -726,7 +813,9 @@ async function buildIngredientBreakdown(
 
   const keywordFallbackEntries = (): IngredientEvidence[] =>
     withStudies.map((r) => {
-      let pos = 0, neg = 0, neutral = 0;
+      let pos = 0,
+        neg = 0,
+        neutral = 0;
       for (const a of r.abstracts) {
         const cls = classifyAbstract(a.abstract);
         if (cls === "pos") pos++;
@@ -738,7 +827,11 @@ async function buildIngredientBreakdown(
       if (pos / total >= 0.55 && pos > neg) verdict = "BACKED";
       else if (neg / total >= 0.45 && neg > pos) verdict = "DEBUNKED";
       const plain =
-        verdict === "BACKED" ? "mostly supportive" : verdict === "DEBUNKED" ? "mostly unsupportive" : "mixed";
+        verdict === "BACKED"
+          ? "mostly supportive"
+          : verdict === "DEBUNKED"
+            ? "mostly unsupportive"
+            : "mixed";
       return {
         ingredient: formatIngredientName(r.ingredient),
         verdict,
@@ -790,8 +883,12 @@ Base all of this only on what's in the abstracts above — never invent a findin
     });
     const json = (await res.json()) as { content: { text: string }[] };
     const text = json.content?.[0]?.text ?? "[]";
-    const parsed = JSON.parse(text.replace(/```json|```/g, "").trim()) as
-      { verdict?: string; oneLiner?: string; studyType?: string; limitations?: string }[];
+    const parsed = JSON.parse(text.replace(/```json|```/g, "").trim()) as {
+      verdict?: string;
+      oneLiner?: string;
+      studyType?: string;
+      limitations?: string;
+    }[];
 
     const claudeEntries: IngredientEvidence[] = withStudies.map((r, i) => {
       const item = parsed[i];
@@ -809,7 +906,9 @@ Base all of this only on what's in the abstracts above — never invent a findin
         studies: r.studies,
         pubmedSearchUrl: r.pubmedSearchUrl,
         studyType:
-          typeof item?.studyType === "string" && item.studyType.trim() ? item.studyType.trim() : "Study",
+          typeof item?.studyType === "string" && item.studyType.trim()
+            ? item.studyType.trim()
+            : "Study",
         limitations: typeof item?.limitations === "string" ? item.limitations.trim() : "",
       };
     });
@@ -839,9 +938,10 @@ function buildIngredientBullets(
     .filter((ing) => ing.verdict !== "UNKNOWN")
     .slice(0, 3)
     .map((ing, i) => {
-      const sourceCaveat = !ingredientSource?.verified && i === 0
-        ? "Estimated ingredient list — not a confirmed formulation"
-        : "";
+      const sourceCaveat =
+        !ingredientSource?.verified && i === 0
+          ? "Estimated ingredient list — not a confirmed formulation"
+          : "";
       const limitations = [sourceCaveat, ing.limitations].filter(Boolean).join("; ");
 
       return {
@@ -854,7 +954,6 @@ function buildIngredientBullets(
       };
     });
 }
-
 
 type QueryClassification = {
   /** The query with obvious typos fixed (especially brand/ingredient names,
@@ -886,7 +985,11 @@ type QueryClassification = {
  */
 async function classifyQuery(query: string): Promise<QueryClassification> {
   const failOpen: QueryClassification = {
-    correctedQuery: query, isProduct: false, isMedicine: false, medicineName: null, impliedOutcome: null,
+    correctedQuery: query,
+    isProduct: false,
+    isMedicine: false,
+    medicineName: null,
+    impliedOutcome: null,
   };
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return failOpen;
@@ -938,7 +1041,10 @@ Return ONLY this JSON, no other text:
         correctedQuery: corrected,
         isProduct: parsed.is_product === true,
         isMedicine: parsed.is_medicine === true,
-        medicineName: typeof parsed.medicine_name === "string" && parsed.medicine_name.trim() ? parsed.medicine_name.trim() : null,
+        medicineName:
+          typeof parsed.medicine_name === "string" && parsed.medicine_name.trim()
+            ? parsed.medicine_name.trim()
+            : null,
         impliedOutcome:
           typeof parsed.implied_outcome === "string" && parsed.implied_outcome.trim()
             ? parsed.implied_outcome.trim()
@@ -955,7 +1061,11 @@ Return ONLY this JSON, no other text:
   const second = await attempt();
   if (second !== null) return second;
 
-  console.error("[classifyQuery] both attempts failed for", JSON.stringify(query), "— using query as typed");
+  console.error(
+    "[classifyQuery] both attempts failed for",
+    JSON.stringify(query),
+    "— using query as typed",
+  );
   return failOpen;
 }
 
@@ -978,7 +1088,18 @@ async function buildResultFromIds(opts: {
    *  Falls back to the raw query when not provided. */
   redditQuerySubject?: string;
 }): Promise<EvidenceVerdict> {
-  const { ids, query, name, slug, updated, generatedAt, pubmedSearchUrl, redditSearchUrl, fallback, redditQuerySubject } = opts;
+  const {
+    ids,
+    query,
+    name,
+    slug,
+    updated,
+    generatedAt,
+    pubmedSearchUrl,
+    redditSearchUrl,
+    fallback,
+    redditQuerySubject,
+  } = opts;
 
   // Kick the community scrape off NOW so its (slow) latency overlaps the PubMed
   // article fetch + XML parse + abstract classification below, instead of
@@ -986,15 +1107,15 @@ async function buildResultFromIds(opts: {
   // (which needs the quotes), so by then it's had a head start and usually the
   // real quotes are already in hand. .catch keeps a scrape failure from taking
   // down the whole verdict — it just degrades to no quotes for this search.
-  // coreSubjectForReddit's "for X" stripping must apply here too, even for
-  // the resolved real product name — that name can carry the same "for
-  // Digestion (Berry Melon, 50 ct)"-style purpose/variant clause a raw
-  // query would, and real Reddit comments never phrase it that way. Passing
-  // redditQuerySubject straight through used to skip this cleanup entirely,
-  // sending an unnaturally verbose search term that a genuinely relevant,
-  // findable thread wouldn't match.
+  // Pass the full query/product name (purpose clause and all) — the Reddit
+  // backend searches it verbatim first, using the purpose ("...for hair
+  // growth", "...for Digestion") to decide which threads actually count as
+  // on-topic, and only broadens (stripping the clause + "(Berry Melon, 50 ct)"
+  // -style noise itself) when the specific phrasing comes up dry. Stripping to
+  // the core subject here erased that signal, so a generic base like "coconut
+  // oil" pulled unrelated skin/lube threads into a hair-growth verdict.
   const communityPromise: Promise<CommunityResult> = fetchCommunityFast(
-    coreSubjectForReddit(redditQuerySubject ?? query),
+    redditQuerySubject ?? query,
   ).catch(() => ({ quotes: [], sentiment: { score: null, label: null, commentCount: null } }));
 
   const efetch = await fetchPubmed(`efetch.fcgi?db=pubmed&retmode=xml&id=${ids.join(",")}`);
@@ -1003,7 +1124,9 @@ async function buildResultFromIds(opts: {
 
   const articles: EvidenceArticle[] = [];
   const abstractsForClaude: { abstract: string; url: string }[] = [];
-  let pos = 0, neg = 0, neutral = 0;
+  let pos = 0,
+    neg = 0,
+    neutral = 0;
 
   for (const raw of articleBlocks) {
     const block = decodeEntities(raw);
@@ -1063,8 +1186,18 @@ async function buildResultFromIds(opts: {
   const community: CommunityResult = await communityPromise;
   const redditQuotes: RedditQuote[] = community.quotes;
 
-  const { displayName, researchVerdict, researchGist, communityVerdict, communityGist, safetyNote, bullets, sentiment: claudeSentiment, category: claudeCategory, verdict: claudeVerdict } =
-    await generateBulletsAndQuotes(searchSubject, query, abstractsForClaude, redditQuotes);
+  const {
+    displayName,
+    researchVerdict,
+    researchGist,
+    communityVerdict,
+    communityGist,
+    safetyNote,
+    bullets,
+    sentiment: claudeSentiment,
+    category: claudeCategory,
+    verdict: claudeVerdict,
+  } = await generateBulletsAndQuotes(searchSubject, query, abstractsForClaude, redditQuotes);
 
   // The backend's sentiment score is computed from the FULL scraped comment
   // pool (up to 150 comments), so it always beats Claude's guess from the
@@ -1097,22 +1230,22 @@ async function buildResultFromIds(opts: {
     fallback?.reason === "product"
       ? `its key ingredients (${termsLabel})`
       : fallback?.reason === "terminology"
-      ? `related research (${termsLabel})`
-      : `"${finalName}"`;
+        ? `related research (${termsLabel})`
+        : `"${finalName}"`;
 
   const verdictClause =
     verdict === "BACKED"
       ? `the bulk of findings support ${subjectLabel}`
       : verdict === "DEBUNKED"
-      ? `the evidence largely fails to support ${subjectLabel}`
-      : `findings are mixed for ${subjectLabel}`;
+        ? `the evidence largely fails to support ${subjectLabel}`
+        : `findings are mixed for ${subjectLabel}`;
 
   const prefix =
     fallback?.reason === "product"
       ? `No direct studies on "${finalName}" as a product. `
       : fallback?.reason === "terminology"
-      ? `No PubMed results for that exact phrase, but the underlying topic is studied. `
-      : "";
+        ? `No PubMed results for that exact phrase, but the underlying topic is studied. `
+        : "";
 
   // researchVerdict is Claude's actual analytical take on the evidence — far
   // more specific/useful than this templated fallback, which only kicks in
@@ -1127,7 +1260,12 @@ async function buildResultFromIds(opts: {
   // that happened for a product whose ingredient-fallback path succeeded
   // (real study data, real 27-study count) but the gist-writing call itself
   // failed, so the fallback shown was the long non-gist sentence.
-  const verdictGistWord = verdict === "BACKED" ? "mostly backed" : verdict === "DEBUNKED" ? "mostly unsupported" : "mixed evidence";
+  const verdictGistWord =
+    verdict === "BACKED"
+      ? "mostly backed"
+      : verdict === "DEBUNKED"
+        ? "mostly unsupported"
+        : "mixed evidence";
   const templatedResearchGist: string[] =
     fallback?.reason === "product"
       ? [`No direct studies on this product`, `Key ingredients: ${verdictGistWord}`]
@@ -1161,13 +1299,26 @@ async function buildResultFromIds(opts: {
   const finalSafetyNote = safetyNote ?? "";
 
   return {
-    query, name: finalName, slug, category, verdict, confidence, oneLiner, communityVerdict: communitySummary,
-    safetyNote: finalSafetyNote, studies,
+    query,
+    name: finalName,
+    slug,
+    category,
+    verdict,
+    confidence,
+    oneLiner,
+    communityVerdict: communitySummary,
+    safetyNote: finalSafetyNote,
+    studies,
     researchGist: finalResearchGist,
-    sentiment, updated,
+    sentiment,
+    updated,
     communityGist: finalCommunityGist,
-    bullets, quotes: redditQuotes, articles: articles.slice(0, 6),
-    pubmedSearchUrl, redditSearchUrl, generatedAt,
+    bullets,
+    quotes: redditQuotes,
+    articles: articles.slice(0, 6),
+    pubmedSearchUrl,
+    redditSearchUrl,
+    generatedAt,
     ingredientFallback: fallback ? fallback.terms : null,
     // Defaulted here; the caller overrides this via spread for branded
     // products where buildIngredientBreakdown actually ran alongside this.
@@ -1189,17 +1340,31 @@ async function buildResultFromIds(opts: {
 async function persistGeneratedVerdict(result: EvidenceVerdict): Promise<void> {
   await saveGeneratedTrend({
     data: {
-      slug: result.slug, query: result.query, name: result.name, category: result.category,
+      slug: result.slug,
+      query: result.query,
+      name: result.name,
+      category: result.category,
       verdict: result.verdict.toLowerCase() as "backed" | "mixed" | "debunked",
-      summary: result.oneLiner, communityVerdict: result.communityVerdict, safetyNote: result.safetyNote,
-      studyCount: result.studies, confidence: result.confidence, updated: result.updated,
-      evidencePoints: result.bullets.map((b) => b.text), sentiment: result.sentiment, opinions: result.quotes,
+      summary: result.oneLiner,
+      communityVerdict: result.communityVerdict,
+      safetyNote: result.safetyNote,
+      studyCount: result.studies,
+      confidence: result.confidence,
+      updated: result.updated,
+      evidencePoints: result.bullets.map((b) => b.text),
+      sentiment: result.sentiment,
+      opinions: result.quotes,
       sourceUrls: result.articles.map((a) => a.url),
-      bullets: result.bullets, articles: result.articles,
-      pubmedSearchUrl: result.pubmedSearchUrl, redditSearchUrl: result.redditSearchUrl, generatedAt: result.generatedAt,
-      ingredientFallback: result.ingredientFallback, ingredientBreakdown: result.ingredientBreakdown,
+      bullets: result.bullets,
+      articles: result.articles,
+      pubmedSearchUrl: result.pubmedSearchUrl,
+      redditSearchUrl: result.redditSearchUrl,
+      generatedAt: result.generatedAt,
+      ingredientFallback: result.ingredientFallback,
+      ingredientBreakdown: result.ingredientBreakdown,
       ingredientSource: result.ingredientSource,
-      researchGist: result.researchGist, communityGist: result.communityGist,
+      researchGist: result.researchGist,
+      communityGist: result.communityGist,
     },
   });
 }
@@ -1231,10 +1396,29 @@ async function generateFreshEvidenceVerdict(rawQuery: string): Promise<EvidenceV
   const updated = new Date().toISOString().split("T")[0];
 
   const empty = (msg: string): EvidenceVerdict => ({
-    query, name, slug, category: guessCategoryFallback(query), verdict: "UNKNOWN", confidence: "low",
-    oneLiner: msg, researchGist: [], communityVerdict: "", communityGist: [], safetyNote: "", studies: 0, sentiment: 0, updated,
-    bullets: [], quotes: [], articles: [],
-    pubmedSearchUrl, redditSearchUrl, generatedAt, ingredientFallback: null, ingredientBreakdown: null, ingredientSource: null,
+    query,
+    name,
+    slug,
+    category: guessCategoryFallback(query),
+    verdict: "UNKNOWN",
+    confidence: "low",
+    oneLiner: msg,
+    researchGist: [],
+    communityVerdict: "",
+    communityGist: [],
+    safetyNote: "",
+    studies: 0,
+    sentiment: 0,
+    updated,
+    bullets: [],
+    quotes: [],
+    articles: [],
+    pubmedSearchUrl,
+    redditSearchUrl,
+    generatedAt,
+    ingredientFallback: null,
+    ingredientBreakdown: null,
+    ingredientSource: null,
   });
 
   if (!query) return empty("Enter a search to generate a verdict.");
@@ -1243,11 +1427,29 @@ async function generateFreshEvidenceVerdict(rawQuery: string): Promise<EvidenceV
     // Intentionally not saved to Supabase — pharma queries shouldn't count
     // toward "trends verified" or ever surface as a card anywhere.
     return {
-      query, name, slug, category: guessCategoryFallback(query), verdict: "PHARMA", confidence: "low",
+      query,
+      name,
+      slug,
+      category: guessCategoryFallback(query),
+      verdict: "PHARMA",
+      confidence: "low",
       oneLiner: `Veda doesn't cover pharmaceutical medicines like ${classification.medicineName ?? name} — we focus on supplements, wellness practices, and cosmetic ingredients. For questions about medications, talk to a doctor or pharmacist.`,
-      researchGist: [], communityVerdict: "", communityGist: [], safetyNote: "", studies: 0, sentiment: 0, updated,
-      bullets: [], quotes: [], articles: [],
-      pubmedSearchUrl, redditSearchUrl, generatedAt, ingredientFallback: null, ingredientBreakdown: null, ingredientSource: null,
+      researchGist: [],
+      communityVerdict: "",
+      communityGist: [],
+      safetyNote: "",
+      studies: 0,
+      sentiment: 0,
+      updated,
+      bullets: [],
+      quotes: [],
+      articles: [],
+      pubmedSearchUrl,
+      redditSearchUrl,
+      generatedAt,
+      ingredientFallback: null,
+      ingredientBreakdown: null,
+      ingredientSource: null,
     };
   }
 
@@ -1256,7 +1458,8 @@ async function generateFreshEvidenceVerdict(rawQuery: string): Promise<EvidenceV
     const esearch = await fetchPubmed(
       `esearch.fcgi?db=pubmed&retmode=json&retmax=15&sort=relevance&term=${encodeURIComponent(query)}`,
     );
-    if (!esearch || !esearch.ok) return empty("Couldn't reach PubMed right now. Try again in a moment.");
+    if (!esearch || !esearch.ok)
+      return empty("Couldn't reach PubMed right now. Try again in a moment.");
 
     const sj = (await esearch.json()) as { esearchresult?: { idlist?: string[] } };
     const ids = sj.esearchresult?.idlist ?? [];
@@ -1279,7 +1482,8 @@ async function generateFreshEvidenceVerdict(rawQuery: string): Promise<EvidenceV
     // real research under "abdominal drawing-in maneuver" terminology.
     const WEAK_RESULT_THRESHOLD = 5;
     const isWeakCount = ids.length < WEAK_RESULT_THRESHOLD;
-    const isIrrelevant = !isWeakCount && !isKnownProduct && !(await checkPubmedRelevance(ids, query));
+    const isIrrelevant =
+      !isWeakCount && !isKnownProduct && !(await checkPubmedRelevance(ids, query));
     if (isWeakCount || isIrrelevant || isKnownProduct) {
       let fallback = await identifyFallbackTerms(query);
 
@@ -1398,14 +1602,22 @@ async function generateFreshEvidenceVerdict(rawQuery: string): Promise<EvidenceV
             const [result, ingredientBreakdown] = await Promise.all([
               buildResultFromIds({
                 ids: mergedIds,
-                query, name: realIngredients?.productName ?? name, slug, updated, generatedAt,
+                query,
+                name: realIngredients?.productName ?? name,
+                slug,
+                updated,
+                generatedAt,
                 pubmedSearchUrl: `https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(fallbackTerm)}`,
                 redditSearchUrl,
                 fallback,
                 redditQuerySubject: realIngredients?.productName,
               }),
               fallback.reason === "product"
-                ? buildIngredientBreakdown(realIngredients?.productName ?? name, fallback.terms, queryOutcome)
+                ? buildIngredientBreakdown(
+                    realIngredients?.productName ?? name,
+                    fallback.terms,
+                    queryOutcome,
+                  )
                 : Promise.resolve(null),
             ]);
 
@@ -1426,7 +1638,10 @@ async function generateFreshEvidenceVerdict(rawQuery: string): Promise<EvidenceV
             // research is mixed/backed, a real contradiction. These are
             // genuinely separate searches (one product-level, one per
             // ingredient), so the honest total is both added together.
-            const ingredientStudyTotal = (ingredientBreakdown ?? []).reduce((sum, i) => sum + i.studies, 0);
+            const ingredientStudyTotal = (ingredientBreakdown ?? []).reduce(
+              (sum, i) => sum + i.studies,
+              0,
+            );
 
             const merged: EvidenceVerdict = {
               ...result,
@@ -1453,29 +1668,58 @@ async function generateFreshEvidenceVerdict(rawQuery: string): Promise<EvidenceV
         // Fallback search found nothing better — the original (weak but
         // non-empty) results are still the best we have, use them.
         const result = await buildResultFromIds({
-          ids, query, name, slug, updated, generatedAt,
-          pubmedSearchUrl, redditSearchUrl, fallback: null,
+          ids,
+          query,
+          name,
+          slug,
+          updated,
+          generatedAt,
+          pubmedSearchUrl,
+          redditSearchUrl,
+          fallback: null,
         });
         await persistGeneratedVerdict(result);
         return result;
       }
 
-      const result = { ...empty("No PubMed results — this one isn't well-studied yet."), verdict: "UNKNOWN" as const };
+      const result = {
+        ...empty("No PubMed results — this one isn't well-studied yet."),
+        verdict: "UNKNOWN" as const,
+      };
       // Still record the attempt, so it counts toward "trends searched" — but
       // as "unmapped" so it never renders as a real verdict card anywhere.
       await saveGeneratedTrend({
         data: {
-          slug, query, name, category: result.category, verdict: "unmapped",
-          summary: result.oneLiner, communityVerdict: "", safetyNote: "", studyCount: 0, confidence: "low", updated,
-          evidencePoints: [], sentiment: 0, opinions: [], sourceUrls: [pubmedSearchUrl],
+          slug,
+          query,
+          name,
+          category: result.category,
+          verdict: "unmapped",
+          summary: result.oneLiner,
+          communityVerdict: "",
+          safetyNote: "",
+          studyCount: 0,
+          confidence: "low",
+          updated,
+          evidencePoints: [],
+          sentiment: 0,
+          opinions: [],
+          sourceUrls: [pubmedSearchUrl],
         },
       });
       return result;
     }
 
     const result = await buildResultFromIds({
-      ids, query, name, slug, updated, generatedAt,
-      pubmedSearchUrl, redditSearchUrl, fallback: null,
+      ids,
+      query,
+      name,
+      slug,
+      updated,
+      generatedAt,
+      pubmedSearchUrl,
+      redditSearchUrl,
+      fallback: null,
     });
     await persistGeneratedVerdict(result);
     return result;
@@ -1531,18 +1775,27 @@ export const generateEvidenceVerdict = createServerFn({ method: "GET" })
  * now," not a routine action.
  */
 export const adminRegenerateBatch = createServerFn({ method: "POST" })
-  .inputValidator((d: { password: string; offset: number; limit?: number; mode?: "stale" | "all" }) => d)
+  .inputValidator(
+    (d: { password: string; offset: number; limit?: number; mode?: "stale" | "all" }) => d,
+  )
   .handler(
     async ({
       data,
-    }): Promise<{ ok: boolean; processed?: number; failed?: number; total?: number; nextOffset?: number | null; error?: string }> => {
+    }): Promise<{
+      ok: boolean;
+      processed?: number;
+      failed?: number;
+      total?: number;
+      nextOffset?: number | null;
+      error?: string;
+    }> => {
       if (!checkAdminPassword(data.password)) return { ok: false, error: "Wrong password." };
 
       try {
         const limit = Math.min(Math.max(data.limit ?? 3, 1), 10);
         const supabase = getSupabaseServiceClient();
 
-        let queryBuilder = supabase
+        const queryBuilder = supabase
           .from("generated_trends")
           .select("id, query, generated_at, bullets", { count: "exact" })
           .neq("verdict", "unmapped")
@@ -1574,7 +1827,13 @@ export const adminRegenerateBatch = createServerFn({ method: "POST" })
 
         const nextOffset = data.offset + rows.length;
         const done = !count || nextOffset >= count || rows.length < limit;
-        return { ok: true, processed, failed, total: count ?? undefined, nextOffset: done ? null : nextOffset };
+        return {
+          ok: true,
+          processed,
+          failed,
+          total: count ?? undefined,
+          nextOffset: done ? null : nextOffset,
+        };
       } catch {
         return { ok: false, error: "Regenerate batch failed." };
       }

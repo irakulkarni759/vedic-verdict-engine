@@ -4,7 +4,7 @@ import { TRENDS } from "@/lib/trends";
 import { TrendCard } from "@/components/TrendCard";
 import { Comments } from "@/components/Comments";
 import { PersonalizeCard } from "@/components/PersonalizeCard";
-import { toTitleCase, coreSubjectForReddit, pollUntil } from "@/lib/utils";
+import { toTitleCase, pollUntil } from "@/lib/utils";
 import {
   startRedditQuoteJob,
   pollRedditQuoteJob,
@@ -12,10 +12,7 @@ import {
   type ClaimJobPollResult,
 } from "@/lib/reddit.server";
 import { persistTrendQuotes } from "@/lib/generatedTrends.functions";
-import {
-  generateEvidenceVerdict,
-  type EvidenceVerdict,
-} from "@/lib/evidence.functions";
+import { generateEvidenceVerdict, type EvidenceVerdict } from "@/lib/evidence.functions";
 
 export const Route = createFileRoute("/search/$query")({
   component: SearchPage,
@@ -43,10 +40,7 @@ export const Route = createFileRoute("/search/$query")({
   }),
   pendingComponent: PendingPage,
   errorComponent: ({ error }) => (
-    <div
-      className="min-h-screen p-10"
-      style={{ backgroundColor: "var(--parchment)" }}
-    >
+    <div className="min-h-screen p-10" style={{ backgroundColor: "var(--parchment)" }}>
       <p className="font-mono text-sm" style={{ color: "var(--ink)" }}>
         Couldn't generate verdict: {error.message}
       </p>
@@ -69,10 +63,7 @@ function PendingPage() {
   const q = decodeURIComponent(query);
 
   return (
-    <div
-      className="min-h-screen pb-24"
-      style={{ backgroundColor: "var(--parchment)" }}
-    >
+    <div className="min-h-screen pb-24" style={{ backgroundColor: "var(--parchment)" }}>
       <div className="mx-auto max-w-[1120px] px-6 pt-8">
         <Link
           to="/"
@@ -83,10 +74,7 @@ function PendingPage() {
         </Link>
 
         <div className="mt-6 rounded-[30px] border border-white/70 bg-[linear-gradient(135deg,#fff_0%,#fbf4e8_100%)] p-8 shadow-[0_22px_70px_rgba(27,52,72,0.08)] sm:p-12">
-          <p
-            className="font-label text-xs"
-            style={{ color: "var(--muted-ink)" }}
-          >
+          <p className="font-label text-xs" style={{ color: "var(--muted-ink)" }}>
             GATHERING EVIDENCE
           </p>
 
@@ -94,18 +82,14 @@ function PendingPage() {
             {toTitleCase(q)}
           </h1>
 
-          <p
-            className="mt-4 font-mono text-xs"
-            style={{ color: "var(--muted-ink)" }}
-          >
+          <p className="mt-4 font-mono text-xs" style={{ color: "var(--muted-ink)" }}>
             Searching PubMed for clinical evidence…
           </p>
 
           <div
             className="mt-6 h-2 w-full overflow-hidden rounded-full"
             style={{
-              backgroundColor:
-                "color-mix(in oklab, var(--ink) 8%, transparent)",
+              backgroundColor: "color-mix(in oklab, var(--ink) 8%, transparent)",
             }}
           >
             <div
@@ -164,14 +148,19 @@ function SearchPage() {
     setLiveCommunityGist(null);
     setLiveSentiment(null);
 
-    const noVerdict =
-      data.verdict === "PHARMA" || data.verdict === "UNKNOWN" || data.studies === 0;
+    const noVerdict = data.verdict === "PHARMA" || data.verdict === "UNKNOWN" || data.studies === 0;
     if (data.quotes.length > 0 || !data.query || noVerdict) return;
 
     let cancelled = false;
     (async () => {
+      // Pass the FULL query (with any "for <purpose>" clause) — the backend
+      // tries it verbatim first so the purpose ("...for hair growth") drives
+      // which threads rank/count as relevant, then broadens (dropping the
+      // clause itself) only if that comes up dry. Pre-stripping the clause
+      // here erased that signal, so e.g. "Coconut Oil for Hair Growth"
+      // scraped generic coconut-oil threads (skin, lube) with no hair anchor.
       const start = await startRedditQuoteJob({
-        data: { query: coreSubjectForReddit(data.query) },
+        data: { query: data.query },
       });
       if (cancelled) return;
 
@@ -216,19 +205,32 @@ function SearchPage() {
     return () => {
       cancelled = true;
     };
-  }, [data.query, data.quotes.length, data.slug, data.name, data.oneLiner, data.sentiment, data.verdict, data.studies]);
+  }, [
+    data.query,
+    data.quotes.length,
+    data.slug,
+    data.name,
+    data.oneLiner,
+    data.sentiment,
+    data.verdict,
+    data.studies,
+  ]);
 
-  const displayQuotes = data.quotes.length > 0 ? data.quotes : liveQuotes ?? [];
+  const displayQuotes = data.quotes.length > 0 ? data.quotes : (liveQuotes ?? []);
   const displayCommunityVerdict = liveCommunityVerdict ?? data.communityVerdict;
   const displaySentiment = liveSentiment ?? data.sentiment;
 
   // Never let a stale "Limited discussion found" gist (cached when the
   // first scrape missed its window) sit above real quotes that have since
   // loaded — if quotes are on screen, that phrase is provably wrong.
-  const staleNoDiscussion = (s: string) => /limited (public )?discussion|no (real )?discussion/i.test(s);
+  const staleNoDiscussion = (s: string) =>
+    /limited (public )?discussion|no (real )?discussion/i.test(s);
   const baseCommunityGist =
-    displayQuotes.length > 0 ? data.communityGist.filter((g) => !staleNoDiscussion(g)) : data.communityGist;
-  const displayCommunityGist = liveCommunityGist ?? (liveCommunityVerdict == null ? baseCommunityGist : []);
+    displayQuotes.length > 0
+      ? data.communityGist.filter((g) => !staleNoDiscussion(g))
+      : data.communityGist;
+  const displayCommunityGist =
+    liveCommunityGist ?? (liveCommunityVerdict == null ? baseCommunityGist : []);
 
   const tokens = q
     .toLowerCase()
@@ -236,10 +238,7 @@ function SearchPage() {
     .filter((t) => t.length > 2);
 
   const related = TRENDS.filter((t) =>
-    tokens.some(
-      (tok) =>
-        t.name.toLowerCase().includes(tok) || t.slug.includes(tok),
-    ),
+    tokens.some((tok) => t.name.toLowerCase().includes(tok) || t.slug.includes(tok)),
   ).slice(0, 3);
 
   // Publication year per bullet, looked up by the bullet's article url —
@@ -262,7 +261,8 @@ function SearchPage() {
   // Reddit discussion were both found — exactly backwards for the most
   // common branded-product case.
   const hasIngredientData = (data.ingredientBreakdown?.length ?? 0) > 0;
-  const isUnknown = !isPharma && !hasIngredientData && (data.verdict === "UNKNOWN" || data.studies === 0);
+  const isUnknown =
+    !isPharma && !hasIngredientData && (data.verdict === "UNKNOWN" || data.studies === 0);
 
   return (
     <main className="min-h-screen bg-[var(--parchment)] px-5 py-8 sm:px-8 sm:py-10">
@@ -359,7 +359,10 @@ function SearchPage() {
               className="mt-3 inline-flex items-center gap-2 rounded-full px-3.5 py-1.5"
               style={{ backgroundColor: "color-mix(in oklab, var(--sage) 10%, transparent)" }}
             >
-              <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: "var(--sage)" }} />
+              <span
+                className="inline-block h-1.5 w-1.5 rounded-full"
+                style={{ backgroundColor: "var(--sage)" }}
+              />
               <span className="font-label text-[10px]" style={{ color: "var(--sage)" }}>
                 BASED ON {data.studies} PUBMED {data.studies === 1 ? "STUDY" : "STUDIES"}
               </span>
@@ -367,9 +370,9 @@ function SearchPage() {
 
             {hasIngredientData && (
               <p className="mt-2 font-mono text-xs" style={{ color: "var(--muted-ink)" }}>
-                Cards marked "FROM INGREDIENT LIST" below are separate PubMed searches on {data.name}'s
-                individual key ingredients, not the product itself — PubMed rarely indexes research on a
-                specific commercial product by name.
+                Cards marked "FROM INGREDIENT LIST" below are separate PubMed searches on{" "}
+                {data.name}'s individual key ingredients, not the product itself — PubMed rarely
+                indexes research on a specific commercial product by name.
               </p>
             )}
 
@@ -404,21 +407,30 @@ function SearchPage() {
                         {b.isIngredient && (
                           <span
                             className="font-label rounded-full px-2 py-0.5 text-[9px]"
-                            style={{ color: "var(--sage)", backgroundColor: "color-mix(in oklab, var(--sage) 10%, transparent)" }}
+                            style={{
+                              color: "var(--sage)",
+                              backgroundColor: "color-mix(in oklab, var(--sage) 10%, transparent)",
+                            }}
                           >
                             FROM INGREDIENT LIST
                           </span>
                         )}
                         <span
                           className="font-label rounded-full px-2 py-0.5 text-[9px]"
-                          style={{ color: "var(--muted-ink)", backgroundColor: "color-mix(in oklab, var(--ink) 6%, transparent)" }}
+                          style={{
+                            color: "var(--muted-ink)",
+                            backgroundColor: "color-mix(in oklab, var(--ink) 6%, transparent)",
+                          }}
                         >
                           {b.studyType.toUpperCase()}
                         </span>
                         {articleYear(b.url) && (
                           <span
                             className="font-label rounded-full px-2 py-0.5 text-[9px]"
-                            style={{ color: "var(--muted-ink)", backgroundColor: "color-mix(in oklab, var(--ink) 6%, transparent)" }}
+                            style={{
+                              color: "var(--muted-ink)",
+                              backgroundColor: "color-mix(in oklab, var(--ink) 6%, transparent)",
+                            }}
                           >
                             PUBLISHED {articleYear(b.url)}
                           </span>
@@ -428,7 +440,8 @@ function SearchPage() {
                             className="font-label inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px]"
                             style={{
                               color: "var(--verdict-mixed)",
-                              backgroundColor: "color-mix(in oklab, var(--verdict-mixed) 10%, transparent)",
+                              backgroundColor:
+                                "color-mix(in oklab, var(--verdict-mixed) 10%, transparent)",
                             }}
                           >
                             ⚠ {b.limitations.toUpperCase()}
@@ -436,9 +449,7 @@ function SearchPage() {
                         )}
                       </div>
 
-                      <p className="text-lg leading-8 text-[var(--ink)]">
-                        {b.text}
-                      </p>
+                      <p className="text-lg leading-8 text-[var(--ink)]">{b.text}</p>
 
                       {isOpen && (
                         <div className="mt-4 rounded-[14px] bg-[var(--parchment)] px-4 py-3.5">
@@ -492,9 +503,7 @@ function SearchPage() {
 
             <article className="mt-4 rounded-[22px] border border-white/75 bg-white/90 p-8 shadow-[0_12px_35px_rgba(27,52,72,0.04)]">
               <div className="mb-5 flex items-center justify-between gap-4">
-                <p className="font-label text-xs text-[var(--muted-ink)]">
-                  COMMUNITY SENTIMENT
-                </p>
+                <p className="font-label text-xs text-[var(--muted-ink)]">COMMUNITY SENTIMENT</p>
                 {/* Only claim a % when real quotes back it — a bar with no
                     discussion behind it was pure invention (defaulted 50). */}
                 {displayQuotes.length > 0 ? (
@@ -502,9 +511,7 @@ function SearchPage() {
                     {displaySentiment}% positive
                   </p>
                 ) : (
-                  <p className="font-mono text-sm text-[var(--muted-ink)]">
-                    gathering data…
-                  </p>
+                  <p className="font-mono text-sm text-[var(--muted-ink)]">gathering data…</p>
                 )}
               </div>
 
@@ -521,9 +528,7 @@ function SearchPage() {
                 {displayQuotes.length > 0 ? (
                   displayQuotes.map((quote) => (
                     <div key={`${quote.handle}-${quote.text}`}>
-                      <p className="text-lg italic leading-8 text-[var(--ink)]">
-                        "{quote.text}"
-                      </p>
+                      <p className="text-lg italic leading-8 text-[var(--ink)]">"{quote.text}"</p>
 
                       <a
                         href={quote.url}
@@ -568,9 +573,7 @@ function SearchPage() {
         {/* ── RELATED STATIC TRENDS ── */}
         {related.length > 0 && (
           <section className="mt-14">
-            <p className="font-label mb-4 text-xs text-[var(--sage)]">
-              MAYBE YOU MEANT
-            </p>
+            <p className="font-label mb-4 text-xs text-[var(--sage)]">MAYBE YOU MEANT</p>
 
             <div className="grid gap-4 md:grid-cols-3">
               {related.map((r) => (
@@ -604,8 +607,10 @@ function HeroSummary({
   communityGist: string[];
   safetyNote: string;
 }) {
-  const researchItems = researchGist.length > 0 ? researchGist : researchVerdict ? [researchVerdict] : [];
-  const communityItems = communityGist.length > 0 ? communityGist : communityVerdict ? [communityVerdict] : [];
+  const researchItems =
+    researchGist.length > 0 ? researchGist : researchVerdict ? [researchVerdict] : [];
+  const communityItems =
+    communityGist.length > 0 ? communityGist : communityVerdict ? [communityVerdict] : [];
 
   return (
     <div className="mt-4 max-w-3xl space-y-4">
@@ -622,10 +627,26 @@ function HeroSummary({
         </div>
       )}
       {safetyNote && (
-        <div className="inline-flex w-fit max-w-[92vw] lg:max-w-none gap-2 rounded-[14px] px-4 py-3" style={{ backgroundColor: "color-mix(in oklab, var(--verdict-mixed) 10%, transparent)" }}>
-          <span className="shrink-0" style={{ color: "var(--verdict-mixed)", fontSize: 15, lineHeight: "24px" }}>⚠</span>
-          <p className="text-sm leading-6 whitespace-normal lg:whitespace-nowrap" style={{ color: "var(--ink)" }}>
-            <span className="font-label mr-1.5 text-[10px]" style={{ color: "var(--verdict-mixed)" }}>SAFETY</span>
+        <div
+          className="inline-flex w-fit max-w-[92vw] lg:max-w-none gap-2 rounded-[14px] px-4 py-3"
+          style={{ backgroundColor: "color-mix(in oklab, var(--verdict-mixed) 10%, transparent)" }}
+        >
+          <span
+            className="shrink-0"
+            style={{ color: "var(--verdict-mixed)", fontSize: 15, lineHeight: "24px" }}
+          >
+            ⚠
+          </span>
+          <p
+            className="text-sm leading-6 whitespace-normal lg:whitespace-nowrap"
+            style={{ color: "var(--ink)" }}
+          >
+            <span
+              className="font-label mr-1.5 text-[10px]"
+              style={{ color: "var(--verdict-mixed)" }}
+            >
+              SAFETY
+            </span>
             {safetyNote}
           </p>
         </div>
@@ -714,15 +735,7 @@ function SearchGistList({ items, color }: { items: string[]; color: string }) {
   );
 }
 
-function SectionHeader({
-  left,
-  right,
-  href,
-}: {
-  left: string;
-  right?: string;
-  href?: string;
-}) {
+function SectionHeader({ left, right, href }: { left: string; right?: string; href?: string }) {
   return (
     <div className="flex items-center justify-between gap-4">
       <p className="font-label text-xs text-[var(--sage)]">{left}</p>
