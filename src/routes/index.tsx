@@ -25,6 +25,26 @@ export const Route = createFileRoute("/")({
         property: "og:description",
         content: "BACKED, MIXED, or DEBUNKED — for every wellness claim.",
       },
+      { property: "og:url", content: "https://askveda.app/" },
+      { name: "twitter:title", content: "Veda — Social media wellness, fact-checked." },
+      { name: "twitter:description", content: "BACKED, MIXED, or DEBUNKED — for every wellness claim." },
+    ],
+    links: [{ rel: "canonical", href: "https://askveda.app/" }],
+    scripts: [
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "WebSite",
+          name: "Veda",
+          url: "https://askveda.app",
+          potentialAction: {
+            "@type": "SearchAction",
+            target: "https://askveda.app/search/{search_term_string}",
+            "query-input": "required name=search_term_string",
+          },
+        }),
+      },
     ],
   }),
   component: Veda,
@@ -120,9 +140,11 @@ function Veda() {
   return (
     <div className="flex min-h-dvh flex-col pt-6 sm:pt-12" style={{ backgroundColor: "var(--parchment)" }}>
       <Nav />
-      <Hero query={query} setQuery={updateQuery} onSubmit={submit} onWarm={prewarm} count={count} trending={trendingRow} searchError={searchError} />
-      <WavyDivider from="var(--parchment)" to="var(--ink)" />
-      <Stats />
+      <main>
+        <Hero query={query} setQuery={updateQuery} onSubmit={submit} onWarm={prewarm} count={count} trending={trendingRow} searchError={searchError} />
+        <WavyDivider from="var(--parchment)" to="var(--ink)" />
+        <Stats />
+      </main>
     </div>
   );
 }

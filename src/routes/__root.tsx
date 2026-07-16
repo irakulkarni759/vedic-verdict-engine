@@ -81,14 +81,22 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { title: "Veda — Is it actually worth it?" },
       { name: "description", content: "Veda is a wellness evidence engine. Search any ingredient, product, or ritual and get a verdict backed by PubMed research and community sentiment." },
       { name: "author", content: "Veda" },
-      { property: "og:title", content: "Veda — Is it actually worth it?" },
-      { property: "og:description", content: "Veda is a wellness evidence engine. Search any ingredient, product, or ritual and get a verdict backed by PubMed research and community sentiment." },
+      { property: "og:site_name", content: "Veda" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:title", content: "Veda — Is it actually worth it?" },
-      { name: "twitter:description", content: "Veda is a wellness evidence engine. Search any ingredient, product, or ritual and get a verdict backed by PubMed research and community sentiment." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/d9161fab-7879-4191-966a-b659e7f59cfe/id-preview-d322de73--ee355b23-5b6a-4281-a15b-8627b685c994.lovable.app-1782536891647.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/d9161fab-7879-4191-966a-b659e7f59cfe/id-preview-d322de73--ee355b23-5b6a-4281-a15b-8627b685c994.lovable.app-1782536891647.png" },
+    ],
+    scripts: [
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "Organization",
+          name: "Veda",
+          url: "https://askveda.app",
+          description:
+            "Wellness evidence engine — verdicts backed by PubMed research and community sentiment.",
+        }),
+      },
     ],
     links: [
       { rel: "stylesheet", href: appCss },

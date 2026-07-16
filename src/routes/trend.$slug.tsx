@@ -27,16 +27,35 @@ export const Route = createFileRoute("/trend/$slug")({
     return { trend, related };
   },
 
-  head: ({ loaderData }) => ({
+  head: ({ params, loaderData }) => ({
     meta: loaderData
       ? [
           { title: `${loaderData.trend.name} — ${loaderData.trend.verdict} — Veda` },
           { name: "description", content: loaderData.trend.oneLiner },
           { property: "og:title", content: `${loaderData.trend.name} — ${loaderData.trend.verdict}` },
           { property: "og:description", content: loaderData.trend.oneLiner },
+          { property: "og:type", content: "article" },
+          { property: "og:url", content: `https://askveda.app/trend/${params.slug}` },
           { name: "twitter:card", content: "summary" },
           { name: "twitter:title", content: `${loaderData.trend.name} — ${loaderData.trend.verdict}` },
           { name: "twitter:description", content: loaderData.trend.oneLiner },
+        ]
+      : [],
+    links: [{ rel: "canonical", href: `https://askveda.app/trend/${params.slug}` }],
+    scripts: loaderData
+      ? [
+          {
+            type: "application/ld+json",
+            children: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "Article",
+              headline: `${loaderData.trend.name} — ${loaderData.trend.verdict}`,
+              description: loaderData.trend.oneLiner,
+              url: `https://askveda.app/trend/${params.slug}`,
+              about: loaderData.trend.name,
+              publisher: { "@type": "Organization", name: "Veda" },
+            }),
+          },
         ]
       : [],
   }),
@@ -70,7 +89,7 @@ function redditUrl(q: string) {
 }
 
 function TrendPage() {
-  const { trend, related } = Route.useLoaderData();
+  const { trend, related } = Route.useLoaderData() as { trend: Trend; related: Trend[] };
   // Lifted so CommunityQuotes can push a freshly-recomputed value up once it
   // finds real quotes — otherwise this text stays frozen at whatever generic
   // line was written when the trend was first generated with zero quotes.
@@ -397,9 +416,9 @@ function TrendPage() {
 
         {related.length > 0 && (
           <section className="mt-14">
-            <p className="font-label mb-4 text-xs text-[var(--sage)]">
+            <h2 className="font-label mb-4 text-xs text-[var(--sage)]">
               RELATED TRENDS
-            </p>
+            </h2>
 
             <div className="grid gap-4 md:grid-cols-3">
               {related.map((r: Trend) => (
@@ -676,7 +695,7 @@ function SectionHeader({
 }) {
   return (
     <div className="flex items-center justify-between gap-4">
-      <p className="font-label text-xs text-[var(--sage)]">{left}</p>
+      <h2 className="font-label text-xs text-[var(--sage)]">{left}</h2>
 
       <a
         href={href}

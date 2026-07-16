@@ -13,13 +13,50 @@ export const Route = createFileRoute("/category/$slug")({
     const merged = [...generated.filter((t) => !seenSlugs.has(t.slug)), ...staticTrends];
     return { category: cat, trends: merged };
   },
-  head: ({ loaderData }) => ({
+  head: ({ params, loaderData }) => ({
     meta: loaderData
       ? [
-          { title: `${loaderData.category.label.toLowerCase()} — Veda` },
+          { title: `${loaderData.category.label}: What actually works — Veda` },
           {
             name: "description",
+            content: `Evidence-backed verdicts on ${loaderData.category.label.toLowerCase()} ingredients, products, and rituals — cross-referenced against PubMed and community sentiment.`,
+          },
+          {
+            property: "og:title",
+            content: `${loaderData.category.label}: What actually works — Veda`,
+          },
+          {
+            property: "og:description",
             content: `Evidence-backed verdicts on ${loaderData.category.label.toLowerCase()} ingredients, products, and rituals.`,
+          },
+          { property: "og:url", content: `https://askveda.app/category/${params.slug}` },
+          {
+            name: "twitter:title",
+            content: `${loaderData.category.label}: What actually works — Veda`,
+          },
+          {
+            name: "twitter:description",
+            content: `Evidence-backed verdicts on ${loaderData.category.label.toLowerCase()} ingredients, products, and rituals.`,
+          },
+        ]
+      : [],
+    links: [{ rel: "canonical", href: `https://askveda.app/category/${params.slug}` }],
+    scripts: loaderData
+      ? [
+          {
+            type: "application/ld+json",
+            children: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "CollectionPage",
+              name: `${loaderData.category.label}: What actually works`,
+              url: `https://askveda.app/category/${params.slug}`,
+              hasPart: loaderData.trends.slice(0, 20).map((t) => ({
+                "@type": "Article",
+                name: t.name,
+                url: `https://askveda.app/trend/${t.slug}`,
+                description: t.oneLiner,
+              })),
+            }),
           },
         ]
       : [],
@@ -40,7 +77,7 @@ export const Route = createFileRoute("/category/$slug")({
 function CategoryPage() {
   const { category, trends } = Route.useLoaderData();
   return (
-    <div className="min-h-screen" style={{ backgroundColor: "var(--parchment)" }}>
+    <main className="min-h-screen" style={{ backgroundColor: "var(--parchment)" }}>
       <header className="mx-auto max-w-[1100px] px-6 pt-10 pb-6">
         <Link to="/" className="font-label text-[10px]" style={{ color: "var(--muted-ink)" }}>
           ← VEDA
@@ -49,7 +86,7 @@ function CategoryPage() {
           {category.label}
         </p>
         <h1 className="font-display mt-2" style={{ color: "var(--ink)", fontSize: "clamp(40px, 6vw, 64px)", lineHeight: 1 }}>
-          What actually works.
+          {category.label}: what actually works.
         </h1>
         <p className="mt-4 max-w-xl" style={{ color: "var(--muted-ink)", fontSize: 14, lineHeight: 1.6 }}>
           Every {category.label.toLowerCase()} verdict below cross-references the clinical literature
@@ -69,6 +106,6 @@ function CategoryPage() {
           )}
         </div>
       </section>
-    </div>
+    </main>
   );
 }
