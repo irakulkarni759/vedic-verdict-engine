@@ -24,18 +24,21 @@ export const Route = createFileRoute("/search/$query")({
     }),
   // Social preview meta — without these a shared search link unfurled with
   // nothing, which undercuts the whole share button below.
-  head: ({ loaderData }) => ({
+  head: ({ params, loaderData }) => ({
     meta: loaderData
       ? [
           { title: `${loaderData.name} — ${loaderData.verdict} — Veda` },
           { name: "description", content: loaderData.oneLiner },
           { property: "og:title", content: `${loaderData.name} — ${loaderData.verdict}` },
           { property: "og:description", content: loaderData.oneLiner },
+          { property: "og:type", content: "article" },
+          { property: "og:url", content: `https://askveda.app/search/${params.query}` },
           { name: "twitter:card", content: "summary" },
           { name: "twitter:title", content: `${loaderData.name} — ${loaderData.verdict}` },
           { name: "twitter:description", content: loaderData.oneLiner },
         ]
       : [],
+    links: [{ rel: "canonical", href: `https://askveda.app/search/${params.query}` }],
   }),
   pendingComponent: PendingPage,
   errorComponent: ({ error }) => (
