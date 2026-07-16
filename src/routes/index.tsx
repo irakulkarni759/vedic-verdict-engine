@@ -140,9 +140,11 @@ function Veda() {
   return (
     <div className="flex min-h-dvh flex-col pt-6 sm:pt-12" style={{ backgroundColor: "var(--parchment)" }}>
       <Nav />
-      <Hero query={query} setQuery={updateQuery} onSubmit={submit} onWarm={prewarm} count={count} trending={trendingRow} searchError={searchError} />
-      <WavyDivider from="var(--parchment)" to="var(--ink)" />
-      <Stats />
+      <main>
+        <Hero query={query} setQuery={updateQuery} onSubmit={submit} onWarm={prewarm} count={count} trending={trendingRow} searchError={searchError} />
+        <WavyDivider from="var(--parchment)" to="var(--ink)" />
+        <Stats />
+      </main>
     </div>
   );
 }
