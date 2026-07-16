@@ -14,6 +14,7 @@ export function TrendCard({ trend, compact = false }: { trend: Trend; compact?: 
     <Link
       to="/trend/$slug"
       params={{ slug: trend.slug }}
+      aria-label={`See the evidence for ${trend.name} — verdict ${trend.verdict}`}
       className="group block rounded-2xl p-5 transition-all hover:-translate-y-0.5"
       style={{
         backgroundColor: "#fff",
