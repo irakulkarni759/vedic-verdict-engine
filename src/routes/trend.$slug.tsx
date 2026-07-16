@@ -695,7 +695,7 @@ function SectionHeader({
 }) {
   return (
     <div className="flex items-center justify-between gap-4">
-      <p className="font-label text-xs text-[var(--sage)]">{left}</p>
+      <h2 className="font-label text-xs text-[var(--sage)]">{left}</h2>
 
       <a
         href={href}
