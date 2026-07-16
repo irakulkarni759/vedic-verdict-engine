@@ -25,6 +25,26 @@ export const Route = createFileRoute("/")({
         property: "og:description",
         content: "BACKED, MIXED, or DEBUNKED — for every wellness claim.",
       },
+      { property: "og:url", content: "https://askveda.app/" },
+      { name: "twitter:title", content: "Veda — Social media wellness, fact-checked." },
+      { name: "twitter:description", content: "BACKED, MIXED, or DEBUNKED — for every wellness claim." },
+    ],
+    links: [{ rel: "canonical", href: "https://askveda.app/" }],
+    scripts: [
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "WebSite",
+          name: "Veda",
+          url: "https://askveda.app",
+          potentialAction: {
+            "@type": "SearchAction",
+            target: "https://askveda.app/search/{search_term_string}",
+            "query-input": "required name=search_term_string",
+          },
+        }),
+      },
     ],
   }),
   component: Veda,
