@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { TRENDS } from "@/lib/trends";
 import { TrendCard } from "@/components/TrendCard";
 import { Comments } from "@/components/Comments";
+import { PersonalizeCard } from "@/components/PersonalizeCard";
 import { toTitleCase, coreSubjectForReddit, pollUntil } from "@/lib/utils";
 import {
   startRedditQuoteJob,
@@ -316,6 +317,21 @@ function SearchPage() {
             communityGist={displayCommunityGist}
             safetyNote={data.safetyNote}
           />
+
+          {!isPharma && !isUnknown && (
+            <PersonalizeCard
+              key={data.slug}
+              slug={data.slug}
+              from={`/search/${encodeURIComponent(q)}`}
+              context={{
+                name: data.name,
+                verdict: data.verdict,
+                oneLiner: data.oneLiner,
+                safetyNote: data.safetyNote,
+                category: data.category,
+              }}
+            />
+          )}
 
           {!isPharma && !isUnknown && (
             <div>

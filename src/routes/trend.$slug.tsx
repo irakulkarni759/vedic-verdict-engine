@@ -6,6 +6,7 @@ import { startRedditQuoteJob, pollRedditQuoteJob, type ClaimJobPollResult } from
 import { coreSubjectForReddit, pollUntil } from "@/lib/utils";
 import { TrendCard } from "@/components/TrendCard";
 import { Comments } from "@/components/Comments";
+import { PersonalizeCard } from "@/components/PersonalizeCard";
 
 type Quote = { handle: string; text: string; url: string };
 
@@ -196,6 +197,19 @@ function TrendPage() {
                 : [])
             }
             safetyNote={trend.safetyNote}
+          />
+
+          <PersonalizeCard
+            key={trend.slug}
+            slug={trend.slug}
+            from={`/trend/${trend.slug}`}
+            context={{
+              name: trend.name,
+              verdict: trend.verdict,
+              oneLiner: trend.oneLiner,
+              safetyNote: trend.safetyNote,
+              category: trend.category,
+            }}
           />
 
           <div>
