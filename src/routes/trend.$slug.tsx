@@ -416,9 +416,9 @@ function TrendPage() {
 
         {related.length > 0 && (
           <section className="mt-14">
-            <p className="font-label mb-4 text-xs text-[var(--sage)]">
+            <h2 className="font-label mb-4 text-xs text-[var(--sage)]">
               RELATED TRENDS
-            </p>
+            </h2>
 
             <div className="grid gap-4 md:grid-cols-3">
               {related.map((r: Trend) => (
