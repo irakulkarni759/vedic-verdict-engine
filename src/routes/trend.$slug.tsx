@@ -27,16 +27,35 @@ export const Route = createFileRoute("/trend/$slug")({
     return { trend, related };
   },
 
-  head: ({ loaderData }) => ({
+  head: ({ params, loaderData }) => ({
     meta: loaderData
       ? [
           { title: `${loaderData.trend.name} — ${loaderData.trend.verdict} — Veda` },
           { name: "description", content: loaderData.trend.oneLiner },
           { property: "og:title", content: `${loaderData.trend.name} — ${loaderData.trend.verdict}` },
           { property: "og:description", content: loaderData.trend.oneLiner },
+          { property: "og:type", content: "article" },
+          { property: "og:url", content: `https://askveda.app/trend/${params.slug}` },
           { name: "twitter:card", content: "summary" },
           { name: "twitter:title", content: `${loaderData.trend.name} — ${loaderData.trend.verdict}` },
           { name: "twitter:description", content: loaderData.trend.oneLiner },
+        ]
+      : [],
+    links: [{ rel: "canonical", href: `https://askveda.app/trend/${params.slug}` }],
+    scripts: loaderData
+      ? [
+          {
+            type: "application/ld+json",
+            children: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "Article",
+              headline: `${loaderData.trend.name} — ${loaderData.trend.verdict}`,
+              description: loaderData.trend.oneLiner,
+              url: `https://askveda.app/trend/${params.slug}`,
+              about: loaderData.trend.name,
+              publisher: { "@type": "Organization", name: "Veda" },
+            }),
+          },
         ]
       : [],
   }),
