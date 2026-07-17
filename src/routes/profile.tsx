@@ -131,11 +131,9 @@ function ProfilePage() {
 
           <p className="font-mono mt-3 text-xs text-[var(--muted-ink)]">
             Answers stay on this device — they're never stored on our servers unless you join the
-            waitlist below.
+            monthly suggestions list below.
           </p>
         </section>
-
-        <WaitlistCard profile={answers} />
 
         <div className="mt-6 space-y-4">
           {PROFILE_QUESTIONS.map((q, qi) => {
@@ -229,6 +227,8 @@ function ProfilePage() {
           )}
         </div>
 
+        <WaitlistCard profile={answers} />
+
         <p className="font-mono mt-6 max-w-xl text-xs leading-5 text-[var(--muted-ink)]">
           Personalized lines are general considerations based on your answers — not medical advice.
           For anything health-related, talk to a professional who actually knows you.
@@ -239,10 +239,11 @@ function ProfilePage() {
 }
 
 /**
- * Waitlist signup: drop an email to get personalized suggestions later. On
- * submit we save the current answers locally too (so this device is
- * personalized) and send email + answers snapshot to the server. No account,
- * no login. The hidden `website` field is a honeypot for bots.
+ * Waitlist signup for monthly personalized product suggestions. Placed after
+ * the questions: the visitor answers, then opts in with their email if they
+ * want a tailored monthly pick. On submit we save the current answers locally
+ * too (so this device is personalized) and send email + answers snapshot to
+ * the server. No account, no login. The hidden `website` field is a honeypot.
  */
 function WaitlistCard({ profile }: { profile: Profile }) {
   const [value, setValue] = useState("");
@@ -267,15 +268,17 @@ function WaitlistCard({ profile }: { profile: Profile }) {
 
   return (
     <section className="mt-4 rounded-[22px] border border-white/75 bg-white/90 p-6 shadow-[0_12px_35px_rgba(27,52,72,0.04)]">
-      <p className="font-label text-[10px] text-[var(--sage)]">GET PERSONALIZED SUGGESTIONS</p>
+      <p className="font-label text-[10px] text-[var(--sage)]">
+        MONTHLY PERSONALIZED PRODUCT SUGGESTIONS
+      </p>
       <p className="mt-1.5 text-sm leading-6 text-[var(--ink)]">
-        Drop your email and we'll send you suggestions tailored to your profile — plus the week's
-        top wellness trends. No spam, unsubscribe anytime.
+        Want product picks matched to your answers? Join the waitlist and we'll email you a
+        personalized set of suggestions once a month. No spam, unsubscribe anytime.
       </p>
 
       {state === "joined" ? (
         <p className="font-mono mt-3 text-xs text-[var(--sage)]">
-          ✓ You're on the list — we'll be in touch at {value}.
+          ✓ You're on the list — we'll email your monthly suggestions to {value}.
         </p>
       ) : (
         <div className="mt-3 flex flex-wrap items-center gap-2">
