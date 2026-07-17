@@ -11,7 +11,6 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
-import { AuthSync } from "../components/AuthSync";
 
 function NotFoundComponent() {
   return (
@@ -159,9 +158,6 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Syncs a signed-in user's saved profile into localStorage across
-          devices. Renders nothing; no-op when auth isn't configured. */}
-      <AuthSync />
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
       <Disclaimer />
