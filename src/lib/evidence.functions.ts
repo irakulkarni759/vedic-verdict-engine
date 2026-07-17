@@ -482,7 +482,13 @@ Return ONLY this JSON shape, no other text:
       category,
       verdict,
     };
-  } catch {
+  } catch (err) {
+    // A failure here (fetch error, or Claude's response not being clean
+    // JSON) silently produces the empty-bullets fallback that the caller
+    // then papers over with generic "Based on N PubMed studies" text -
+    // log it so that's diagnosable instead of indistinguishable from "no
+    // rich data was ever generated."
+    console.error(`[evidence] summarizeWithClaude failed for "${query}":`, err);
     return {
       displayName: null,
       researchVerdict: null,
@@ -557,6 +563,7 @@ or
     });
 
     const json = (await res.json()) as { content: { text: string }[] };
+    if (!res.ok) throw new Error(`Anthropic API ${res.status}: ${JSON.stringify(json).slice(0, 300)}`);
     const text = json.content?.[0]?.text ?? "{}";
     const parsed = JSON.parse(text.replace(/```json|```/g, "").trim()) as {
       reason?: FallbackReason | null;
@@ -630,6 +637,7 @@ If you search and cannot find a real, verifiable ingredient list for this exact 
     });
 
     const json = (await res.json()) as { content?: { type: string; text?: string }[] };
+    if (!res.ok) throw new Error(`Anthropic API ${res.status}: ${JSON.stringify(json).slice(0, 300)}`);
     // A web-search turn's response mixes text blocks with server_tool_use /
     // web_search_tool_result blocks — only the text blocks carry Claude's
     // actual written answer, which is where the JSON lives.
@@ -882,6 +890,7 @@ Base all of this only on what's in the abstracts above — never invent a findin
       }),
     });
     const json = (await res.json()) as { content: { text: string }[] };
+    if (!res.ok) throw new Error(`Anthropic API ${res.status}: ${JSON.stringify(json).slice(0, 300)}`);
     const text = json.content?.[0]?.text ?? "[]";
     const parsed = JSON.parse(text.replace(/```json|```/g, "").trim()) as {
       verdict?: string;
@@ -913,7 +922,8 @@ Base all of this only on what's in the abstracts above — never invent a findin
       };
     });
     return [...claudeEntries, ...noStudyEntries];
-  } catch {
+  } catch (e) {
+    console.error("[buildIngredientBreakdown] Claude verdict call failed, using keyword fallback:", e);
     return [...keywordFallbackEntries(), ...noStudyEntries];
   }
 }
@@ -1025,6 +1035,7 @@ Return ONLY this JSON, no other text:
         }),
       });
       const json = (await res.json()) as { content: { text: string }[] };
+      if (!res.ok) throw new Error(`Anthropic API ${res.status}: ${JSON.stringify(json).slice(0, 300)}`);
       const text = json.content?.[0]?.text ?? "{}";
       const parsed = JSON.parse(text.replace(/```json|```/g, "").trim()) as {
         corrected_query?: string;

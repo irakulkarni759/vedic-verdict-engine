@@ -7,6 +7,7 @@ import {
   pollRedditQuoteJob,
   type ClaimJobPollResult,
 } from "@/lib/reddit.server";
+import { generateEvidenceVerdict } from "@/lib/evidence.functions";
 import { pollUntil } from "@/lib/utils";
 import { TrendCard } from "@/components/TrendCard";
 import { Comments } from "@/components/Comments";
@@ -16,9 +17,23 @@ type Quote = { handle: string; text: string; url: string };
 
 export const Route = createFileRoute("/trend/$slug")({
   loader: async ({ params }) => {
-    const trend =
+    const isGenerated = !trendBySlug(params.slug);
+    let trend =
       trendBySlug(params.slug) ?? (await getGeneratedTrendBySlug({ data: { slug: params.slug } }));
     if (!trend) throw notFound();
+
+    // Self-heal: a generated row with no bullets means the Claude
+    // summarization call silently failed when this claim was first
+    // generated (see evidence.functions.ts), leaving only the generic
+    // "Based on N PubMed studies" placeholder text with no actual findings.
+    // generateEvidenceVerdict already treats an empty-bullets row as a
+    // cache miss and regenerates + persists a fresh one (this is exactly
+    // how the search page recovers from the same failure) - reuse that
+    // here instead of serving the broken row forever.
+    if (isGenerated && (!trend.bullets || trend.bullets.length === 0)) {
+      await generateEvidenceVerdict({ data: { query: trend.query ?? trend.name } });
+      trend = (await getGeneratedTrendBySlug({ data: { slug: params.slug } })) ?? trend;
+    }
 
     // Quotes are NOT fetched here anymore. The Reddit backend is slow to wake
     // and slow to scrape, so blocking the loader on it meant the whole page
